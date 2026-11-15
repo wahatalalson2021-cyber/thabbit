@@ -217,6 +217,21 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .setrows small{color:var(--muted)}
 .shead{font-weight:700;color:var(--accent);text-align:center;margin-top:6px}
 .seg{margin-top:2px}
+.kindtxt{font-size:.85rem;font-weight:600;color:var(--accent)}
+.dots{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.dots i{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--accent);transform:scale(1.25)}
+.dots i.ok{background:var(--good)}
+.ay.focus{padding:20px 16px}
+.ay.focus .t{font-size:2rem;line-height:2.3;text-align:center}
+.bigrep{align-self:center;width:150px;height:150px;border-radius:50%;border:0;padding:8px;background:conic-gradient(var(--accent) var(--deg), var(--line) 0);display:grid;place-items:center;margin:4px auto 0;touch-action:manipulation}
+.bigrep.full{background:conic-gradient(var(--good) 360deg, var(--line) 0)}
+.bigrep .in{width:100%;height:100%;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.bigrep b{font-size:2.6rem;color:var(--accent)}
+.bigrep.full b{color:var(--good)}
+.bigrep b.go{font-size:1.6rem}
+.bigrep small{color:var(--muted);font-size:.95rem}
+.bigrep:active .in{transform:scale(.96)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -792,7 +807,7 @@ function startSession(queue){
 function initStep(){
   const t = sess.queue[sess.pos];
   sess.phase = t.type === 'new' ? 'read' : 'test';
-  sess.reps = {};
+  sess.reps = {}; sess.ri = 0;
   sess.reveal = t.type === 'new' ? 1 : 2;
   sess.shown = new Set();
   sess.peeked = new Set();
@@ -808,16 +823,19 @@ function vSession(){
   const revs = sess.queue.filter(q => q.type === 'review');
   const kind = t.type === 'new' ? 'حفظ جديد' : t.type === 'practice' ? 'مراجعة حرة' : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
   const title = t.page ? `صفحة ${AR(t.page)} · ${cShort(c)}` : cLabel(c);
-  let h = `<main><div class="sess-top"><button class="x" data-act="quit">إنهاء</button><div class="steps">${steps}</div></div>
+  let h = `<main><div class="sess-top"><button class="x" data-act="ask" data-v="quit">إنهاء</button><div class="steps">${steps}</div></div>${confirmBox === 'quit' ? `<div class="confirm"><p>هل تريد الخروج؟ ${t.type === 'new' ? 'تكرارك في هذا المقطع لن يُحفظ، وتستطيع العودة إليه من شاشة «اليوم».' : 'ما أنهيته من مراجعات محفوظ، والباقي ينتظرك.'}</p><div class="rnav"><button class="btn" data-act="cancel">أكمل</button><button class="btn danger" data-act="quit">خروج</button></div></div>` : ''}
     <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>`;
   if (sess.phase === 'read'){
-    const ay = chunkAyat(c);
-    h += `<p class="muted">اقرأ كل آية وكرّرها ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'}، واضغط على العدّاد مع كل تكرار.</p>`;
-    h += ay.map(x => { const k = x.s + ':' + x.a, r = sess.reps[k] || 0, full = r >= R0;
-      return (x.head || x === ay[0] ? headHtml(x, multi) : '') + `<div class="ay"><div class="t">${esc(x.txt)} <span class="num">﴿${AR(x.a)}﴾</span></div>
-      <button class="rep ${full ? 'full' : ''}" data-act="rep" data-v="${k}"><span class="ring" style="background:conic-gradient(${full ? 'var(--good)' : 'var(--accent)'} ${Math.min(r, R0) * 360 / R0}deg, var(--line) 0)"><span style="background:var(--surface);width:20px;height:20px;border-radius:50%;display:grid;place-items:center">${AR(r)}</span></span>${full ? 'أتممت التكرار' : 'كرّرتها ' + AR(r) + ' من ' + AR(R0)}</button></div>`; }).join('');
-    const allDone = ay.every(x => (sess.reps[x.s + ':' + x.a] || 0) >= R0);
-    h += `<button class="btn" data-act="toTest">${allDone ? 'اختبر نفسك الآن' : 'جاهز، اختبرني'}</button>`;
+    const ay = chunkAyat(c), ri = Math.min(sess.ri || 0, ay.length - 1), x = ay[ri], key = x.s + ':' + x.a, r = sess.reps[key] || 0, full = r >= R0;
+    const allDone = ay.every(y => (sess.reps[y.s + ':' + y.a] || 0) >= R0);
+    h = h.replace('<span class="chip">' + kind + '</span>', `<span class="kindtxt">${kind} · الآية ${AR(ri + 1)} من ${AR(ay.length)}</span>`);
+    h += `<p class="muted">اقرأ الآية بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'} تنتقل للآية التالية تلقائيًا.</p>`;
+    h += `<div class="dots" aria-hidden="true">${ay.map((y, yi) => `<i class="${(sess.reps[y.s + ':' + y.a] || 0) >= R0 ? 'ok' : yi === ri ? 'on' : ''}"></i>`).join('')}</div>`;
+    h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus"><div class="t">${esc(x.txt)} <span class="num">﴿${AR(x.a)}﴾</span></div></div>`;
+    h += `<button class="bigrep ${full ? 'full' : ''}" data-act="rep" data-v="${key}" style="--deg:${Math.min(r, R0) * 360 / R0}deg"><span class="in">${r ? `<b>${AR(r)}</b><small>من ${AR(R0)}</small>` : `<b class="go">ابدأ</b><small>${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'}</small>`}</span></button>
+      <p class="muted" style="text-align:center">${full ? 'أتممت تكرار هذه الآية' : 'اضغط بعد كل تكرار'}</p>`;
+    h += `<div class="rnav"><button class="btn ghost" data-act="ri" data-v="${ri - 1}" ${ri === 0 ? 'disabled' : ''}>الآية السابقة</button><button class="btn ghost" data-act="ri" data-v="${ri + 1}" ${ri >= ay.length - 1 ? 'disabled' : ''}>الآية التالية</button></div>`;
+    if (allDone || ri === ay.length - 1) h += `<button class="btn" data-act="toTest">${allDone ? 'اختبر نفسك الآن' : 'جاهز، اختبرني'}</button>`;
   } else {
     let k = 0, words = '';
     chunkAyat(c).forEach((x, xi) => {
@@ -1156,8 +1174,9 @@ app.addEventListener('click', e => {
   if (a === 'hifzGo'){ if (hasNewLeft()) startSession([{type:'new', idx:S.nextNew}]); return; }
   if (a === 'revGo'){ const todo = reviewTodo(); if (todo.length) startSession(todo.map(x => Object.assign({}, x))); return; }
   if (a === 'practice'){ startSession([{type:'practice', idx:+v}]); return; }
-  if (a === 'quit'){ stopMic(); sess = null; if (retReader && RD){ retReader = false; openReader(RD.page, RD.back); return; } view = 'home'; render(); return; }
-  if (a === 'rep'){ sess.reps[v] = (sess.reps[v] || 0) + 1; render(); return; }
+  if (a === 'quit'){ confirmBox = null; stopMic(); sess = null; if (retReader && RD){ retReader = false; openReader(RD.page, RD.back); return; } view = 'home'; render(); return; }
+  if (a === 'rep'){ const n = (sess.reps[v] || 0) + 1; sess.reps[v] = n; const ay = chunkAyat(itemChunk(sess.queue[sess.pos])); const ri = sess.ri || 0; if (n === REPS() && ri < ay.length - 1){ render(); setTimeout(() => { if (sess && (sess.ri || 0) === ri){ sess.ri = ri + 1; render(); window.scrollTo(0, 0); } }, 450); return; } render(); return; }
+  if (a === 'ri'){ sess.ri = +v; render(); window.scrollTo(0, 0); return; }
   if (a === 'toTest'){ sess.phase = 'test'; render(); window.scrollTo(0, 0); return; }
   if (a === 'peek'){ const i = +v; if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
   if (a === 'mic'){
