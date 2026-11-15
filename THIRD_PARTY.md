@@ -21,3 +21,7 @@ Uthmani text from The Noble Qur'an Encyclopedia (quranenc.com), via the quran-js
 
 ## Quarter, page and juz boundaries
 From **quran-meta** v7.0.0 (Hafs lists), MIT License, Copyright (c) 2020 Quran-Center. https://www.npmjs.com/package/quran-meta
+
+## Tajweed colour mushaf
+- tajweed.json: built from QUL's open exports (qpc-v4 words, qpc-v4-tajweed-15-lines layout), https://qul.tarteel.ai
+- The colour page fonts (KFGQPC V4, 1441H) are © King Fahd Glorious Qur'an Printing Complex, published by QUL. They are NOT included in this repository; the app loads them from the @tlawat/mushaf-fonts-qpc-v4-tajweed package on jsDelivr, unmodified. Their notice reads: "NOT FOR SALE, ONLY CHARITABLE (SADAQA) PURPOSE ONLY. PRINTING AND PUBLISHING NOT PERMITTED WITHOUT PRIOR PERMISSION FROM KING FAHAD GLORIOUS QURAN PRINTING COMPLEX." This app is free.

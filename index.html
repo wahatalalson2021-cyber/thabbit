@@ -167,6 +167,7 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .mlines{color:var(--ink);direction:rtl;font-size:20px}
 .ml{display:flex;justify-content:center;align-items:center;height:1.95em;white-space:nowrap;line-height:1}
 .ml.full{justify-content:space-between}
+.ml.ctr{justify-content:center}
 .mw{border-radius:4px;transition:background .15s}
 .mw[data-act]{cursor:pointer}
 .mw.sel{background:color-mix(in srgb,var(--gold) 32%,transparent)}
@@ -818,7 +819,7 @@ function vSettings(){
   <div class="card"><h3>البيانات</h3><p class="muted">التقدّم محفوظ في هذا الجهاز فقط.</p>
   ${confirmBox === 'reset' ? `<div class="confirm"><p>سيُمسح كل التقدّم ولا يمكن استرجاعه.</p><div class="rnav"><button class="btn danger" data-act="resetYes">امسح</button><button class="btn ghost" data-act="cancel">إلغاء</button></div></div>` : '<button class="btn danger" data-act="ask" data-v="reset">مسح كل البيانات</button>'}</div>
   ${IN_CLAUDE || STANDALONE ? '' : installGuide()}
-  <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta.</p></div>`;
+  <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. مصحف التجويد الملوّن: خطوط مجمع الملك فهد (الإصدار الرابع، ١٤٤١هـ) كما تنشرها مكتبة QUL، للعرض المجاني فقط. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta.</p></div>`;
   return h;
 }
 
@@ -944,14 +945,15 @@ function pageFonts(p){ const s = new Set(); M.pages[p - 1].forEach(l => l.slice(
 async function preparePage(p){
   try {
     await loadMushaf();
-    await Promise.all(pageFonts(p).map(loadFont));
+    if (tjOn()){ await loadTajweed(); heads(); await Promise.all([tjFont(p), loadFont('QCF4_QBSML'), loadFont('QCF4_Hafs_01')]); }
+    else await Promise.all(pageFonts(p).map(loadFont));
     if (RD && RD.page === p && view === 'reader'){ RD.status = 'ok'; render(); }
-    if (p < 604) pageFonts(p + 1).forEach(n => loadFont(n).catch(() => {}));
+    if (p < 604){ if (tjOn()) tjFont(p + 1).catch(() => {}); else pageFonts(p + 1).forEach(n => loadFont(n).catch(() => {})); }
   } catch (e) { if (RD && RD.page === p && view === 'reader'){ RD.status = 'err'; render(); } }
 }
 function openReader(p, back){
   p = Math.max(1, Math.min(604, p | 0));
-  RD = {page:p, status: M && pageFonts(p).every(n => fontDone[n]) ? 'ok' : 'loading', sel:null, sheet:'', back: back || (view === 'reader' ? 'read' : view)};
+  RD = {page:p, status: pageReady(p) ? 'ok' : 'loading', sel:null, sheet:'', back: back || (view === 'reader' ? 'read' : view)};
   view = 'reader'; R().page = p; save(); render(); window.scrollTo(0, 0);
   if (RD.status !== 'ok') preparePage(p);
 }
@@ -960,13 +962,57 @@ function goPage(np){
   const w = S.wird, p = RD.page;
   if (w && np === p + 1 && w.pos === p){ w.pos = np; markDay(); }
   RD.page = np; RD.sel = null; RD.sheet = ''; R().page = np; save();
-  RD.status = M && pageFonts(np).every(n => fontDone[n]) ? 'ok' : 'loading';
+  RD.status = pageReady(np) ? 'ok' : 'loading';
   render(); window.scrollTo(0, 0);
   if (RD.status !== 'ok') preparePage(np);
 }
 const RSIZES = [[0,'مثل المصحف'],[1,'كبير'],[2,'كبير جدًا']];
 function rsize(){ const s = R().size; return s == null ? 1 : s; }
+/* ---------- tajweed colours: King Fahd Complex V4 colour page fonts, as published by QUL ---------- */
+const TJCDN = 'https://cdn.jsdelivr.net/npm/@tlawat/mushaf-fonts-qpc-v4-tajweed@1.20260912.0/fonts/';
+let TJ = null, tjLoading = null, HEADS = null, BSM = null, palStyle = null;
+const tjReady = {}, tjDone = {};
+const tjOn = () => R().tj !== false;
+const isDark = () => { const th = document.documentElement.dataset.theme; return th === 'dark' || (th !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches); };
+function loadTajweed(){
+  if (TJ) return Promise.resolve(TJ);
+  if (!tjLoading) tjLoading = fetch('tajweed.json').then(r => { if (!r.ok) throw new Error('http'); return r.json(); }).then(d => (TJ = d)).catch(e => { tjLoading = null; throw e; });
+  return tjLoading;
+}
+const tjUrl = p => TJCDN + 'p' + p + (p === 328 ? '.woff' : '.woff2');
+function tjFont(p){
+  const n = 'TJ' + p;
+  if (!tjReady[n]) tjReady[n] = new FontFace(n, `url(${tjUrl(p)})`).load().then(f => {
+    document.fonts.add(f); tjDone[n] = true;
+    try { if (!palStyle){ palStyle = document.createElement('style'); document.head.appendChild(palStyle); } palStyle.sheet.insertRule(`@font-palette-values --tjd${p} { font-family: ${n}; base-palette: 1; }`, palStyle.sheet.cssRules.length); } catch (e) {}
+  }).catch(e => { delete tjReady[n]; throw e; });
+  return tjReady[n];
+}
+function heads(){ if (HEADS || !M) return; HEADS = []; M.pages.forEach(pg => pg.forEach(l => { if (l[0] === 1) HEADS.push(l[1]); else if (l[0] === 2 && !BSM) BSM = l.slice(1); })); }
+function pageReady(p){
+  if (!M) return false;
+  if (tjOn()) return !!(TJ && tjDone['TJ' + p] && fontDone.QCF4_QBSML && fontDone.QCF4_Hafs_01);
+  return pageFonts(p).every(n => fontDone[n]);
+}
+function tjPageHtml(p){
+  heads();
+  const big = rsize() > 0, fam = 'TJ' + p, pal = isDark() ? `;font-palette:--tjd${p}` : '';
+  let h = `<div class="mlines tj${p <= 2 ? ' opening' : ''}${big ? ' big' : ''}" id="mlines">`, flow = '';
+  const flush = () => { if (flow){ h += `<div class="flow">${flow}</div>`; flow = ''; } };
+  const mw = (txt, g) => `<span class="mw${RD.sel && g === RD.sel ? ' sel' : ''}" style="font-family:${fam}${pal}" data-act="ayah" data-v="${g}">${txt}</span>`;
+  const enc = x => { const d = decode(x); return `<span class="mw" style="font-family:${M.fonts[d.fi]}">${String.fromCodePoint(d.code)}</span>`; };
+  for (const l of TJ.pages[p - 1]){
+    if (l[0] === 1){ flush(); h += `<div class="ml sh"><span class="shb">${enc(HEADS[l[1] - 1])}</span></div>`; continue; }
+    if (l[0] === 2){ flush(); h += `<div class="ml bs">${BSM.map(enc).join('')}</div>`; continue; }
+    const ws = l.slice(2);
+    if (big){ flow += (flow ? ' ' : '') + ws.map(([x, g]) => mw(x, g)).join(' '); continue; }
+    h += `<div class="ml${l[1] ? ' ctr' : ''}">${ws.map(([x, g]) => mw(x, g)).join('')}</div>`;
+  }
+  flush();
+  return h + '</div>';
+}
 function pageHtml(p){
+  if (tjOn() && TJ) return tjPageHtml(p);
   const big = rsize() > 0;
   let h = `<div class="mlines${p <= 2 ? ' opening' : ''}${big ? ' big' : ''}" id="mlines">`, flow = '';
   const flush = () => { if (flow){ h += `<div class="flow">${flow}</div>`; flow = ''; } };
@@ -989,11 +1035,12 @@ function layoutPage(){
   const lines = [...box.querySelectorAll('.ml:not(.sh):not(.bs)')];
   const sums = lines.map(l => { let s = 0; for (const c of l.children) s += c.getBoundingClientRect().width; return s; });
   let maxEm = 16.3;
-  if (box.classList.contains('opening') && sums.length) maxEm = Math.max(...sums) / 20 + 0.6;
+  if (box.classList.contains('tj') && sums.length) maxEm = Math.max(...sums) / 20 + (box.classList.contains('opening') ? 0.6 : 0.2);
+  else if (box.classList.contains('opening') && sums.length) maxEm = Math.max(...sums) / 20 + 0.6;
   let fs = Math.min(W / (maxEm * 1.02), 46);
   box.style.fontSize = fs + 'px';
   if (box.classList.contains('opening')) return;
-  lines.forEach((l, i) => l.classList.toggle('full', sums[i] * fs / 20 > W * 0.86));
+  lines.forEach((l, i) => l.classList.toggle('full', !l.classList.contains('ctr') && sums[i] * fs / 20 > W * 0.86));
 }
 window.addEventListener('resize', () => { if (view === 'reader') layoutPage(); });
 const ICON = {
@@ -1024,7 +1071,8 @@ function vReader(){
       ${M ? `<button class="btn soft" data-act="rdMarkPage">${marks.some(m => m.p === p) ? 'هذه الصفحة عليها علامة' : 'ضع علامة على هذه الصفحة'}</button>` : ''}
       <div class="mlist">${marks.length ? marks.map(m => { const [s, a] = gidToSA(m.g); return `<button class="srow" data-act="rdGo" data-v="${m.p}"><span class="sn">★</span><span class="st"><b>سورة ${Q[s - 1][0]} · الآية ${AR(a)}</b></span><span class="sp">ص ${AR(m.p)}</span></button>`; }).join('') : '<p class="muted">لا توجد علامات بعد. اضغط على أي آية واختر «ضع علامة».</p>'}</div></div>`;
   } else if (RD.sheet === 'size'){
-    sheet = `<div class="rsheet card"><div class="row"><b>حجم الخط</b><button class="x" data-act="rdSheet" data-v="" aria-label="إغلاق">✕</button></div>
+    sheet = `<div class="rsheet card"><div class="row"><b>الخط والألوان</b><button class="x" data-act="rdSheet" data-v="" aria-label="إغلاق">✕</button></div>
+      <button class="opt" data-act="rdTj" aria-pressed="${tjOn()}"><span class="dot"></span><span><b>مصحف التجويد الملوّن</b><span class="muted" style="display:block">ألوان أحكام التجويد، بخطوط مجمع الملك فهد</span></span></button>
       <div class="tabs3">${RSIZES.map(([v, l]) => `<button data-act="rdSize" data-v="${v}" aria-pressed="${rsize() === v}">${l}</button>`).join('')}</div>
       <p class="muted">«مثل المصحف» يعرض الأسطر كما في المصحف الورقي. «كبير» و«أكبر» يكبّران الخط ويوزّعان كلمات الصفحة نفسها على أسطر أقصر.</p></div>`;
   }
@@ -1046,7 +1094,7 @@ function vReader(){
       <button data-act="rdPrev" ${p <= 1 ? 'disabled' : ''}>${ICON.prev}السابقة</button>
       <button data-act="rdJump" data-v="sura">${ICON.list}الفهرس</button>
       <button data-act="rdSheet" data-v="marks" aria-pressed="${RD.sheet === 'marks'}">${ICON.mark}العلامات</button>
-      <button data-act="rdSheet" data-v="size" aria-pressed="${RD.sheet === 'size'}">${ICON.size}حجم الخط</button>
+      <button data-act="rdSheet" data-v="size" aria-pressed="${RD.sheet === 'size'}">${ICON.size}الخط والألوان</button>
       <button data-act="rdNext" ${p >= 604 ? 'disabled' : ''}>${ICON.next}التالية</button>
     </nav></div>`;
 }
@@ -1264,6 +1312,7 @@ app.addEventListener('click', e => {
   if (a === 'rdJump'){ rdTab = v; view = 'read'; render(); const el2 = document.querySelector('.tabs3'); if (el2) el2.scrollIntoView({block:'start'}); return; }
   if (a === 'rdSheet'){ RD.sel = null; RD.sheet = RD.sheet === v ? '' : v; render(); return; }
   if (a === 'rdSize'){ R().size = +v; save(); render(); return; }
+  if (a === 'rdTj'){ R().tj = !tjOn(); save(); RD.status = pageReady(RD.page) ? 'ok' : 'loading'; render(); if (RD.status !== 'ok') preparePage(RD.page); return; }
   if (a === 'rdGo'){ RD.sheet = ''; goPage(+v); return; }
   if (a === 'rdMarkPage'){ const r = R(); if (!r.marks.some(m => m.p === RD.page)){ const g = firstGid(RD.page); if (g){ r.marks.unshift({g, p:RD.page}); save(); } } render(); return; }
   if (a === 'dlStart'){ startDownload(); return; }
