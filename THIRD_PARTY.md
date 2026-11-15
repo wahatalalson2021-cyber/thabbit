@@ -18,3 +18,6 @@ package on jsDelivr, for Quranic rendering only.
 
 ## Quran text (memorization)
 Uthmani text from The Noble Qur'an Encyclopedia (quranenc.com), via the quran-json package.
+
+## Quarter, page and juz boundaries
+From **quran-meta** v7.0.0 (Hafs lists), MIT License, Copyright (c) 2020 Quran-Center. https://www.npmjs.com/package/quran-meta
