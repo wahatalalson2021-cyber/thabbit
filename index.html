@@ -500,6 +500,7 @@ function vOnboard(){
       <p>${AR(chunks.length)} مقطعًا، مقطع جديد كل يوم مع مراجعة ما سبق.</p>
       <p class="muted">تنتهي تقريبًا خلال ${AR(chunks.length)} يومًا إذا التزمت يوميًا.</p></div>
     <button class="btn" data-act="start">ابدأ الخطة</button>
+    ${S ? '' : '<button class="btn ghost" data-act="skip">تخطَّ الآن وافتح المصحف</button><p class="muted" style="text-align:center">تستطيع اختيار خطة الحفظ لاحقًا من الإعدادات.</p>'}
   </main>`;
 }
 
@@ -913,6 +914,11 @@ app.addEventListener('click', e => {
   if (a === 'tab'){ view = v; confirmBox = null; render(); window.scrollTo(0, 0); return; }
   if (a === 'goal'){ draft.type = v; render(); return; }
   if (a === 'min'){ draft.minutes = +v; render(); return; }
+  if (a === 'skip'){
+    const chunks = buildPlan(goalSurahs('amma', 67), BUDGET[15]);
+    S = {type:'amma', surah:67, minutes:15, chunks, learned:{}, nextNew:0, lastNewDay:null, days:{}, dayOffset:0};
+    save(); view = 'read'; render(); return;
+  }
   if (a === 'start'){
     const chunks = buildPlan(goalSurahs(draft.type, draft.surah), BUDGET[draft.minutes]);
     S = {type:draft.type, surah:draft.surah, minutes:draft.minutes, chunks, learned:{}, nextNew:0, lastNewDay:null, days:{}, dayOffset:0};
