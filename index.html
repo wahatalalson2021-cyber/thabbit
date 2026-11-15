@@ -206,17 +206,40 @@ function makeWebSpeech(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR || IN_CLAUDE) return null;
   const android = /Android/i.test(navigator.userAgent);
-  const H = {s:[], p:[], f:[]}; const emit = (k, e) => H[k].forEach(fn => fn(e));
-  let rec = null, st = 'idle', stopReason = null;
+  const H = {s:[], p:[], f:[], h:[]}; const emit = (k, e) => H[k].forEach(fn => fn(e));
+  let rec = null, st = 'idle', stopReason = null, stream = null;
+  const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const BAD = /virtual|cable|stereo mix|vb-audio|voicemeeter|loopback|blackhole|soundflower/i;
+  /* Some computers default to a virtual "microphone" with no sound. If so, open the real one and give it to the recognizer. */
+  async function pickStream(){
+    if (MOBILE || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return null;
+    try {
+      let s = await navigator.mediaDevices.getUserMedia({audio:true});
+      const tr = s.getAudioTracks()[0];
+      if (!BAD.test(tr.label)){ s.getTracks().forEach(x => x.stop()); return null; }
+      const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput' && !BAD.test(d.label) && d.deviceId !== 'default' && d.deviceId !== 'communications');
+      s.getTracks().forEach(x => x.stop());
+      if (!devs.length) return null;
+      return await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:devs[0].deviceId}}});
+    } catch (e) { return null; }
+  }
+  function begin(r){
+    const tr = stream && stream.getAudioTracks()[0];
+    if (tr && tr.readyState === 'live'){ try { r.start(tr); return; } catch (e) {} }
+    r.start();
+  }
   const LOCAL = location.protocol === 'file:';
   const ERR = {'not-allowed':'not_granted','service-not-allowed':'not_granted','audio-capture':'no_mic','network':'network','language-not-supported':'unavailable'};
   return {
     start(){
-      return new Promise((resolve, reject) => {
+      return new Promise(async (resolve, reject) => {
         if (rec){ resolve(); return; }
         let started = false, err = null, heard = false, restarts = 0;
         rec = new SR(); rec.lang = 'ar-SA'; rec.interimResults = true; rec.continuous = !android; rec.maxAlternatives = 1;
         rec.onstart = () => { if (!started){ started = true; resolve(); } st = 'listening'; emit('s', {state:'listening'}); };
+        rec.onaudiostart = () => emit('h', {stage:'audio'});
+        rec.onsoundstart = () => emit('h', {stage:'sound'});
+        rec.onspeechstart = () => emit('h', {stage:'speech'});
         rec.onresult = e => {
           heard = true; restarts = 0;
           let interim = '';
@@ -228,14 +251,16 @@ function makeWebSpeech(){
         };
         rec.onerror = e => { if (e.error !== 'no-speech' && e.error !== 'aborted') err = ERR[e.error] || 'upstream_error'; };
         rec.onend = () => {
-          if (st === 'listening' && !stopReason && !err && !LOCAL && (heard || restarts < 1)){ restarts++; heard = false; try { rec.start(); return; } catch (x) {} }
+          if (st === 'listening' && !stopReason && !err && !LOCAL && (heard || restarts < 1)){ restarts++; heard = false; try { begin(rec); return; } catch (x) {} }
           const reason = stopReason || err || 'stopped';
           rec = null; st = 'idle'; stopReason = null; emit('p', {text:''});
+          if (stream){ stream.getTracks().forEach(x => x.stop()); stream = null; }
           if (!started) reject({code: err || 'upstream_error'});
           emit('s', {state:'idle', reason});
         };
         st = 'starting'; emit('s', {state:'starting'});
-        try { rec.start(); } catch (x) { rec = null; st = 'idle'; reject({code:'upstream_error'}); }
+        stream = await pickStream();
+        try { begin(rec); } catch (x) { rec = null; st = 'idle'; reject({code:'upstream_error'}); }
       });
     },
     stop(){
@@ -248,7 +273,8 @@ function makeWebSpeech(){
     active(){ return st !== 'idle'; },
     onState(fn){ H.s.push(fn); return () => {}; },
     onPartial(fn){ H.p.push(fn); return () => {}; },
-    onFinal(fn){ H.f.push(fn); return () => {}; }
+    onFinal(fn){ H.f.push(fn); return () => {}; },
+    onHear(fn){ H.h.push(fn); return () => {}; }
   };
 }
 DICT = makeWebSpeech();
@@ -258,7 +284,16 @@ if (DICT){
     if (state === 'idle' && sess && sess.listening){ sess.listening = false; processSpoken(true); sess.micErr = MIC_ERR[reason] ? MIC_ERR[reason] + diag(reason) : ''; liveText = ''; }
     if (view === 'session') render();
   });
-  DICT.onPartial(({text}) => { liveText = text; const el = document.getElementById('live'); if (el) el.textContent = text || 'أستمع إليك...'; });
+  DICT.onPartial(({text}) => { liveText = text; const el = document.getElementById('live'); if (el) el.textContent = text || hearMsg(); });
+  DICT.onHear(({stage}) => {
+    if (!sess) return;
+    sess.hear = stage;
+    clearTimeout(sess.hearTimer);
+    if (stage === 'audio') sess.hearTimer = setTimeout(() => { if (sess && sess.listening && sess.hear === 'audio'){ sess.micTip = true; if (view === 'session') render(); } }, 7000);
+    else sess.micTip = false;
+    const el = document.getElementById('live'); if (el && !liveText) el.textContent = hearMsg();
+    if (stage !== 'audio' && view === 'session') render();
+  });
   DICT.onFinal(({text}) => { if (sess && sess.exp && sess.listening){ feed(text); if (view === 'session') render(); } });
 }
 const MIC_ERR = {
@@ -306,6 +341,10 @@ function processSpoken(flush){
     sess.p += hit + 1; sess.m2 = 0;
   }
   if (sess.p >= E.length){ sess.reveal = E.length; stopMic(); }
+}
+function hearMsg(){
+  const h = sess && sess.hear;
+  return h === 'speech' ? 'أسمعك... تابع القراءة' : h === 'sound' ? 'يصلني صوت...' : h === 'audio' ? 'الميكروفون يعمل. ابدأ القراءة من أول المقطع' : 'أجهّز الميكروفون...';
 }
 const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
 
@@ -512,7 +551,8 @@ function vSession(){
     if (!allShown){
       if (DICT){
         h += `<div class="mic-box"><button class="mic ${sess.listening ? 'on' : ''}" data-act="mic">${MIC_SVG}${sess.listening ? 'أنهيت التسميع' : sess.p > 0 ? 'تابع التسميع بصوتك' : 'سمّع بصوتك'}</button>
-          <p class="live" id="live" aria-live="polite">${sess.listening ? esc(liveText) || 'أستمع إليك... ابدأ من أول المقطع' : ''}</p>
+          <p class="live" id="live" aria-live="polite">${sess.listening ? esc(liveText) || hearMsg() : ''}</p>
+          ${sess.listening && sess.micTip ? `<p class="err">لا يصل أي صوت إلى الميكروفون. اضغط رمز الميكروفون في شريط العنوان أعلى المتصفح، واختر الميكروفون الحقيقي لجهازك.</p>` : ''}
           ${sess.micErr ? `<p class="err">${sess.micErr}</p>` : ''}</div>`;
       } else if (DICT === null){
         h += `<p class="muted">${IN_CLAUDE ? 'التسميع بالصوت يعمل من نسخة التطبيق المستقلة، لأن صفحات Claude لا تسمح بالميكروفون. هنا اقرأ من حفظك ثم قيّم نفسك.' : 'هذا المتصفح لا يدعم التسميع بالصوت. جرّب Chrome أو Safari، أو اقرأ من حفظك ثم قيّم نفسك.'}</p>`;
@@ -581,7 +621,7 @@ app.addEventListener('click', e => {
   if (a === 'mic'){
     if (!DICT) return;
     if (sess.listening || dictState !== 'idle'){ DICT.stop().catch(() => {}); return; }
-    sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.spoken = []; liveText = '';
+    sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.spoken = []; liveText = ''; sess.hear = null; sess.micTip = false;
     const L = LANGS[langIdx];
     DICT.start(L ? {language:L} : undefined).then(() => saveLang(), err => { if (sess){ sess.listening = false; sess.micErr = micFail(err && err.code); render(); } });
     render(); return;
