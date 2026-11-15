@@ -232,6 +232,9 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .bigrep b.go{font-size:1.6rem}
 .bigrep small{color:var(--muted);font-size:.95rem}
 .bigrep:active .in{transform:scale(.96)}
+.opt.big{align-items:center;padding:16px}
+.opt.big .tic{flex:none}
+.homebtn{display:inline-flex;align-items:center;gap:6px;font-weight:600}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -557,7 +560,7 @@ function schedule(c, g){
 function learnNew(idx, g){
   const t = today();
   S.learned[idx] = {iv:1, ef: g === 3 ? 2.5 : 2.2, reps:1, lapses:0, due:t + 1, last:t, on:t};
-  S.nextNew = Math.max(S.nextNew, idx + 1); S.lastNewDay = t; markDay(); save();
+  S.nextNew = Math.max(S.nextNew, idx + 1); S.lastNewDay = t; if (S.inprog && S.inprog.idx === idx) S.inprog = null; markDay(); save();
 }
 function dueList(){
   const t = today();
@@ -632,6 +635,7 @@ function render(){
   if (view === 'session') h = vSession();
   else if (view === 'reader') h = vReader();
   else if (view === 'setupHifz') h = vSetupHifz();
+  else if (view === 'hifzMenu') h = vHifzMenu();
   else if (view === 'setupReview') h = vSetupReview();
   else if (view === 'setupWird') h = vSetupWird();
   else {
@@ -663,9 +667,10 @@ function vHome(){
   const rp = R().page;
   h += tile('read', 'قراءة', rp ? 'أكمل من صفحة ' + AR(rp) : 'افتح المصحف', 'rdOpen', rp || 1);
   if (!S.hifz) h += tile('hifz', 'حفظ', 'اختر ما تحفظه ومقداره', 'go', 'setupHifz');
-  else if (!hasNewLeft()) h += tile('hifz', 'حفظ', 'أتممت ' + hifzName(S.hifz) + '. اختر هدفًا جديدًا', 'go', 'setupHifz', true);
-  else if (newDoneToday()) h += tile('hifz', 'حفظ', 'حفظت ورد اليوم · اضغط لمقطع إضافي', 'hifzGo', '', true, 'goHifz');
-  else h += tile('hifz', 'حفظ', 'اليوم: ' + cShort(S.chunks[S.nextNew]), 'hifzGo', '', false, 'goHifz');
+  else if (!hasNewLeft()) h += tile('hifz', 'حفظ', 'أتممت ' + hifzName(S.hifz) + '. اختر هدفًا جديدًا', 'go', 'hifzMenu', true);
+  else if (inprog()) h += tile('hifz', 'حفظ', 'أكمل من حيث توقفت: ' + cShort(S.chunks[S.inprog.idx]), 'go', 'hifzMenu', false, 'goHifz');
+  else if (newDoneToday()) h += tile('hifz', 'حفظ', 'حفظت ورد اليوم · اضغط لمقطع إضافي', 'go', 'hifzMenu', true, 'goHifz');
+  else h += tile('hifz', 'حفظ', 'اليوم: ' + cShort(S.chunks[S.nextNew]), 'go', 'hifzMenu', false, 'goHifz');
   const todo = reviewTodo(), anyRev = Object.keys(S.learned).length || S.arch.length || (S.rev.known || []).length;
   if (!anyRev) h += tile('rev', 'مراجعة', 'حدّد ما تحفظه ومقدار مراجعتك', 'go', 'setupReview');
   else if (!todo.length) h += tile('rev', 'مراجعة', 'لا مراجعة متبقية اليوم', 'go', 'setupReview', true);
@@ -686,6 +691,18 @@ function vHome(){
   return h;
 }
 
+const HOME_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>';
+function inprog(){ const ip = S.inprog; return ip && S.chunks[ip.idx] && !S.learned[ip.idx] && Object.values(ip.reps || {}).some(n => n > 0) ? ip : null; }
+function keepProgress(){ const t = sess && sess.queue[sess.pos]; if (t && t.type === 'new'){ S.inprog = {idx:t.idx, reps:sess.reps, ri:sess.ri || 0}; save(); } }
+function vHifzMenu(){
+  const ip = inprog(), opts = [];
+  if (ip){ const c = S.chunks[ip.idx], n = chunkAyat(c).length;
+    opts.push(`<button class="opt big" data-act="hifzResume"><span class="tic">${TI.hifz}</span><span><b>أكمل من حيث توقفت</b><span class="muted" style="display:block">${cLabel(c)} · الآية ${AR(Math.min((ip.ri || 0) + 1, n))} من ${AR(n)}</span></span></button>`); }
+  if (hasNewLeft()){ const c = S.chunks[S.nextNew], done = newDoneToday();
+    opts.push(`<button class="opt big" data-act="hifzToday"><span class="tic">${done ? '+' : '١'}</span><span><b>${done ? 'احفظ المقطع التالي' : ip && ip.idx === S.nextNew ? 'ابدأ مقطع اليوم من أوله' : 'حفظ اليوم'}</b><span class="muted" style="display:block">${cLabel(c)}${done ? ' · أنهيت ورد اليوم، هذا مقطع إضافي' : ''}</span></span></button>`); }
+  opts.push(`<button class="opt big" data-act="go" data-v="setupHifz"><span class="tic">+</span><span><b>حفظ جديد</b><span class="muted" style="display:block">اختر سورة أو ربعًا أو جزءًا آخر، ومقداره اليومي</span></span></button>`);
+  return `<main>${back()}<div><h1>الحفظ</h1>${S.hifz ? `<p class="muted">خطتك الحالية: ${hifzName(S.hifz)} · ${paceName(S.hifz)}</p>` : ''}</div><div class="btns">${opts.join('')}</div></main>`;
+}
 /* ---------- setup: memorization ---------- */
 function newHd(){
   const h = S.hifz && !S.hifz.name && S.hifz.pace.type !== 'mins' ? S.hifz : null;
@@ -717,7 +734,7 @@ function vSetupHifz(){
 }
 function saveHifz(){
   Object.keys(S.learned).forEach(i => { if (S.chunks[i]) S.arch.push(Object.assign({c:S.chunks[i]}, S.learned[i])); });
-  S.hifz = hdToHifz(hd); S.chunks = planChunks(S.hifz); S.learned = {}; S.nextNew = 0; S.lastNewDay = null; S.rev.day = null; save();
+  S.inprog = null; S.hifz = hdToHifz(hd); S.chunks = planChunks(S.hifz); S.learned = {}; S.nextNew = 0; S.lastNewDay = null; S.rev.day = null; save();
 }
 
 /* ---------- setup: review ---------- */
@@ -823,7 +840,7 @@ function vSession(){
   const revs = sess.queue.filter(q => q.type === 'review');
   const kind = t.type === 'new' ? 'حفظ جديد' : t.type === 'practice' ? 'مراجعة حرة' : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
   const title = t.page ? `صفحة ${AR(t.page)} · ${cShort(c)}` : cLabel(c);
-  let h = `<main><div class="sess-top"><button class="x" data-act="ask" data-v="quit">إنهاء</button><div class="steps">${steps}</div></div>${confirmBox === 'quit' ? `<div class="confirm"><p>هل تريد الخروج؟ ${t.type === 'new' ? 'تكرارك في هذا المقطع لن يُحفظ، وتستطيع العودة إليه من شاشة «اليوم».' : 'ما أنهيته من مراجعات محفوظ، والباقي ينتظرك.'}</p><div class="rnav"><button class="btn" data-act="cancel">أكمل</button><button class="btn danger" data-act="quit">خروج</button></div></div>` : ''}
+  let h = `<main><div class="sess-top"><button class="x homebtn" data-act="quit">${HOME_SVG}الرئيسية</button><div class="steps">${steps}</div></div>${confirmBox === 'quit' ? `<div class="confirm"><p>هل تريد الخروج؟ ${t.type === 'new' ? 'تكرارك في هذا المقطع لن يُحفظ، وتستطيع العودة إليه من شاشة «اليوم».' : 'ما أنهيته من مراجعات محفوظ، والباقي ينتظرك.'}</p><div class="rnav"><button class="btn" data-act="cancel">أكمل</button><button class="btn danger" data-act="quit">خروج</button></div></div>` : ''}
     <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>`;
   if (sess.phase === 'read'){
     const ay = chunkAyat(c), ri = Math.min(sess.ri || 0, ay.length - 1), x = ay[ri], key = x.s + ':' + x.a, r = sess.reps[key] || 0, full = r >= R0;
@@ -1175,8 +1192,10 @@ app.addEventListener('click', e => {
   if (a === 'revGo'){ const todo = reviewTodo(); if (todo.length) startSession(todo.map(x => Object.assign({}, x))); return; }
   if (a === 'practice'){ startSession([{type:'practice', idx:+v}]); return; }
   if (a === 'quit'){ confirmBox = null; stopMic(); sess = null; if (retReader && RD){ retReader = false; openReader(RD.page, RD.back); return; } view = 'home'; render(); return; }
-  if (a === 'rep'){ const n = (sess.reps[v] || 0) + 1; sess.reps[v] = n; const ay = chunkAyat(itemChunk(sess.queue[sess.pos])); const ri = sess.ri || 0; if (n === REPS() && ri < ay.length - 1){ render(); setTimeout(() => { if (sess && (sess.ri || 0) === ri){ sess.ri = ri + 1; render(); window.scrollTo(0, 0); } }, 450); return; } render(); return; }
-  if (a === 'ri'){ sess.ri = +v; render(); window.scrollTo(0, 0); return; }
+  if (a === 'rep'){ const n = (sess.reps[v] || 0) + 1; sess.reps[v] = n; keepProgress(); const ay = chunkAyat(itemChunk(sess.queue[sess.pos])); const ri = sess.ri || 0; if (n === REPS() && ri < ay.length - 1){ render(); setTimeout(() => { if (sess && (sess.ri || 0) === ri){ sess.ri = ri + 1; render(); window.scrollTo(0, 0); } }, 450); return; } render(); return; }
+  if (a === 'ri'){ sess.ri = +v; keepProgress(); render(); window.scrollTo(0, 0); return; }
+  if (a === 'hifzToday'){ if (hasNewLeft()){ S.inprog = null; save(); startSession([{type:'new', idx:S.nextNew}]); } return; }
+  if (a === 'hifzResume'){ const ip = inprog(); if (ip){ startSession([{type:'new', idx:ip.idx}]); sess.reps = Object.assign({}, ip.reps); sess.ri = ip.ri || 0; render(); } return; }
   if (a === 'toTest'){ sess.phase = 'test'; render(); window.scrollTo(0, 0); return; }
   if (a === 'peek'){ const i = +v; if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
   if (a === 'mic'){
