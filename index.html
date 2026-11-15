@@ -235,6 +235,10 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .opt.big{align-items:center;padding:16px}
 .opt.big .tic{flex:none}
 .homebtn{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.dlcard{flex-direction:row;align-items:center;gap:14px}
+.dlcard.done .mimg{width:44px;height:55px}
+.mimg{flex:none;width:84px;height:105px;filter:drop-shadow(0 4px 8px rgb(0 0 0 / .18))}
+.dltxt{flex:1;display:flex;flex-direction:column;gap:8px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -687,6 +691,7 @@ function vHome(){
     const total = S.chunks.reduce((n, c) => n + nAyat(c), 0), pct = Math.round(learnedAyat / total * 100);
     h += `<div class="card"><div class="row"><h3>${hifzName(S.hifz)}</h3><b>${AR(pct)}٪</b></div><div class="bar" style="color:var(--accent)"><i style="width:${pct}%"></i></div><p class="muted">حفظت ${AR(learnedAyat)} من ${AR(total)} آية · ${paceName(S.hifz)}</p></div>`;
   }
+  h += dlCard(true);
   h += installCard();
   return h;
 }
@@ -1053,18 +1058,24 @@ async function startDownload(){
     const m = await loadMushaf();
     const urls = [new URL('mushaf.json', location.href).href, ...m.fonts.map(fontUrl)];
     const c = await caches.open(MCACHE); let done = 0; const q = urls.slice();
-    const worker = async () => { while (q.length){ const u = q.shift(); if (!(await c.match(u))){ const r = await fetch(u, {mode:'cors'}); if (!r.ok) throw new Error(u); await c.put(u, r); } done++; dl.pct = Math.round(done / urls.length * 100); if (view === 'read') render(); } };
+    const worker = async () => { while (q.length){ const u = q.shift(); if (!(await c.match(u))){ const r = await fetch(u, {mode:'cors'}); if (!r.ok) throw new Error(u); await c.put(u, r); } done++; dl.pct = Math.round(done / urls.length * 100); if (view === 'read' || view === 'home') render(); } };
     await Promise.all([worker(), worker(), worker(), worker()]);
     dl.state = 'done'; try { localStorage.setItem('thabbit-dl', '1'); } catch (e) {}
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
   } catch (e) { dl.state = 'idle'; dl.err = 'توقف التحميل. تأكد من الإنترنت، ثم اضغط «تحميل المصحف» ليكمل من حيث توقف.'; }
-  if (view === 'read') render();
+  if (view === 'read' || view === 'home') render();
 }
-function dlCard(){
+const MUSHAF_SVG = '<svg class="mimg" viewBox="0 0 120 150" aria-hidden="true"><defs><linearGradient id="mg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14806f"/><stop offset="1" stop-color="#0a4f47"/></linearGradient></defs>' +
+  '<rect x="14" y="10" width="96" height="132" rx="6" fill="#e8dcc0"/><rect x="10" y="6" width="96" height="132" rx="6" fill="url(#mg)"/>' +
+  '<rect x="18" y="14" width="80" height="116" rx="3" fill="none" stroke="#d9b45a" stroke-width="2"/><rect x="23" y="19" width="70" height="106" rx="2" fill="none" stroke="#d9b45a" stroke-width=".8" stroke-dasharray="3 2"/>' +
+  '<g transform="translate(58 72)" fill="none" stroke="#e6c46e" stroke-width="1.6"><rect x="-20" y="-20" width="40" height="40"/><rect x="-20" y="-20" width="40" height="40" transform="rotate(45)"/><circle r="11" fill="#e6c46e" fill-opacity=".18"/><circle r="5" fill="#e6c46e" stroke="none"/></g>' +
+  '<g fill="#d9b45a"><path d="M18 14h10l-10 10z"/><path d="M98 14h-10l10 10z"/><path d="M18 130h10l-10-10z"/><path d="M98 130h-10l10-10z"/></g></svg>';
+function dlCard(big){
   if (IN_CLAUDE) return '';
-  if (dl.state === 'done') return `<div class="card"><div class="row"><h3>المصحف محمّل على جهازك</h3><span class="chip">✓</span></div><p class="muted">تستطيع القراءة بدون إنترنت.</p></div>`;
-  if (dl.state === 'run') return `<div class="card"><h3>جاري تحميل المصحف...</h3><div class="bar" style="color:var(--accent)"><i style="width:${dl.pct}%"></i></div><p class="muted">${AR(dl.pct)}٪ · أبقِ التطبيق مفتوحًا حتى ينتهي.</p></div>`;
-  return `<div class="card"><h3>حمّل المصحف للقراءة بدون إنترنت</h3><p class="muted">حجمه حوالي ٣٨ ميجابايت، ويُفضَّل تحميله على شبكة Wi-Fi. بدون التحميل تُحمَّل كل صفحة عند فتحها وتحتاج إلى إنترنت.</p>${dl.err ? `<p class="err">${dl.err}</p>` : ''}<button class="btn soft" data-act="dlStart">تحميل المصحف</button></div>`;
+  const img = big ? MUSHAF_SVG : '';
+  if (dl.state === 'done') return big ? `<div class="card dlcard done">${img}<div class="dltxt"><h3>المصحف محمّل على جهازك ✓</h3><p class="muted">تقرأ مصحف المدينة كاملًا بدون إنترنت.</p></div></div>` : `<div class="card"><div class="row"><h3>المصحف محمّل على جهازك</h3><span class="chip">✓</span></div><p class="muted">تستطيع القراءة بدون إنترنت.</p></div>`;
+  if (dl.state === 'run') return `<div class="card dlcard">${img}<div class="dltxt"><h3>جاري تحميل المصحف...</h3><div class="bar" style="color:var(--accent)"><i style="width:${dl.pct}%"></i></div><p class="muted">${AR(dl.pct)}٪ · أبقِ التطبيق مفتوحًا حتى ينتهي.</p></div></div>`;
+  return `<div class="card dlcard">${img}<div class="dltxt"><h3>حمّل المصحف على جهازك</h3><p class="muted">لتقرأ مصحف المدينة كاملًا بدون إنترنت. حجمه حوالي ٣٨ ميجابايت، ويُفضَّل تحميله على شبكة Wi-Fi.</p>${dl.err ? `<p class="err">${dl.err}</p>` : ''}<button class="btn soft" data-act="dlStart">تحميل المصحف</button></div></div>`;
 }
 function vRead(){
   const r = R();
