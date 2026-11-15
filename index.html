@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ثبّت لحفظ القرآن</title>
+<meta name="theme-color" content="#0d6a60">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ثبّت">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -31,7 +38,8 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:16px;line-height:1.6}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:16px;line-height:1.6;overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
+button{touch-action:manipulation;-webkit-user-select:none;user-select:none}
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
@@ -468,6 +476,7 @@ function vHome(){
     h += `<div class="task"><span class="ic done">✓</span><div><h3>أتممت حفظ الهدف كاملًا</h3><p class="muted">استمر في المراجعة ليثبت حفظك.</p></div></div>`;
   }
   h += '</div>';
+  h += installCard();
   const canNew = hasNewLeft() && !nd;
   if (due.length || canNew){
     h += `<button class="btn" data-act="today">${due.length && canNew ? 'ابدأ ورد اليوم' : due.length ? 'ابدأ المراجعة' : 'ابدأ الحفظ'}</button>`;
@@ -609,11 +618,30 @@ function advance(){
   initStep(); render(); window.scrollTo(0, 0);
 }
 
+/* ---------- install as an app ---------- */
+let installEvt = null;
+const STANDALONE = (() => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } })();
+const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+let installHidden = false;
+try { installHidden = localStorage.getItem('thabbit-install-hide') === '1'; } catch (e) {}
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (view === 'home') render(); });
+function installCard(){
+  if (IN_CLAUDE || STANDALONE || installHidden) return '';
+  if (installEvt) return `<div class="card"><div class="row"><h3>ثبّت التطبيق على جهازك</h3><button class="x" data-act="installHide" aria-label="إخفاء">✕</button></div><p class="muted">يفتح من الشاشة الرئيسية بملء الشاشة، ويعمل الحفظ بدون إنترنت.</p><button class="btn soft" data-act="install">تثبيت التطبيق</button></div>`;
+  if (IOS) return `<div class="card"><div class="row"><h3>ثبّت التطبيق على جوالك</h3><button class="x" data-act="installHide" aria-label="إخفاء">✕</button></div><p class="muted">في Safari اضغط زر المشاركة ⬆️ أسفل الشاشة، ثم «إضافة إلى الشاشة الرئيسية».</p></div>`;
+  return '';
+}
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+
 /* ---------- events ---------- */
 app.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act, v = el.dataset.v;
   if (a === 'surah') return;
+  if (a === 'install'){ if (installEvt){ installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; render(); }); } return; }
+  if (a === 'installHide'){ installHidden = true; try { localStorage.setItem('thabbit-install-hide', '1'); } catch (err) {} render(); return; }
   if (a === 'tab'){ view = v; confirmBox = null; render(); window.scrollTo(0, 0); return; }
   if (a === 'goal'){ draft.type = v; render(); return; }
   if (a === 'min'){ draft.minutes = +v; render(); return; }
