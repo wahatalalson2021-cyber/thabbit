@@ -244,7 +244,7 @@ function makeWebSpeech(){
         if (rec){ resolve(); return; }
         let started = false, err = null, heard = false, restarts = 0, lastInterim = '';
         rec = new SR(); rec.lang = 'ar-SA'; rec.interimResults = true; rec.continuous = !android; rec.maxAlternatives = 1;
-        rec.onstart = () => { if (!started){ started = true; resolve(); } st = 'listening'; emit('s', {state:'listening'}); };
+        rec.onstart = () => { if (!started){ started = true; resolve(); } st = 'listening'; emit('s', {state:'listening'}); emit('h', {stage:'audio'}); };
         rec.onaudiostart = () => emit('h', {stage:'audio'});
         rec.onsoundstart = () => emit('h', {stage:'sound'});
         rec.onspeechstart = () => emit('h', {stage:'speech'});
@@ -296,6 +296,7 @@ if (DICT){
   });
   DICT.onPartial(({text}) => {
     liveText = text;
+    if (text && sess && sess.listening && sess.hear !== 'speech'){ sess.hear = 'speech'; sess.micTip = false; clearTimeout(sess.hearTimer); }
     if (sess && sess.exp && sess.listening && text !== sess.interim){ sess.interim = text; recompute(false); if (view === 'session'){ render(); return; } }
     const el = document.getElementById('live'); if (el) el.textContent = text || hearMsg();
   });
@@ -307,6 +308,9 @@ if (DICT){
     else sess.micTip = false;
     const el = document.getElementById('live'); if (el && !liveText) el.textContent = hearMsg();
     if (stage !== 'audio' && view === 'session') render();
+  });
+  DICT.onState(({state}) => {
+    if (state === 'starting' && sess){ clearTimeout(sess.startTimer); sess.startTimer = setTimeout(() => { if (sess && sess.listening && !sess.hear){ sess.micErr = STANDALONE && IOS ? 'التسميع بالصوت لا يعمل من أيقونة التطبيق على الآيفون، لأن Apple تمنعه. للتسميع افتح الرابط في Safari.' + diag('ios_app') : 'لم يبدأ الاستماع. حاول مرة أخرى.' + diag('no_start'); if (view === 'session') render(); } }, 6000); }
   });
   DICT.onFinal(({text}) => { if (sess && sess.exp && sess.listening){ feed(text); if (view === 'session') render(); } });
 }
