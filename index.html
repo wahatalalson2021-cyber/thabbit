@@ -1098,30 +1098,44 @@ function vReader(){
       <button data-act="rdNext" ${p >= 604 ? 'disabled' : ''}>${ICON.next}التالية</button>
     </nav></div>`;
 }
-/* download for offline reading */
-const dl = {state:'idle', pct:0, err:''};
-let dlFlag = null;
-try { dlFlag = localStorage.getItem('thabbit-dl'); if (dlFlag === '1') dl.state = 'done'; } catch (e) {}
-/* Download once: resume an interrupted download when the app opens or the connection returns; re-check the saved copy still exists. */
-function resumeDownload(){ let f = null; try { f = localStorage.getItem('thabbit-dl'); } catch (e) {} if (f === 'run' && dl.state !== 'run' && navigator.onLine !== false) startDownload(); }
+/* download for offline reading: the mushaf the reader uses (tajweed colours or plain), once, resuming after interruptions */
+const DLK = {plain:'thabbit-dl', tj:'thabbit-dl-tj'};
+const DLN = {plain:49, tj:608};
+const dls = {plain:{state:'idle', pct:0, err:''}, tj:{state:'idle', pct:0, err:''}};
+const dlKind = () => tjOn() ? 'tj' : 'plain';
+const getFlag = k => { try { return localStorage.getItem(DLK[k]); } catch (e) { return null; } };
+const setFlag = (k, v) => { try { localStorage.setItem(DLK[k], v); } catch (e) {} };
+Object.keys(dls).forEach(k => { if (getFlag(k) === '1') dls[k].state = 'done'; });
+function dlUrls(k){
+  const base = [new URL('mushaf.json', location.href).href];
+  if (k === 'plain') return base.concat(M.fonts.map(fontUrl));
+  const out = base.concat([new URL('tajweed.json', location.href).href, fontUrl('QCF4_QBSML'), fontUrl('QCF4_Hafs_01')]);
+  for (let p = 1; p <= 604; p++) out.push(tjUrl(p));
+  return out;
+}
+function resumeDownload(){ Object.keys(dls).forEach(k => { if (getFlag(k) === 'run' && dls[k].state !== 'run' && navigator.onLine !== false) startDownload(k); }); }
 window.addEventListener('online', resumeDownload);
 setTimeout(() => {
   if (IN_CLAUDE || !('caches' in window)) return;
-  if (dlFlag === 'run') resumeDownload();
-  else if (dlFlag === '1') caches.open(MCACHE).then(c => c.keys()).then(ks => { if (ks.length < 49){ dl.state = 'idle'; try { localStorage.setItem('thabbit-dl', 'run'); } catch (e) {} resumeDownload(); } }).catch(() => {});
+  resumeDownload();
+  caches.open(MCACHE).then(c => c.keys()).then(ks => {
+    const have = new Set(ks.map(r => r.url));
+    Object.keys(dls).forEach(k => { if (getFlag(k) !== '1') return; loadMushaf().then(() => { const miss = dlUrls(k).filter(u => !have.has(u)).length; if (miss > 0){ dls[k].state = 'idle'; setFlag(k, 'run'); resumeDownload(); } }).catch(() => {}); });
+  }).catch(() => {});
 }, 1500);
-async function startDownload(){
-  if (!('caches' in window)){ dl.err = 'هذا المتصفح لا يدعم حفظ المصحف على الجهاز.'; render(); return; }
-  dl.state = 'run'; dl.err = ''; try { localStorage.setItem('thabbit-dl', 'run'); } catch (e) {} render();
+async function startDownload(k){
+  k = k || dlKind(); const d = dls[k];
+  if (!('caches' in window)){ d.err = 'هذا المتصفح لا يدعم حفظ المصحف على الجهاز.'; render(); return; }
+  d.state = 'run'; d.err = ''; setFlag(k, 'run'); render();
   try {
-    const m = await loadMushaf();
-    const urls = [new URL('mushaf.json', location.href).href, ...m.fonts.map(fontUrl)];
+    await loadMushaf();
+    const urls = dlUrls(k);
     const c = await caches.open(MCACHE); let done = 0; const q = urls.slice();
-    const worker = async () => { while (q.length){ const u = q.shift(); if (!(await c.match(u))){ const r = await fetch(u, {mode:'cors'}); if (!r.ok) throw new Error(u); await c.put(u, r); } done++; dl.pct = Math.round(done / urls.length * 100); if (view === 'read' || view === 'home') render(); } };
-    await Promise.all([worker(), worker(), worker(), worker()]);
-    dl.state = 'done'; try { localStorage.setItem('thabbit-dl', '1'); } catch (e) {}
+    const worker = async () => { while (q.length){ const u = q.shift(); if (!(await c.match(u))){ const r = await fetch(u, {mode:'cors'}); if (!r.ok) throw new Error(u); await c.put(u, r); } done++; const pct = Math.round(done / urls.length * 100); if (pct !== d.pct){ d.pct = pct; if (view === 'read' || view === 'home') render(); } } };
+    await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+    d.state = 'done'; setFlag(k, '1');
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
-  } catch (e) { dl.state = 'idle'; dl.err = 'توقف التحميل بسبب انقطاع الإنترنت. سيكمل تلقائيًا من حيث توقف عند عودة الاتصال.'; }
+  } catch (e) { d.state = 'idle'; d.err = 'توقف التحميل بسبب انقطاع الإنترنت. سيكمل تلقائيًا من حيث توقف عند عودة الاتصال.'; }
   if (view === 'read' || view === 'home') render();
 }
 const MUSHAF_SVG = '<svg class="mimg" viewBox="0 0 120 150" aria-hidden="true"><defs><linearGradient id="mg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14806f"/><stop offset="1" stop-color="#0a4f47"/></linearGradient></defs>' +
@@ -1131,10 +1145,12 @@ const MUSHAF_SVG = '<svg class="mimg" viewBox="0 0 120 150" aria-hidden="true"><
   '<g fill="#d9b45a"><path d="M18 14h10l-10 10z"/><path d="M98 14h-10l10 10z"/><path d="M18 130h10l-10-10z"/><path d="M98 130h-10l10-10z"/></g></svg>';
 function dlCard(big){
   if (IN_CLAUDE) return '';
-  const img = big ? MUSHAF_SVG : '';
-  if (dl.state === 'done') return big ? `<button class="card dlcard mcard" data-act="rdOpen" data-v="${R().page || 1}">${img}<span class="dltxt"><b class="mtitle">المصحف الشريف</b><span class="muted">مصحف المدينة النبوية · محمّل على جهازك، يعمل بدون إنترنت ✓</span><span class="mopen">${R().page ? 'أكمل من صفحة ' + AR(R().page) : 'افتح المصحف'}</span></span></button>` : `<div class="card"><div class="row"><h3>المصحف محمّل على جهازك</h3><span class="chip">✓</span></div><p class="muted">تستطيع القراءة بدون إنترنت.</p></div>`;
-  if (dl.state === 'run') return `<div class="card dlcard">${img}<div class="dltxt"><h3>جاري تحميل المصحف...</h3><div class="bar" style="color:var(--accent)"><i style="width:${dl.pct}%"></i></div><p class="muted">${AR(dl.pct)}٪ · أبقِ التطبيق مفتوحًا حتى ينتهي.</p></div></div>`;
-  return `<div class="card dlcard">${img}<div class="dltxt"><h3>حمّل المصحف على جهازك</h3><p class="muted">لتقرأ مصحف المدينة كاملًا بدون إنترنت. حجمه حوالي ٣٨ ميجابايت، ويُفضَّل تحميله على شبكة Wi-Fi.</p>${dl.err ? `<p class="err">${dl.err}</p>` : ''}<button class="btn soft" data-act="dlStart">تحميل المصحف</button></div></div>`;
+  const k = dlKind(), d = dls[k], img = big ? MUSHAF_SVG : '';
+  const name = k === 'tj' ? 'مصحف التجويد الملوّن' : 'المصحف';
+  const size = k === 'tj' ? '٥٢' : '٣٨';
+  if (d.state === 'done') return big ? `<button class="card dlcard mcard" data-act="rdOpen" data-v="${R().page || 1}">${img}<span class="dltxt"><b class="mtitle">المصحف الشريف</b><span class="muted">${k === 'tj' ? 'مصحف التجويد الملوّن' : 'مصحف المدينة النبوية'} · محمّل على جهازك، يعمل بدون إنترنت ✓</span><span class="mopen">${R().page ? 'أكمل من صفحة ' + AR(R().page) : 'افتح المصحف'}</span></span></button>` : `<div class="card"><div class="row"><h3>${name} محمّل على جهازك</h3><span class="chip">✓</span></div><p class="muted">تستطيع القراءة بدون إنترنت.</p></div>`;
+  if (d.state === 'run') return `<div class="card dlcard">${img}<div class="dltxt"><h3>جاري تحميل ${name}...</h3><div class="bar" style="color:var(--accent)"><i style="width:${d.pct}%"></i></div><p class="muted">${AR(d.pct)}٪ · أبقِ التطبيق مفتوحًا حتى ينتهي.</p></div></div>`;
+  return `<div class="card dlcard">${img}<div class="dltxt"><h3>حمّل ${name} على جهازك</h3><p class="muted">لتقرأ القرآن كاملًا بدون إنترنت. حجمه حوالي ${size} ميجابايت، ويُفضَّل تحميله على شبكة Wi-Fi.</p>${d.err ? `<p class="err">${d.err}</p>` : ''}<button class="btn soft" data-act="dlStart">تحميل ${name}</button></div></div>`;
 }
 function vRead(){
   const r = R();
