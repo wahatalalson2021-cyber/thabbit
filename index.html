@@ -234,7 +234,7 @@ function makeWebSpeech(){
     start(){
       return new Promise(async (resolve, reject) => {
         if (rec){ resolve(); return; }
-        let started = false, err = null, heard = false, restarts = 0;
+        let started = false, err = null, heard = false, restarts = 0, lastInterim = '';
         rec = new SR(); rec.lang = 'ar-SA'; rec.interimResults = true; rec.continuous = !android; rec.maxAlternatives = 1;
         rec.onstart = () => { if (!started){ started = true; resolve(); } st = 'listening'; emit('s', {state:'listening'}); };
         rec.onaudiostart = () => emit('h', {stage:'audio'});
@@ -247,10 +247,12 @@ function makeWebSpeech(){
             const r = e.results[i];
             if (r.isFinal) emit('f', {text:' ' + r[0].transcript}); else interim += r[0].transcript;
           }
+          lastInterim = interim;
           emit('p', {text:interim});
         };
         rec.onerror = e => { if (e.error !== 'no-speech' && e.error !== 'aborted') err = ERR[e.error] || 'upstream_error'; };
         rec.onend = () => {
+          if (lastInterim.trim()){ emit('f', {text:' ' + lastInterim}); lastInterim = ''; emit('p', {text:''}); }
           if (st === 'listening' && !stopReason && !err && !LOCAL && (heard || restarts < 1)){ restarts++; heard = false; try { begin(rec); return; } catch (x) {} }
           const reason = stopReason || err || 'stopped';
           rec = null; st = 'idle'; stopReason = null; emit('p', {text:''});
@@ -281,10 +283,14 @@ DICT = makeWebSpeech();
 if (DICT){
   DICT.onState(({state, reason}) => {
     dictState = state;
-    if (state === 'idle' && sess && sess.listening){ sess.listening = false; processSpoken(true); sess.micErr = MIC_ERR[reason] ? MIC_ERR[reason] + diag(reason) : ''; liveText = ''; }
+    if (state === 'idle' && sess && sess.listening){ sess.listening = false; sess.interim = ''; recompute(true); sess.micErr = MIC_ERR[reason] ? MIC_ERR[reason] + diag(reason) : ''; liveText = ''; }
     if (view === 'session') render();
   });
-  DICT.onPartial(({text}) => { liveText = text; const el = document.getElementById('live'); if (el) el.textContent = text || hearMsg(); });
+  DICT.onPartial(({text}) => {
+    liveText = text;
+    if (sess && sess.exp && sess.listening && text !== sess.interim){ sess.interim = text; recompute(false); if (view === 'session'){ render(); return; } }
+    const el = document.getElementById('live'); if (el) el.textContent = text || hearMsg();
+  });
   DICT.onHear(({stage}) => {
     if (!sess) return;
     sess.hear = stage;
@@ -321,13 +327,21 @@ function micFail(code){
 function stopMic(){ if (DICT && dictState !== 'idle') DICT.stop().catch(() => {}); if (sess) sess.listening = false; }
 function feed(text){
   if (!/[\u0621-\u064A]/.test(text) && /[A-Za-z]/.test(text)) sess.micErr = 'الخدمة تكتب كلامك بلغة غير العربية. اجعل لغة المتصفح العربية ثم حاول مرة أخرى.' + diag('lang');
-  sess.spoken.push(...text.split(/\s+/).map(normSpoken).filter(Boolean));
-  processSpoken(false);
+  sess.finalText = (sess.finalText || '') + ' ' + text; sess.interim = '';
+  recompute(false);
 }
+/* Re-align everything heard so far (final + live text) against the ayat, so live text and corrections both count. */
+function recompute(flush){
+  sess.ws = {}; sess.p = 0; sess.m2 = 0;
+  sess.spoken = ((sess.finalText || '') + ' ' + (sess.interim || '')).split(/\s+/).map(normSpoken).filter(Boolean);
+  processSpoken(flush);
+}
+const PRE = new Set(['بسم','الله','الرحمن','الرحيم','اعوذ','بالله','من','الشيطان','الرجيم'].map(w => normSpoken(w)));
 function processSpoken(flush){
   const E = sess.exp;
   while (sess.spoken.length && sess.p < E.length){
     const w = sess.spoken[0], w2 = sess.spoken.length > 1 ? w + sess.spoken[1] : null;
+    if (sess.p === 0 && PRE.has(w) && !same(E[0], w) && !(w2 && same(E[0], w2))){ sess.spoken.shift(); continue; }
     let hit = -1, used = 1;
     for (let j = 0; j < 4 && sess.p + j < E.length; j++){
       if (same(E[sess.p + j], w)){ hit = j; used = 1; break; }
@@ -517,7 +531,7 @@ function initStep(){
   sess.peeked = new Set();
   const c = S.chunks[t.idx];
   sess.exp = chunkAyat(c).flatMap(([, txt]) => txt.split(' ').map(expVariants));
-  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.usedMic = false; sess.listening = false; sess.micErr = '';
+  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = '';
 }
 function chunkAyat(c){ const vs = Q[c.s-1][1]; const out = []; for (let i = c.a; i <= c.b; i++) out.push([i, vs[i-1]]); return out; }
 function bas(c){ return c.a === 1 && c.s !== 1 && c.s !== 9 ? `<div class="basmala">${BASMALA}</div>` : ''; }
@@ -621,7 +635,7 @@ app.addEventListener('click', e => {
   if (a === 'mic'){
     if (!DICT) return;
     if (sess.listening || dictState !== 'idle'){ DICT.stop().catch(() => {}); return; }
-    sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.spoken = []; liveText = ''; sess.hear = null; sess.micTip = false;
+    sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.interim = ''; liveText = ''; sess.hear = null; sess.micTip = false;
     const L = LANGS[langIdx];
     DICT.start(L ? {language:L} : undefined).then(() => saveLang(), err => { if (sess){ sess.listening = false; sess.micErr = micFail(err && err.code); render(); } });
     render(); return;
