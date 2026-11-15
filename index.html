@@ -189,6 +189,14 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .tabs3 button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
 .linkbtn{background:none;border:0;color:var(--muted);text-decoration:underline;font-size:.85rem;align-self:center}
 input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit}
+.gsteps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.gstep{display:flex;align-items:center;gap:10px}
+.gnum{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:.8rem;font-weight:700}
+.gico{flex:none;width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);display:grid;place-items:center;color:#0a84ff}
+.gico svg{width:22px;height:22px}
+.gtxt{display:flex;flex-direction:column;line-height:1.4}
+.gtxt small{color:var(--muted)}
+.guide{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -492,6 +500,7 @@ function vOnboard(){
   const mins = [10, 15, 20, 30].map(m => `<button data-act="min" data-v="${m}" aria-pressed="${draft.minutes === m}">${AR(m)} د</button>`).join('');
   return `<main>
     <div class="top"><span class="brand">ثبّت</span>${S ? '<button class="x" data-act="tab" data-v="settings">رجوع</button>' : ''}</div>
+    ${installCard()}
     <div><h1>ماذا تريد أن تحفظ؟</h1><p class="muted">نضع لك خطة يومية، ونذكّرك بمراجعة ما حفظته قبل أن تنساه.</p></div>
     <div class="btns">${opts}</div>${sel}
     <div><h2>كم دقيقة تستطيع يوميًا؟</h2></div>
@@ -584,6 +593,7 @@ function vSettings(){
   ${S.dayOffset ? '<button class="btn ghost" data-act="realDay">ارجع إلى اليوم الحقيقي</button>' : ''}</div>
   <div class="card"><h3>البيانات</h3><p class="muted">التقدّم محفوظ في هذا المتصفح فقط.</p>
   ${confirmBox === 'reset' ? `<div class="confirm"><p>سيُمسح كل التقدّم ولا يمكن استرجاعه.</p><div class="grid3" style="grid-template-columns:1fr 1fr"><button class="btn danger" data-act="resetYes">امسح</button><button class="btn ghost" data-act="cancel">إلغاء</button></div></div>` : '<button class="btn danger" data-act="ask" data-v="reset">مسح كل البيانات</button>'}</div>
+  ${IN_CLAUDE || STANDALONE ? '' : installGuide()}
   <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com)، المأخوذ عن مصحف مجمع الملك فهد.</p></div>`;
   return h;
 }
@@ -894,10 +904,41 @@ const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 let installHidden = false;
 try { installHidden = localStorage.getItem('thabbit-install-hide') === '1'; } catch (e) {}
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (view === 'home') render(); });
+const ANDROID = /Android/i.test(navigator.userAgent);
+const GI = {
+  share:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>',
+  dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  vdots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
+  add:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg>',
+  ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>'
+};
+const gstep = (n, icon, title, sub) => `<li class="gstep"><span class="gnum">${AR(n)}</span><span class="gico">${icon}</span><span class="gtxt"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span></li>`;
+function installGuide(){
+  const appIcon = '<img src="apple-touch-icon.png" alt="" width="26" height="26" style="border-radius:6px">';
+  let steps, title;
+  if (IOS){
+    title = 'تثبيت «ثبّت» على الآيفون';
+    steps = gstep(1, GI.share, 'اضغط زر المشاركة', 'في Safari، أسفل الشاشة. إذا لم يظهر فاضغط أولًا زر ••• أو ☰') +
+      gstep(2, GI.add, 'اختر «إضافة إلى الشاشة الرئيسية»', 'انزل في القائمة قليلًا حتى تجده') +
+      gstep(3, GI.ok, 'اضغط «إضافة»', 'أعلى يمين الشاشة') +
+      gstep(4, appIcon, 'افتح التطبيق من أيقونته', 'وابدأ الحفظ والقراءة منها دائمًا');
+  } else {
+    title = 'تثبيت «ثبّت» على جوالك';
+    steps = gstep(1, GI.vdots, 'افتح الرابط في Chrome', 'إذا فتحته من واتساب: اضغط ⋮ ثم «فتح في Chrome»') +
+      gstep(2, GI.vdots, 'اضغط ⋮ أعلى الشاشة', '') +
+      gstep(3, GI.add, 'اختر «تثبيت التطبيق»', 'أو «إضافة إلى الشاشة الرئيسية»') +
+      gstep(4, appIcon, 'افتح التطبيق من أيقونته', '');
+  }
+  return `<div class="card guide" id="guide"><div class="row"><h3>${title}</h3>${installHidden ? '' : '<button class="x" data-act="installHide" aria-label="إخفاء">✕</button>'}</div>
+    ${installEvt ? '<button class="btn" data-act="install">ثبّت التطبيق بضغطة واحدة</button>' : ''}
+    <ol class="gsteps">${steps}</ol>
+    ${IOS ? '<p class="muted">مهم: استخدم Safari العادي، وليس الوضع الخاص (Private)، حتى يُحفظ تقدّمك.</p>' : ''}</div>`;
+}
 function installCard(){
-  if (IN_CLAUDE || STANDALONE || installHidden) return '';
-  if (installEvt) return `<div class="card"><div class="row"><h3>ثبّت التطبيق على جهازك</h3><button class="x" data-act="installHide" aria-label="إخفاء">✕</button></div><p class="muted">يفتح من الشاشة الرئيسية بملء الشاشة، ويعمل الحفظ بدون إنترنت.</p><button class="btn soft" data-act="install">تثبيت التطبيق</button></div>`;
-  if (IOS) return `<div class="card"><div class="row"><h3>ثبّت التطبيق على جوالك</h3><button class="x" data-act="installHide" aria-label="إخفاء">✕</button></div><p class="muted">في Safari اضغط زر المشاركة ⬆️ أسفل الشاشة، ثم «إضافة إلى الشاشة الرئيسية».</p></div>`;
+  if (IN_CLAUDE || STANDALONE) return '';
+  if (location.hash === '#install') return installGuide();
+  if (installHidden) return '';
+  if (installEvt || IOS || ANDROID) return installGuide();
   return '';
 }
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE){
