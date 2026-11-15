@@ -155,7 +155,9 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .rtool button:disabled{opacity:.35}
 .rsheet{position:fixed;left:8px;right:8px;bottom:76px;max-width:544px;margin:0 auto;z-index:7;box-shadow:0 8px 28px rgb(0 0 0 / .22)}
 .mlist{max-height:40vh;overflow-y:auto}
-.flow{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;row-gap:.55em;padding:.3em 0;line-height:1}
+.flow{display:block;text-align:justify;text-align-last:center;line-height:2.3;background-image:linear-gradient(to bottom,transparent calc(100% - 1px),color-mix(in srgb,var(--gold) 40%,transparent) calc(100% - 1px));background-size:100% 2.3em;padding:0 .08em}
+.flow .mw{display:inline-block;line-height:1;vertical-align:middle}
+.big .sh,.big .bs{font-size:.55em;margin:.3em 0}
 .big .ml{height:2.1em}
 .rbar{display:flex;align-items:center;gap:10px}
 .rtitle{flex:1;display:flex;flex-direction:column;align-items:center;line-height:1.35;text-align:center}
@@ -729,8 +731,8 @@ function kToday(){
   const per = Math.ceil(604 / k.days), to = Math.min(604, k.from + per - 1);
   return {per, from:k.from, to, done: Math.max(0, k.pos - k.from), left: Math.max(0, to - k.pos + 1)};
 }
-const RSIZES = [[0,'مثل المصحف'],[1,'كبير'],[2,'أكبر']];
-function rsize(){ return R().size || 0; }
+const RSIZES = [[0,'مثل المصحف'],[1,'كبير'],[2,'كبير جدًا']];
+function rsize(){ const s = R().size; return s == null ? 1 : s; }
 function pageHtml(p){
   const big = rsize() > 0;
   let h = `<div class="mlines${p <= 2 ? ' opening' : ''}${big ? ' big' : ''}" id="mlines">`, flow = '';
@@ -739,7 +741,7 @@ function pageHtml(p){
     const t = l[0];
     const w = l.slice(1).map(x => { const d = decode(x);
       return `<span class="mw${RD.sel && d.g === RD.sel ? ' sel' : ''}" style="font-family:${M.fonts[d.fi]}"${d.g ? ` data-act="ayah" data-v="${d.g}"` : ''}>${String.fromCodePoint(d.code)}</span>`; }).join('');
-    if (t === 0 && big){ flow += w; continue; }
+    if (t === 0 && big){ flow += (flow ? ' ' : '') + l.slice(1).map(x => { const d = decode(x); return `<span class="mw${RD.sel && d.g === RD.sel ? ' sel' : ''}" style="font-family:${M.fonts[d.fi]}"${d.g ? ` data-act="ayah" data-v="${d.g}"` : ''}>${String.fromCodePoint(d.code)}</span>`; }).join(' '); continue; }
     flush();
     h += t === 1 ? `<div class="ml sh"><span class="shb">${w}</span></div>` : t === 2 ? `<div class="ml bs">${w}</div>` : `<div class="ml">${w}</div>`;
   }
@@ -749,13 +751,13 @@ function pageHtml(p){
 function layoutPage(){
   const box = document.getElementById('mlines'); if (!box) return;
   const W = box.clientWidth;
+  if (box.classList.contains('big')){ box.style.fontSize = W / (rsize() === 1 ? 9 : 7) + 'px'; return; }
   box.style.fontSize = '20px';
   const lines = [...box.querySelectorAll('.ml:not(.sh):not(.bs)')];
   const sums = lines.map(l => { let s = 0; for (const c of l.children) s += c.getBoundingClientRect().width; return s; });
   let maxEm = 16.3;
   if (box.classList.contains('opening') && sums.length) maxEm = Math.max(...sums) / 20 + 0.6;
   let fs = Math.min(W / (maxEm * 1.02), 46);
-  if (box.classList.contains('big')) fs = W / 16.4 * (rsize() === 1 ? 1.4 : 1.8);
   box.style.fontSize = fs + 'px';
   if (box.classList.contains('opening')) return;
   lines.forEach((l, i) => l.classList.toggle('full', sums[i] * fs / 20 > W * 0.86));
