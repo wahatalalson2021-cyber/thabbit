@@ -312,9 +312,11 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .rcnum{display:block;width:100%;margin-top:4px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:1.1rem;text-align:center}
 .btn svg{width:20px;height:20px;vertical-align:-4px;margin-inline-end:6px}
 .askmore{display:flex;flex-direction:column;gap:10px}
-.labbanner{background:#7a4fb5;color:#fff;border-radius:12px;padding:9px 12px;font-weight:600;font-size:.88rem;text-align:center}
-.mic-box.lab .mic{background:#7a4fb5}
-.mic-box.lab .mic:disabled{opacity:.75}
+.engask{display:flex;flex-direction:column;gap:10px}
+.enghead{display:flex;align-items:center;gap:8px}
+.enghead svg{width:22px;height:22px;color:var(--accent)}
+.mic:disabled{opacity:.75}
+.beeptog svg{flex:none}
 .okbanner{background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good);border-radius:12px;padding:10px 12px;font-weight:600;font-size:.9rem}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -440,107 +442,163 @@ function streak(){
   let n = 0; while (S.days[t]){ n++; t--; } return n;
 }
 
-/* ---------- LAB (test link only, ?lab=1): Quran-trained speech model running on the phone ----------
-   Records the recitation, then a Whisper model fine-tuned on Quran recitation (tarteel-ai/whisper-base-ar-quran,
-   Apache-2.0) writes it out on the device, and the normal matcher colours the words. The regular link never loads any of it. */
-const LAB = (() => { const q = location.search, on = /[?&]lab=1/.test(q);
-  try { if (on) localStorage.setItem('thabbit-lab', '1'); if (/[?&]lab=0/.test(q)){ localStorage.removeItem('thabbit-lab'); return false; }
-    return on || localStorage.getItem('thabbit-lab') === '1'; } catch (e) { return on; } })();
 const TJS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js';
+/* ---------- Accurate recitation engine: a Quran-trained speech model running on the phone ----------
+   tarteel-ai/whisper-base-ar-quran (Apache-2.0), compressed for phones, run with Transformers.js. Downloaded once, then works
+   offline and from the home-screen icon. While the reader recites, the voice is cut at each pause (usually an ayah end), each piece
+   is written out by the model, and the normal matcher colours the words. The phone's own speech service stays as a fallback. */
+const ENG_DTYPE = 'q8', ENG_MB = 105;
+const ENG = {st: 'checking', mb: 0, err: ''};   // checking | none | dl | ready | bad
+const engFlag = (k, v) => { try { if (v === undefined) return localStorage.getItem('thabbit-eng-' + k); if (v === null) localStorage.removeItem('thabbit-eng-' + k); else localStorage.setItem('thabbit-eng-' + k, v); } catch (e) { return null; } };
+/* The model runs in a background worker, so the screen and the microphone keep working while it writes. */
+const WORKER_SRC = `let asr = null;
+self.onmessage = async e => { const m = e.data;
+  if (m.type === 'load'){ try { const T = await import(m.tjs); T.env.allowLocalModels = true; T.env.allowRemoteModels = false; T.env.localModelPath = m.base;
+      try { T.env.backends.onnx.wasm.numThreads = 1; } catch (x) {}
+      asr = await T.pipeline('automatic-speech-recognition', 'tarteel-base', {dtype: {encoder_model: m.dtype, decoder_model_merged: m.dtype}, device: 'wasm',
+        progress_callback: p => self.postMessage({type: 'prog', p: {status: p.status, file: p.file, loaded: p.loaded, total: p.total}})});
+      self.postMessage({type: 'ready'}); } catch (x) { self.postMessage({type: 'err', msg: String(x && x.message || x)}); } }
+  if (m.type === 'run'){ try { const r = await asr(m.audio, {max_new_tokens: m.max}); self.postMessage({type: 'out', id: m.id, text: r.text}); }
+    catch (x) { self.postMessage({type: 'out', id: m.id, err: String(x && x.message || x)}); } } };`;
 let ASR = null, asrLoad = null;
 function loadASR(onProg){
   if (ASR) return Promise.resolve(ASR);
-  if (!asrLoad) asrLoad = (async () => {
-    labLog('تحميل مكتبة التشغيل');
-    const T = await import(TJS);
-    T.env.allowLocalModels = true; T.env.allowRemoteModels = false; T.env.localModelPath = new URL('./models/', location.href).href;
-    try { T.env.backends.onnx.wasm.numThreads = 1; } catch (e) {}
-    labLog('المكتبة جاهزة، أبدأ تحميل النموذج');
-    ASR = await T.pipeline('automatic-speech-recognition', 'tarteel-base', {dtype: {encoder_model: 'q8', decoder_model_merged: 'q8'}, device: 'wasm', progress_callback: onProg});
-    return ASR;
-  })().catch(e => { asrLoad = null; throw e; });
+  if (!asrLoad) asrLoad = new Promise((resolve, reject) => {
+    let w; try { w = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], {type: 'text/javascript'})), {type: 'module'}); } catch (e) { reject(e); return; }
+    const wait = {}; let nid = 0;
+    w.onmessage = e => { const m = e.data;
+      if (m.type === 'prog'){ if (onProg) onProg(m.p); }
+      else if (m.type === 'ready'){ ASR = (audio, o) => new Promise((ok, no) => { const id = ++nid; wait[id] = {ok, no}; w.postMessage({type: 'run', id, audio, max: o && o.max_new_tokens || 220}, [audio.buffer]); }); ASR.worker = w; resolve(ASR); }
+      else if (m.type === 'err'){ w.terminate(); reject(new Error(m.msg)); }
+      else if (m.type === 'out'){ const p = wait[m.id]; delete wait[m.id]; if (p){ if (m.err) p.no(new Error(m.err)); else p.ok({text: m.text}); } } };
+    w.onerror = e => { reject(new Error(e.message || 'worker')); };
+    w.postMessage({type: 'load', tjs: TJS, base: new URL('./models/', location.href).href, dtype: ENG_DTYPE});
+  }).catch(e => { asrLoad = null; throw e; });
   return asrLoad;
 }
-let labRec = null;
-const LABLOG = []; let labT0 = 0;
-function labLog(m){ LABLOG.push(Math.round((performance.now() - labT0) / 1000) + 's ' + m); if (LABLOG.length > 40) LABLOG.shift(); }
-window.addEventListener('error', e => { if (LAB) labLog('خطأ: ' + (e.message || e)); });
-window.addEventListener('unhandledrejection', e => { if (LAB) labLog('خطأ: ' + (e.reason && e.reason.message || e.reason)); });
-function labBox(){
-  const L = sess.lab || {st:'idle'}, busy = L.st === 'loading' || L.st === 'working';
-  const label = L.st === 'rec' ? 'أنهيت، اكتب ما قرأته' : L.st === 'loading' ? 'أحمّل نموذج القرآن...' : L.st === 'working' ? 'أكتب ما قرأته...' : L.st === 'ready' ? 'ابدأ التسجيل' : 'سمّع بنموذج القرآن (تجريبي)';
-  return `<div class="mic-box lab"><button class="mic ${L.st === 'rec' ? 'on' : ''}" data-act="labMic" ${busy ? 'disabled' : ''}>${MIC_SVG}${label}</button>
-    ${L.msg ? `<p class="live" id="labmsg">${esc(L.msg)}</p>` : ''}${L.err ? `<p class="err">${esc(L.err)}</p><p class="muted" dir="auto" style="font-size:.75rem;margin:0">${esc(LABLOG.slice(-4).join(' | '))}</p>` : ''}</div>`;
+/* Is the model already saved on this phone? (look in the library's own storage, without loading it) */
+async function engCheck(){
+  if (IN_CLAUDE || !('caches' in window)){ ENG.st = 'bad'; return; }
+  if (engFlag('bad') === '1'){ ENG.st = 'bad'; return; }
+  try { const ks = await (await caches.open('transformers-cache')).keys();
+    const have = f => ks.some(r => r.url.includes('/models/tarteel-base/onnx/' + f + '_' + (ENG_DTYPE === 'q8' ? 'quantized' : ENG_DTYPE)));
+    ENG.st = have('encoder_model') && have('decoder_model_merged') ? 'ready' : 'none';
+  } catch (e) { ENG.st = 'none'; }
+  if (ENG.st === 'none' && engFlag('run') === '1' && navigator.onLine !== false) engDownload();
+  if (view === 'home' || view === 'settings' || view === 'session') render();
 }
-const labSet = (o) => { sess.lab = Object.assign(sess.lab || {st:'idle'}, o); if (view === 'session') render(); };
-/* Model files are about 105 MB (fixed total), shown as one counter. Then the phone prepares the model in memory, which can take a while. */
-const LAB_MB = 105;
-async function labStart(){
-  const s0 = sess;
-  if (ASR){ labSet({st:'ready', msg:'النموذج جاهز. اضغط «ابدأ التسجيل» ثم اقرأ.', err:''}); return; }
-  labT0 = performance.now(); LABLOG.length = 0; labLog('بدء: ' + navigator.userAgent.slice(0, 60));
-  labSet({st:'loading', msg:'أبدأ التحميل...', err:''});
-  const files = {}; let prepTimer = null, prepStart = 0;
-  const showMsg = m => { if (sess !== s0) return; sess.lab.msg = m; const el = document.getElementById('labmsg'); if (el) el.textContent = m; else render(); };
+setTimeout(engCheck, 600);
+window.addEventListener('online', () => { if (ENG.st === 'none' && engFlag('run') === '1') engDownload(); });
+const engUI = () => { if (view === 'home' || view === 'settings' || view === 'session' || view === 'read'){ const el = document.getElementById('engmsg'); if (el && ENG.st === 'dl') el.textContent = engProgText(); else render(); } };
+const engProgText = () => ENG.prep ? 'اكتمل التحميل، أجهّز المحرك على جهازك...' : 'جاري التحميل: ' + AR(Math.min(ENG_MB, Math.round(ENG.mb))) + ' من ' + AR(ENG_MB) + ' ميجابايت تقريبًا';
+/* Download (and prepare) the engine. Resumes by itself if the connection drops. */
+async function engDownload(){
+  if (ENG.st === 'dl' || ENG.st === 'ready' && ASR) return;
+  ENG.st = 'dl'; ENG.err = ''; ENG.mb = 0; ENG.prep = false; engFlag('run', '1'); engUI();
+  const files = {};
   try {
     await loadASR(pr => {
-      if (pr.status === 'progress' && pr.total){ files[pr.file] = pr.loaded;
-        const mb = Object.values(files).reduce((x, y) => x + y, 0) / 1048576;
-        showMsg('تحميل النموذج مرة واحدة فقط: ' + AR(Math.min(LAB_MB, Math.round(mb))) + ' من ' + AR(LAB_MB) + ' ميجابايت تقريبًا'); }
-      else if (pr.status === 'done') labLog('اكتمل: ' + pr.file);
-      else if (pr.status === 'initiate') labLog('بدأ: ' + pr.file);
-      if (pr.status === 'done' && /decoder/.test(pr.file || '') && !prepTimer){ prepStart = Date.now(); labLog('أجهّز النموذج');
-        prepTimer = setInterval(() => showMsg('اكتمل التحميل. أجهّز النموذج على جهازك... ' + AR(Math.round((Date.now() - prepStart) / 1000)) + ' ثانية (قد يستغرق دقيقة أو أكثر أول مرة)'), 1000); }
+      if (pr.status === 'progress' && pr.total){ files[pr.file] = pr.loaded; ENG.mb = Object.values(files).reduce((x, y) => x + y, 0) / 1048576; engUI(); }
+      if (pr.status === 'done' && /decoder/.test(pr.file || '')){ ENG.prep = true; engUI(); }
     });
-  } catch (e) { clearInterval(prepTimer); labLog('فشل: ' + (e && e.message || e)); if (sess === s0) labSet({st:'idle', msg:'', err:'تعذّر تجهيز النموذج على هذا الجهاز. (' + (e && e.message || e) + ')'}); return; }
-  clearInterval(prepTimer); labLog('النموذج جاهز');
-  if (sess !== s0) return;
-  labSet({st:'ready', msg:'النموذج جاهز. اضغط «ابدأ التسجيل» ثم اقرأ.', err:''});
-}
-async function labRecord(){
-  const s0 = sess;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-    const mr = new MediaRecorder(stream), parts = [];
-    mr.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
-    mr.onstop = () => { stream.getTracks().forEach(t => t.stop()); labWork(new Blob(parts, {type: mr.mimeType || 'audio/mp4'}), s0); };
-    labRec = {mr, t0: Date.now()}; mr.start(1000);
-    labSet({st:'rec', msg:'أسجّل الآن. اقرأ من حفظك، ثم اضغط الزر عند الانتهاء.'});
-  } catch (e) { labLog('ميكروفون: ' + (e && e.name || e)); labSet({st:'ready', msg:'', err:'تعذّر تشغيل الميكروفون. اسمح لـ Safari باستخدامه ثم اضغط «ابدأ التسجيل» مرة أخرى. (' + (e && e.name || e) + ')'}); }
-}
-function labStop(){ if (labRec && labRec.mr.state !== 'inactive'){ labRec.audioSec = (Date.now() - labRec.t0) / 1000; labRec.mr.stop(); labSet({st:'working', msg:'أكتب ما قرأته...'}); } }
-/* Whisper reads at most 30 s at a time: cut long recordings at the quietest moment, keeping pieces under ~25 s. */
-function labPieces(y){
-  const sr = 16000, out = []; let start = 0;
-  const win = 8000, loud = i => { let s = 0; for (let k = i; k < i + win && k < y.length; k++) s += y[k] * y[k]; return s; };
-  while ((y.length - start) / sr > 25){
-    let best = start + 12 * sr, bv = Infinity;
-    for (let i = start + 12 * sr; i < start + 24 * sr; i += 1600){ const v = loud(i); if (v < bv){ bv = v; best = i + win / 2; } }
-    out.push(y.subarray(start, best)); start = best;
+    ENG.st = 'ready'; engFlag('run', null);
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  } catch (e) {
+    const offline = navigator.onLine === false || /fetch|network|load/i.test(String(e && e.message || e));
+    ENG.st = offline ? 'none' : 'bad'; if (!offline){ engFlag('bad', '1'); engFlag('run', null); }
+    ENG.err = offline ? 'توقف التحميل بسبب انقطاع الإنترنت. سيكمل تلقائيًا عند عودة الاتصال.' : 'هذا الجهاز لا يستطيع تشغيل المحرك الدقيق. سيعمل التسميع بخدمة الجوال.';
   }
-  out.push(y.subarray(start)); return out;
+  if (sess && sess.engWait && ENG.st === 'ready'){ sess.engWait = false; liveText = ''; }
+  engUI();
 }
-async function labWork(blob, s0){
-  const t0 = performance.now();
-  try {
-    const buf = await blob.arrayBuffer(), AC0 = new (window.AudioContext || window.webkitAudioContext)();
-    const dec = await AC0.decodeAudioData(buf); AC0.close && AC0.close();
-    const off = new OfflineAudioContext(1, Math.ceil(dec.duration * 16000), 16000), src = off.createBufferSource();
-    src.buffer = dec; src.connect(off.destination); src.start(); const y = (await off.startRendering()).getChannelData(0);
-    const pieces = labPieces(y), texts = [];
-    for (let i = 0; i < pieces.length; i++){
-      if (sess !== s0) return;
-      labSet({msg: 'أكتب ما قرأته...' + (pieces.length > 1 ? ' الجزء ' + AR(i + 1) + ' من ' + AR(pieces.length) : '')});
-      const r = await ASR(pieces[i], {max_new_tokens: 220});
-      texts.push(String(r.text || '').replace(/<\|[^|]*\|>/g, '').trim());
-    }
-    if (sess !== s0) return;
-    const proc = (performance.now() - t0) / 1000;
-    sess.finalText = texts.join(' '); sess.interim = ''; sess.usedMic = true; sess.engine = 'model';
-    sess.labTime = {audio: dec.duration, proc}; recompute(true); sess.reveal = sess.total;
-    labSet({st:'idle', msg:'', err:''});
-  } catch (e) { labLog('كتابة: ' + (e && e.message || e)); if (sess === s0) labSet({st:'ready', msg:'', err:'تعذّرت كتابة التلاوة. (' + (e && e.message || e) + ')'}); }
+function engDelete(){ caches.delete('transformers-cache').catch(() => {}); try { ASR && ASR.worker && ASR.worker.terminate(); } catch (e) {} ASR = null; asrLoad = null; ENG.st = 'none'; engFlag('run', null); engFlag('bad', null); engFlag('later', null); render(); }
+const useEngine = () => ENG.st === 'ready';
+
+/* Live capture: raw sound from the microphone, cut into pieces at pauses, each piece written out by the model. */
+let REC = null;
+async function engStart(){
+  const s0 = sess, Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx();                                   // created inside the tap, so the iPhone allows it
+  REC = {s0, ctx, q: [], busy: false, stopping: false, seg: [], segN: 0, speech: 0, sil: 0, noise: 0.003, pre: [], blocks: [], cands: []};
+  sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.interim = ''; sess.hear = 'audio'; sess.micTip = false; sess.engine = 'model';
+  liveText = ASR ? '' : 'أجهّز المحرك الدقيق... ابدأ القراءة'; render();
+  try { REC.stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}}); }
+  catch (e) { engClose(); if (sess === s0){ sess.listening = false; sess.micErr = 'لم يُسمح باستخدام الميكروفون. اسمح لـ Safari باستخدامه ثم حاول مرة أخرى.'; render(); } return; }
+  if (!REC || REC.s0 !== sess){ engClose(); return; }
+  const src = ctx.createMediaStreamSource(REC.stream); REC.src = src;
+  try {   /* sound is collected on the audio thread, so none is lost while the phone is busy */
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([CAPTURE_SRC], {type: 'text/javascript'})));
+    const node = new AudioWorkletNode(ctx, 'thabbit-capture'), mute = ctx.createGain(); mute.gain.value = 0;
+    node.port.onmessage = e => engAudio(e.data, ctx.sampleRate); src.connect(node); node.connect(mute); mute.connect(ctx.destination); REC.proc = node;
+  } catch (e) {
+    const proc = ctx.createScriptProcessor(4096, 1, 1); src.connect(proc); proc.connect(ctx.destination); REC.proc = proc;
+    proc.onaudioprocess = ev => engAudio(new Float32Array(ev.inputBuffer.getChannelData(0)), ctx.sampleRate);
+  }
+  if (ctx.state === 'suspended') ctx.resume();
+  loadASR().then(() => { if (REC && liveText.startsWith('أجهّز')){ liveText = ''; engLive(); } engPump(); }, err => { if (REC){ engFlag('bad', '1'); ENG.st = 'bad'; engClose(); if (sess === s0){ sess.listening = false; sess.micErr = 'تعذّر تشغيل المحرك الدقيق على هذا الجهاز. اضغط «سمّع بصوتك» مرة أخرى للتسميع بخدمة الجوال.'; render(); } } });
 }
+const CAPTURE_SRC = `class C extends AudioWorkletProcessor { constructor(){ super(); this.b = []; this.n = 0; }
+  process(i){ const ch = i[0] && i[0][0]; if (ch){ this.b.push(ch.slice(0)); this.n += ch.length;
+    if (this.n >= 4096){ const o = new Float32Array(this.n); let k = 0; for (const x of this.b){ o.set(x, k); k += x.length; } this.port.postMessage(o, [o.buffer]); this.b = []; this.n = 0; } } return true; } }
+registerProcessor('thabbit-capture', C);`;
+function engAudio(x, rate){
+  const R0 = REC; if (!R0 || R0.stopping) return;
+  const ratio = rate / 16000, n = Math.floor(x.length / ratio), y = new Float32Array(n);   // to 16 kHz (average)
+  for (let i = 0; i < n; i++){ const a = Math.floor(i * ratio), b = Math.min(x.length, Math.floor((i + 1) * ratio)); let s = 0; for (let k = a; k < b; k++) s += x[k]; y[i] = s / Math.max(1, b - a); }
+  let e = 0; for (let i = 0; i < n; i++) e += y[i] * y[i]; const rms = Math.sqrt(e / Math.max(1, n)), dur = n / 16000;
+  if (rms < R0.noise * 2) R0.noise = R0.noise * 0.95 + rms * 0.05;
+  const thr = Math.max(R0.noise * 3, 0.006), loud = rms > thr;
+  if (loud){ if (R0.segN && R0.sil >= 0.3) R0.cands.push({k: R0.seg.length, sil: R0.sil, at: R0.segN / 16000});   // a pause inside the piece: a possible cut point
+    R0.speech += dur; R0.sil = 0; if (sess && sess.hear !== 'speech'){ sess.hear = 'speech'; engLive(); } } else R0.sil += dur;
+  if (!R0.segN && !loud){ R0.pre.push(y); if (R0.pre.length > 4) R0.pre.shift(); return; }   // keep a little sound before speech starts
+  if (!R0.segN){ R0.pre.forEach(b => { R0.seg.push(b); R0.blocks.push(0); R0.segN += b.length; }); R0.pre = []; }
+  R0.seg.push(y); R0.blocks.push(rms); R0.segN += n;
+  /* The model learned from whole ayat, so a piece must start at an ayah start: cut only at a long pause (an ayah end).
+     A piece that grows too long is cut at its longest pause. */
+  const segSec = R0.segN / 16000;
+  if (segSec >= 2 && R0.speech >= 1 && R0.sil >= 0.8) engCut(R0.seg.length);
+  else if (segSec >= 24){
+    const c = R0.cands.filter(x => x.at >= 5).sort((a, b) => b.sil - a.sil)[0];
+    if (c) engCut(c.k);
+    else { let best = R0.blocks.length - 1, bv = Infinity; for (let i = Math.round(R0.blocks.length / 2); i < R0.blocks.length - 1; i++) if (R0.blocks[i] < bv){ bv = R0.blocks[i]; best = i + 1; } engCut(best); }
+  }
+}
+function engCut(k){
+  const R0 = REC; const part = R0.seg.slice(0, k), len = part.reduce((a, b) => a + b.length, 0), out = new Float32Array(len); let o = 0;
+  part.forEach(b => { out.set(b, o); o += b.length; });
+  R0.seg = R0.seg.slice(k); R0.blocks = R0.blocks.slice(k); R0.segN = R0.seg.reduce((a, b) => a + b.length, 0); R0.speech = 0; R0.sil = 0;
+  R0.cands = R0.cands.filter(x => x.k > k).map(x => ({k: x.k - k, sil: x.sil, at: x.at - len / 16000}));
+  if (len > 16000 * 0.6) { R0.q.push(out); engPump(); }
+}
+async function engPump(){
+  const R0 = REC; if (!R0 || R0.busy || !ASR) return;
+  if (!R0.q.length){ if (R0.stopping) engFinish(); return; }
+  R0.busy = true; liveText = 'أكتب ما قرأته...'; engLive();
+  try { const y = R0.q.shift(), r = await ASR(y, {max_new_tokens: Math.min(220, 30 + Math.round(y.length / 16000 * 9))}); const t = engClean(r.text);
+    if (sess === R0.s0 && t){ sess.finalText = (sess.finalText || '') + ' ' + t; sess.interim = ''; recompute(false); } }
+  catch (e) { if (sess === R0.s0) sess.micErr = 'تعذّرت كتابة جزء من التلاوة. (' + (e && e.message || e) + ')'; }
+  R0.busy = false; liveText = R0.stopping ? 'أكتب آخر ما قرأته...' : '';
+  if (REC === R0 && view === 'session') render();
+  engPump();
+}
+/* Remove the model's rare runaway repetition ("تتتتت...", the same word many times). */
+function engClean(t){
+  let ws = String(t || '').replace(/<\|[^|]*\|>/g, '').trim().split(/\s+/).filter(w => w && !/(.{1,3})\1{4,}/.test(w));
+  return ws.filter((w, i) => !(i >= 3 && w === ws[i - 1] && w === ws[i - 2] && w === ws[i - 3])).join(' ');
+}
+function engLive(){ const el = document.getElementById('live'); if (el) el.textContent = liveText || hearMsg(); }
+/* The reader pressed "finished" (or reached the end): cut what is left, write it, then show the result. */
+function engStop(){
+  const R0 = REC; if (!R0 || R0.stopping) return;
+  if (R0.segN > 16000 * 0.4 && R0.speech > 0.3) engCut(R0.seg.length);
+  R0.stopping = true; engRelease(R0);
+  if (sess === R0.s0){ sess.draining = true; liveText = R0.q.length || R0.busy ? 'أكتب آخر ما قرأته...' : ''; render(); }
+  if (!ASR && !asrLoad) engFinish(); else engPump();
+}
+function engRelease(R0){ try { if (R0.proc){ R0.proc.onaudioprocess = null; if (R0.proc.port) R0.proc.port.onmessage = null; } R0.src && R0.src.disconnect(); R0.proc && R0.proc.disconnect(); } catch (e) {}
+  try { R0.stream && R0.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { R0.ctx.close(); } catch (e) {} }
+function engFinish(){ const R0 = REC; REC = null; if (!R0) return; if (sess === R0.s0){ sess.listening = false; sess.draining = false; liveText = ''; recompute(true); if (view === 'session') render(); } }
+function engClose(){ const R0 = REC; REC = null; if (R0) engRelease(R0); }
 
 /* ---------- recitation matching ---------- */
 const HAR = /[ؐ-ًؚ-ٟۖ-ࣰۭ-ࣿـ]/g;
@@ -709,7 +767,7 @@ function micFail(code){
   }
   return MIC_ERR[code] ? MIC_ERR[code] + diag(code) : '';
 }
-function stopMic(){ if (DICT && dictState !== 'idle') DICT.stop().catch(() => {}); if (sess){ if (sess.listening && sess.interim){ sess.finalText = (sess.finalText || '') + ' ' + sess.interim; sess.interim = ''; } sess.listening = false; } }
+function stopMic(){ if (REC) engStop(); if (DICT && dictState !== 'idle') DICT.stop().catch(() => {}); if (sess){ if (sess.listening && sess.interim){ sess.finalText = (sess.finalText || '') + ' ' + sess.interim; sess.interim = ''; } sess.listening = false; } }
 function feed(text){
   if (!/[\u0621-\u064A]/.test(text) && /[A-Za-z]/.test(text)) sess.micErr = 'الخدمة تكتب كلامك بلغة غير العربية. اجعل لغة المتصفح العربية ثم حاول مرة أخرى.' + diag('lang');
   sess.finalText = (sess.finalText || '') + ' ' + text; sess.interim = '';
@@ -1045,13 +1103,13 @@ function vHome(){
   else if (!wt.left) h += tile('wird', 'ورد يومي', 'أتممت ورد اليوم', 'rdOpen', S.wird.pos > 604 ? 1 : S.wird.pos, true, 'goWird');
   else h += tile('wird', 'ورد يومي', `صفحة ${AR(wt.from)} إلى ${AR(wt.to)} · بقي ${AR(wt.left)}`, 'rdOpen', S.wird.pos, false, 'goWird');
   h += '</div>';
-  if (LAB) h = `<div class="labbanner">الوضع التجريبي مفعّل: زر «سمّع بنموذج القرآن» يظهر في شاشة التسميع</div>` + h;
   if (S.hifz && S.chunks.length){
     const learnedAyat = Object.keys(S.learned).reduce((n, i) => n + (S.chunks[i] ? nAyat(S.chunks[i]) : 0), 0);
     const total = S.chunks.reduce((n, c) => n + nAyat(c), 0), pct = Math.round(learnedAyat / total * 100);
     h += `<div class="card"><div class="row"><h3>${hifzName(S.hifz)}</h3><b>${AR(pct)}٪</b></div><div class="bar" style="color:var(--accent)"><i style="width:${pct}%"></i></div><p class="muted">حفظت ${AR(learnedAyat)} من ${AR(total)} آية · ${paceName(S.hifz)}</p></div>`;
   }
   h += dlCard(true);
+  if (ENG.st === 'none' || ENG.st === 'dl') h += `<div class="card dlcard"><div class="dltxt"><h3 class="enghead">${MIC_SVG}التسميع الدقيق بصوتك</h3><p class="muted">${ENG.st === 'dl' ? '' : 'محرك مدرّب على تلاوة القرآن يكتشف أخطاء الحفظ بدقة. يُحمَّل مرة واحدة (حوالي ' + AR(ENG_MB) + ' ميجابايت) ويعمل بدون إنترنت.'}</p>${ENG.st === 'dl' ? `<p class="live" id="engmsg">${engProgText()}</p>` : `${ENG.err ? `<p class="err">${ENG.err}</p>` : ''}<button class="btn dlbtn" data-act="engDl">${CLOUD}حمّل محرك التسميع</button>`}</div></div>`;
   h += installCard();
   h += FOOT_SVG;
   return h;
@@ -1266,13 +1324,14 @@ function vSettings(){
     <div class="row"><span><b>صوت التنبيه عند الخطأ</b><small>نغمة قصيرة أثناء التسميع بالصوت إذا أخطأت في كلمة</small></span><button class="x" data-act="beepTog">${S.beep !== false ? 'يعمل' : 'مغلق'}</button></div>
     <div class="row"><span><b>الورد اليومي</b><small>${S.wird ? wirdName(S.wird) : 'غير محدد'}</small></span><button class="x" data-act="go" data-v="setupWird">تعديل</button></div>
   </div>
+  ${engCard()}
   <div class="card"><h3>وضع التجربة</h3><p class="muted">لترى كيف تعمل المراجعة دون انتظار، قدّم التطبيق يومًا واحدًا.${S.dayOffset ? ' أنت الآن متقدم ' + AR(S.dayOffset) + ' ' + (S.dayOffset === 1 ? 'يومًا' : 'أيام') + '.' : ''}</p>
   <button class="btn soft" data-act="nextDay">انتقل إلى اليوم التالي</button>
   ${S.dayOffset ? '<button class="btn ghost" data-act="realDay">ارجع إلى اليوم الحقيقي</button>' : ''}</div>
   <div class="card"><h3>البيانات</h3><p class="muted">التقدّم محفوظ في هذا الجهاز فقط.</p>
   ${confirmBox === 'reset' ? `<div class="confirm"><p>سيُمسح كل التقدّم ولا يمكن استرجاعه.</p><div class="rnav"><button class="btn danger" data-act="resetYes">امسح</button><button class="btn ghost" data-act="cancel">إلغاء</button></div></div>` : '<button class="btn danger" data-act="ask" data-v="reset">مسح كل البيانات</button>'}</div>
   ${IN_CLAUDE || STANDALONE ? '' : installGuide()}
-  <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. مصحف التجويد الملوّن: خطوط مجمع الملك فهد (الإصدار الرابع، ١٤٤١هـ) كما تنشرها مكتبة QUL، للعرض المجاني فقط. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta.</p></div>`;
+  <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. مصحف التجويد الملوّن: خطوط مجمع الملك فهد (الإصدار الرابع، ١٤٤١هـ) كما تنشرها مكتبة QUL، للعرض المجاني فقط. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta. محرك التسميع الدقيق: نموذج tarteel-ai/whisper-base-ar-quran من Tarteel AI (رخصة Apache 2.0)، مضغوط ليعمل على الجوال بمكتبة Transformers.js.</p></div>`;
   return h;
 }
 
@@ -1296,7 +1355,7 @@ function initStep(){
       if ((x.a === 1 || (x.s === 42 && x.a === 2)) && MUQ.has(first)) sess.muq.set(sess.exp.length, first);
       x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
     tajweedVariants(sess.exp); }
-  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false; SRLOG.length = 0; sess.lab = null; sess.labTime = null; sess.engine = null;
+  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false; SRLOG.length = 0; sess.engine = null; sess.draining = false; sess.engWait = false; sess.engAsk = false;
 }
 function chunkAyat(c){ const out = []; segs(c).forEach((sg, si) => { for (let a = sg.a; a <= sg.b; a++) out.push({s:sg.s, a, txt:Q[sg.s - 1][1][a - 1], head: a === sg.a && (si > 0 || a === 1)}); }); return out; }
 function headHtml(x, multi){ return (multi ? `<div class="shead">${sName(x.s)}</div>` : '') + (x.a === 1 && x.s !== 1 && x.s !== 9 ? `<div class="basmala">${BASMALA}</div>` : ''); }
@@ -1340,9 +1399,10 @@ function vSession(){
     h += `<p class="muted">${t.type === 'new' ? 'الآيات مخفية الآن. اقرأها من حفظك بصوت مسموع، واكشف الكلمة إذا توقفت.' : 'اقرأ من حفظك بصوت مسموع من أوله. أول كلمتين ظاهرتان لتبدأ.'}</p>${words}`;
     if (!allShown){
       h += `<div class="dock">`;
-      if (LAB) h += labBox();
-      if (DICT && !(sess.lab && sess.lab.st !== 'idle')){
-        h += `<div class="mic-box"><button class="mic ${sess.listening ? 'on' : ''}" data-act="mic">${MIC_SVG}${sess.listening ? 'أنهيت التسميع' : sess.p > 0 ? 'تابع التسميع بصوتك' : 'سمّع بصوتك'}</button>
+      if (sess.engAsk) h += engAskBox();
+      else if (DICT || ENG.st === 'ready' || ENG.st === 'dl' || ENG.st === 'none'){
+        h += `<div class="mic-box"><button class="mic ${sess.listening ? 'on' : ''}" data-act="mic" ${sess.draining ? 'disabled' : ''}>${MIC_SVG}${sess.draining ? 'أكتب آخر ما قرأته...' : sess.listening ? 'أنهيت التسميع' : sess.p > 0 ? 'تابع التسميع بصوتك' : 'سمّع بصوتك'}</button>
+          ${engNote()}
           <button class="beeptog" data-act="beepTog" aria-pressed="${S.beep !== false}">${S.beep !== false ? BELL_SVG + 'صوت التنبيه عند الخطأ: يعمل' : BELL_OFF_SVG + 'صوت التنبيه عند الخطأ: مغلق'}</button>
           <p class="live" id="live" aria-live="polite">${sess.listening ? esc(liveText) || hearMsg() : ''}</p>
           ${sess.listening && sess.micTip ? `<p class="err">لا يصل أي صوت إلى الميكروفون. اضغط رمز الميكروفون في شريط العنوان أعلى المتصفح، واختر الميكروفون الحقيقي لجهازك.</p>` : ''}
@@ -1361,7 +1421,7 @@ function vSession(){
       const S3 = sug === 3 ? 'sug' : '', S2 = sug === 2 ? 'sug' : '', S1 = sug === 1 ? 'sug' : '';
       if (sess.usedMic){
         h += `<div class="result"><span class="chip">${AR(okN)} كلمة صحيحة</span>${misses ? `<span class="chip warn" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)">${AR(misses)} خطأ أو تجاوز (بالأحمر)</span>` : ''}${softs ? `<span class="chip soft">${AR(softs)} لم تُسمع بوضوح</span>` : ''}${hints ? `<span class="chip warn">${AR(hints)} مساعدة</span>` : ''}${unreached ? `<span class="chip warn">${AR(unreached)} لم تُقرأ</span>` : ''}</div>
-          <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} الاقتراح مُعلَّم، والقرار لك.${misses || softs ? ' اضغط أي كلمة ملونة لترى ماذا سمع التطبيق.' : ''}</p>${sess.labTime ? `<p class="muted">نموذج القرآن (تجريبي): مدة التلاوة ${AR(Math.round(sess.labTime.audio))} ثانية، ووقت الكتابة ${AR(Math.round(sess.labTime.proc))} ثانية.</p>` : ''}${whyBox()}
+          <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} الاقتراح مُعلَّم، والقرار لك.${misses || softs ? ' اضغط أي كلمة ملونة لترى ماذا سمع التطبيق.' : ''}</p>${whyBox()}
           <button class="beeptog" data-act="heardAll">${sess.showAll ? 'إخفاء النص المسموع' : 'اعرض كل ما سمعه التطبيق'}</button>${sess.showAll ? `<div class="whybox"><small>هذا ما كتبته خدمة التعرّف على الكلام من صوتك:</small><span>${esc((sess.finalText || '').trim()) || '—'}</span><button class="btn soft" data-act="copyReport">انسخ التقرير لإرساله</button></div>` : ''}`;
       } else {
         h += `<p class="muted">${hints ? 'احتجت إلى ' + AR(hints) + ' ' + (hints === 1 ? 'كلمة' : hints === 2 ? 'كلمتين' : 'كلمات') + ' مساعدة (باللون البرتقالي).' : 'قارن قراءتك بالنص أعلاه.'} كيف كان حفظك؟</p>`;
@@ -1374,6 +1434,27 @@ function vSession(){
     }
   }
   return h + '</main>';
+}
+/* The one-time offer before the first recitation, and the short status line under the recite button. */
+function engCard(){
+  if (IN_CLAUDE) return '';
+  const st = ENG.st;
+  let body = st === 'ready' ? `<p class="muted">محمّل على جهازك ✓ يعمل بدون إنترنت، ويُستخدم تلقائيًا في كل تسميع.</p>${confirmBox === 'engDel' ? `<div class="confirm"><p>سيُحذف المحرك من جهازك، ويعود التسميع إلى خدمة الجوال الأقل دقة.</p><div class="rnav"><button class="btn danger" data-act="engDel">احذف</button><button class="btn ghost" data-act="cancel">إلغاء</button></div></div>` : '<button class="btn ghost" data-act="engDel">احذف المحرك لتوفير المساحة</button>'}`
+    : st === 'dl' ? `<p class="live" id="engmsg">${engProgText()}</p><p class="muted">أبقِ التطبيق مفتوحًا حتى ينتهي.</p>`
+    : st === 'bad' ? `<p class="muted">${ENG.err || 'لم يعمل المحرك على هذا الجهاز، فالتسميع يعمل بخدمة الجوال.'}</p><button class="btn ghost" data-act="engDl">حاول مرة أخرى</button>`
+    : st === 'checking' ? '<p class="muted">...</p>'
+    : `<p class="muted">محرك مدرّب على تلاوة القرآن، يفهم المدود والأحكام ويكتشف الأخطاء بدقة أعلى بكثير من خدمة الجوال. حجمه حوالي ${AR(ENG_MB)} ميجابايت مرة واحدة، ويُفضَّل تحميله على Wi-Fi.</p>${ENG.err ? `<p class="err">${ENG.err}</p>` : ''}<button class="btn" data-act="engDl">${CLOUD}حمّل محرك التسميع الدقيق</button>`;
+  return `<div class="card"><h3>محرك التسميع الدقيق</h3>${body}</div>`;
+}
+function engAskBox(){
+  return `<div class="card engask"><h3>تسميع أدق بمحرك القرآن</h3><p class="muted">نحمّل مرة واحدة فقط محركًا مدرّبًا على تلاوة القرآن (حوالي ${AR(ENG_MB)} ميجابايت). يفهم المدود والأحكام، ويعمل بعد ذلك بدون إنترنت. يُفضَّل أن تكون على شبكة Wi-Fi.</p>
+    <button class="btn" data-act="engGo">حمّل وابدأ</button><button class="btn ghost" data-act="engLater">لاحقًا، سمّع بخدمة الجوال</button></div>`;
+}
+function engNote(){
+  if (ENG.st === 'dl') return `<p class="live" id="engmsg">${engProgText()}</p>${sess.engWait ? '<p class="muted" style="margin:0;text-align:center">عند انتهاء التحميل اضغط «سمّع بصوتك» وابدأ القراءة.</p>' : ''}${ENG.err ? `<p class="err">${ENG.err}</p>` : ''}`;
+  if (ENG.st === 'none' && !sess.listening) return `<button class="beeptog" data-act="engGo">${CLOUD}للتسميع الأدق: حمّل محرك القرآن (${AR(ENG_MB)} ميجابايت)</button>${ENG.err ? `<p class="err">${ENG.err}</p>` : ''}`;
+  if (ENG.st === 'bad' && ENG.err && !sess.listening) return `<p class="muted" style="margin:0;text-align:center">${ENG.err}</p>`;
+  return '';
 }
 function whyBox(){
   const i = sess.why; if (i == null || !sess.ws[i]) return '';
@@ -1815,18 +1896,29 @@ app.addEventListener('click', e => {
   if (a === 'peek'){ const i = +v; if (sess.reveal >= sess.total && sess.ws[i]){ sess.why = sess.why === i ? null : i; render(); return; } if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
   if (a === 'copyReport'){
     const t = sess.queue[sess.pos], c = itemChunk(t), [s1, a1] = gidToSA(c.r[0][0]), [s2, a2] = gidToSA(c.r[c.r.length - 1][1]);
-    const rep = ['تقرير تسميع - ثبّت', 'المقطع: ' + Q[s1 - 1][0] + ' ' + a1 + ' إلى ' + Q[s2 - 1][0] + ' ' + a2, 'الجهاز: ' + navigator.userAgent, 'المحرك: ' + (sess.engine === 'model' ? 'نموذج القرآن' + (sess.labTime ? ' (تلاوة ' + Math.round(sess.labTime.audio) + ' ث، كتابة ' + Math.round(sess.labTime.proc) + ' ث)' : '') : 'خدمة الجوال'),
+    const rep = ['تقرير تسميع - ثبّت', 'المقطع: ' + Q[s1 - 1][0] + ' ' + a1 + ' إلى ' + Q[s2 - 1][0] + ' ' + a2, 'الجهاز: ' + navigator.userAgent, 'المحرك: ' + (sess.engine === 'model' ? 'المحرك الدقيق (نموذج القرآن)' : 'خدمة الجوال') + ' · حالة المحرك: ' + ENG.st,
       'الكلمات الحمراء: ' + chunkAyat(c).flatMap(x => x.txt.split(' ')).filter((_, i) => sess.ws[i] === 'miss').join('، '),
-      'النص المسموع: ' + (sess.finalText || '').trim(), ...(LABLOG.length ? ['سجل نموذج القرآن:', ...LABLOG] : []), 'الدفعات:', ...SRLOG.map((run, i) => '#' + (i + 1) + '\n' + run.join('\n'))].join('\n');
+      'النص المسموع: ' + (sess.finalText || '').trim(), 'الدفعات:', ...SRLOG.map((run, i) => '#' + (i + 1) + '\n' + run.join('\n'))].join('\n');
     const done = () => toast('نُسخ التقرير. الصقه في المحادثة مع Claude.');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(rep).then(done, () => { prompt('انسخ النص:', rep); });
     else prompt('انسخ النص:', rep);
     return;
   }
-  if (a === 'labMic'){ const st = sess.lab && sess.lab.st; if (st === 'rec') labStop(); else if (st === 'ready') labRecord(); else if (!st || st === 'idle'){ stopMic(); labStart(); } return; }
+  if (a === 'engGo'){ sess.engAsk = false; sess.engWait = true; engDownload(); render(); return; }
+  if (a === 'engLater'){ sess.engAsk = false; engFlag('later', '1'); render(); return; }
+  if (a === 'engDl'){ engFlag('bad', null); if (ENG.st === 'bad') ENG.st = 'none'; engDownload(); return; }
+  if (a === 'engDel'){ if (confirmBox === 'engDel'){ confirmBox = null; engDelete(); } else { confirmBox = 'engDel'; render(); } return; }
   if (a === 'heardAll'){ sess.showAll = !sess.showAll; render(); return; }
   if (a === 'beepTog'){ S.beep = S.beep === false; save(); if (S.beep) { audioUnlock(); beep(); } render(); return; }
   if (a === 'mic'){
+    if (REC){ engStop(); return; }
+    if (sess.draining) return;
+    if (!sess.listening && dictState === 'idle'){
+      /* First recitation without the accurate engine: offer it once (it is what makes recitation reliable). */
+      if (ENG.st === 'none' && engFlag('later') !== '1'){ sess.engAsk = true; render(); return; }
+      if (ENG.st === 'dl'){ sess.engWait = true; render(); return; }
+      if (useEngine()){ audioUnlock(); engStart(); return; }
+    }
     if (!DICT) return;
     if (sess.listening || dictState !== 'idle'){ DICT.stop().catch(() => {}); return; }
     audioUnlock();
@@ -1877,7 +1969,7 @@ app.addEventListener('click', e => {
   if (a === 'rdTj'){ R().tj = !tjOn(); save(); RD.status = pageReady(RD.page) ? 'ok' : 'loading'; render(); if (RD.status !== 'ok') preparePage(RD.page); return; }
   if (a === 'rdGo'){ RD.sheet = ''; goPage(+v); return; }
   if (a === 'rdMarkPage'){ const r = R(); if (!r.marks.some(m => m.p === RD.page)){ const g = firstGid(RD.page); if (g){ r.marks.unshift({g, p:RD.page}); save(); } } render(); return; }
-  if (a === 'dlStart'){ startDownload(); return; }
+  if (a === 'dlStart'){ startDownload(); if (ENG.st === 'none') engDownload(); return; }
   if (a === 'ask'){ confirmBox = v; render(); return; }
   if (a === 'cancel'){ confirmBox = null; render(); return; }
   if (a === 'resetYes'){ try { localStorage.removeItem(KEY); } catch (err) {} location.reload(); return; }
