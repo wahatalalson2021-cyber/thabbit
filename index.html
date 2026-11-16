@@ -300,6 +300,8 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .beeptog[aria-pressed="true"]{color:var(--accent)}
 .toast{position:fixed;top:max(14px,env(safe-area-inset-top));left:16px;right:16px;z-index:50;background:var(--good);color:#fff;border-radius:12px;padding:12px 14px;font-weight:600;font-size:.92rem;box-shadow:0 6px 20px rgb(0 0 0 / .18);transition:opacity .5s,transform .5s}
 .toast.out{opacity:0;transform:translateY(-10px)}
+#rcA,#rcB{display:block;width:100%;margin-top:4px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:1.1rem;text-align:center}
+.btn svg{width:20px;height:20px;vertical-align:-4px;margin-inline-end:6px}
 .okbanner{background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good);border-radius:12px;padding:10px 12px;font-weight:600;font-size:.9rem}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -747,6 +749,7 @@ function render(){
   else if (view === 'setupHifz') h = vSetupHifz();
   else if (view === 'hifzMenu') h = vHifzMenu();
   else if (view === 'revMenu') h = vRevMenu();
+  else if (view === 'recite') h = vRecite();
   else if (view === 'search') h = vSearch();
   else if (view === 'setupReview') h = vSetupReview();
   else if (view === 'setupWird') h = vSetupWird();
@@ -856,6 +859,38 @@ function toast(msg){
   const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = '✓ ' + msg;
   document.body.appendChild(el); setTimeout(() => el.classList.add('out'), 4200); setTimeout(() => el.remove(), 4800);
 }
+/* ---------- recite what you already know (inside review) ---------- */
+let rc = null;
+function rcRange(d){
+  if (d.kind === 'surah') return [GBASE[d.s - 1] + 1, GBASE[d.s]];
+  if (d.kind === 'juz') return [JSTART[d.j], d.j === 30 ? GBASE[114] : JSTART[d.j + 1] - 1];
+  const a = Math.min(d.a, d.b), b = Math.max(d.a, d.b); return [PSTART[a], PSTART[b + 1] - 1];
+}
+function rcName(d){ return d.kind === 'surah' ? 'سورة ' + Q[d.s - 1][0] : d.kind === 'juz' ? 'الجزء ' + AR(d.j) : 'الصفحات ' + AR(Math.min(d.a, d.b)) + ' إلى ' + AR(Math.max(d.a, d.b)); }
+/* One item per mushaf page, holding only the ayat of the chosen range on that page. */
+function reciteItems(G1, G2){
+  const out = [];
+  for (let p = gPage(G1); p <= gPage(G2); p++){ const a = Math.max(G1, PSTART[p]), b = Math.min(G2, PSTART[p + 1] - 1); if (a <= b) out.push({type:'recite', page:p, chunk:{r:[[a, b]]}}); }
+  return out;
+}
+function startRecite(d){
+  const [G1, G2] = rcRange(d), items = reciteItems(G1, G2);
+  startSession(items);
+  sess.banner = 'تسميع ' + rcName(d) + (items.length > 1 ? ': ' + countWord(items.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') + '، صفحة بعد صفحة. تستطيع التوقف في أي وقت.' : '.');
+  render(); window.scrollTo(0, 0);
+}
+function rcSum(d){ const [G1, G2] = rcRange(d), n = gPage(G2) - gPage(G1) + 1; return `${rcName(d)} · ${countWord(n, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')}${n > 1 ? '، تسمّعها صفحة بعد صفحة' : ''}.`; }
+function vRecite(){
+  const d = rc; let body = '';
+  if (d.kind === 'surah') body = `<label class="muted" for="rcSel">اختر السورة</label><select id="rcSel">${Q.map((q, i) => `<option value="${i + 1}" ${d.s === i + 1 ? 'selected' : ''}>${AR(i + 1)}. سورة ${q[0]}</option>`).join('')}</select>`;
+  else if (d.kind === 'juz') body = `<div class="jgrid">${Array.from({length:30}, (_, i) => `<button data-act="rcJuz" data-v="${i + 1}" aria-pressed="${d.j === i + 1}">${AR(i + 1)}</button>`).join('')}</div>`;
+  else body = `<div class="rnav"><label class="muted">من صفحة<input id="rcA" type="number" inputmode="numeric" min="1" max="604" value="${d.a}"></label><label class="muted">إلى صفحة<input id="rcB" type="number" inputmode="numeric" min="1" max="604" value="${d.b}"></label></div>`;
+  return `<main>${back('revMenu')}
+    <div><h1>سمّع ما تختاره</h1><p class="muted">اختبر حفظك لسورة أو جزء أو صفحات تحفظها. الكلمات مخفية، وتسمّع بصوتك صفحة بعد صفحة.</p></div>
+    <div class="card"><h3>ماذا تريد أن تسمّع؟</h3>${seg('rcKind', [['surah','سورة'],['juz','جزء'],['pages','صفحات']], d.kind)}${body}
+      <p class="muted" id="rcSum">${rcSum(d)}</p></div>
+    <button class="btn" data-act="rcGo">ابدأ التسميع</button></main>`;
+}
 function vRevMenu(){
   const todo = reviewTodo(), tot = Math.max(S.rev.tot || 0, todo.length), done = tot - todo.length, opts = [];
   const desc = list => { const pg = list.filter(x => x.page).length, ch = list.length - pg; return [ch ? countWord(ch, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') : '', pg ? countWord(pg, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') : ''].filter(Boolean).join(' و'); };
@@ -864,6 +899,7 @@ function vRevMenu(){
   else if (tot) opts.push(`<div class="opt big done"><span class="tic">✓</span><span><b>أنهيت مراجعة اليوم</b><span class="muted" style="display:block">تقبّل الله منك</span></span></div>`);
   const ex = !todo.length && knownPages().length ? pickPages(true) : [];
   if (ex.length) opts.push(`<button class="opt big" data-act="revExtra"><span class="tic">+</span><span><b>راجع مقدارًا إضافيًا</b><span class="muted" style="display:block">${countWord(ex.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')} تبدأ من صفحة ${AR(ex[0])}</span></span></button>`);
+  opts.push(`<button class="opt big" data-act="go" data-v="recite"><span class="tic">${MIC_SVG}</span><span><b>سمّع ما تختاره</b><span class="muted" style="display:block">سورة أو جزء أو صفحات تحفظها، تسمّعها بصوتك</span></span></button>`);
   opts.push(`<button class="opt big" data-act="go" data-v="setupReview"><span class="tic">+</span><span><b>مراجعة جديدة</b><span class="muted" style="display:block">غيّر ما تراجعه ومقدار مراجعتك اليومية</span></span></button>`);
   const r = S.rev, kn = (r.known || []).length;
   return `<main>${back()}<div><h1>المراجعة</h1>${kn && r.n ? `<p class="muted">خطتك الحالية: تحفظ ${countWord(kn, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا')} · تراجع ${r.unit === 'surah' ? countWord(r.n, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : r.unit === 'juz' ? countWord(r.n, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : countWord(r.n, 'صفحة واحدة', 'صفحتين', 'صفحات', 'صفحة')} يوميًا</p>` : ''}</div><div class="btns">${opts.join('')}</div></main>`;
@@ -1050,7 +1086,8 @@ function vSession(){
   const t = sess.queue[sess.pos], c = itemChunk(t), multi = segs(c).length > 1, R0 = REPS();
   const steps = sess.queue.map((_, i) => `<i class="${i <= sess.pos ? 'on' : ''}"></i>`).join('');
   const revs = sess.queue.filter(q => q.type === 'review');
-  const kind = t.type === 'new' ? 'حفظ جديد' : t.type === 'practice' ? 'مراجعة حرة' : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
+  const recs = sess.queue.filter(q => q.type === 'recite');
+  const kind = t.type === 'new' ? 'حفظ جديد' : t.type === 'practice' ? 'مراجعة حرة' : t.type === 'recite' ? `تسميع ${AR(recs.indexOf(t) + 1)} من ${AR(recs.length)}` : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
   const title = t.page ? `صفحة ${AR(t.page)} · ${cShort(c)}` : cLabel(c);
   let h = `<main><div class="sess-top"><button class="x homebtn" data-act="quit">${HOME_SVG}الرئيسية</button><div class="steps">${steps}</div></div>${confirmBox === 'quit' ? `<div class="confirm"><p>هل تريد الخروج؟ ${t.type === 'new' ? 'تكرارك في هذا المقطع لن يُحفظ، وتستطيع العودة إليه من شاشة «اليوم».' : 'ما أنهيته من مراجعات محفوظ، والباقي ينتظرك.'}</p><div class="rnav"><button class="btn" data-act="cancel">أكمل</button><button class="btn danger" data-act="quit">خروج</button></div></div>` : ''}
     <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>${sess.banner ? `<div class="okbanner">✓ ${sess.banner}</div>` : ''}`;
@@ -1273,7 +1310,8 @@ function vReader(){
   if (RD.sel){
     const [s, a] = gidToSA(RD.sel), marked = R().marks.some(m => m.g === RD.sel);
     sheet = `<div class="rsheet card"><div class="row"><b>سورة ${Q[s - 1][0]} · الآية ${AR(a)}</b><button class="x" data-act="rdUnsel" aria-label="إغلاق">✕</button></div>
-      <div class="rnav"><button class="btn soft" data-act="rdRecite">سمّع هذه الآية</button><button class="btn ghost" data-act="rdMark">${marked ? 'إزالة العلامة' : 'ضع علامة'}</button></div></div>`;
+      <div class="rnav"><button class="btn soft" data-act="rdRecite">سمّع هذه الآية</button><button class="btn ghost" data-act="rdMark">${marked ? 'إزالة العلامة' : 'ضع علامة'}</button></div>
+      <button class="btn soft" data-act="rdReciteSura">${MIC_SVG}سمّع سورة ${Q[s - 1][0]} كاملة</button></div>`;
   } else if (RD.sheet === 'marks'){
     const marks = R().marks;
     sheet = `<div class="rsheet card"><div class="row"><b>العلامات</b><button class="x" data-act="rdSheet" data-v="" aria-label="إغلاق">✕</button></div>
@@ -1450,6 +1488,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 function go(v){
   if (v === 'setupHifz'){ hd = newHd(); confirmBox = null; }
   if (v === 'search') sFocus = true;
+  if (v === 'recite' && !rc){ const p = R().page || 1, sa = gidToSA(PSTART[p]); rc = {kind:'surah', s:sa[0], j:juzOf(p), a:p, b:Math.min(604, p + 1)}; }
   if (v === 'setupReview') rvd = {known:[...(S.rev.known || [])], unit:S.rev.unit || 'pages', n:S.rev.n || 5};
   if (v === 'setupWird'){ const w = S.wird; wd = w ? {mode: w.days ? 'khatma' : w.per % 20 === 0 ? 'juz' : 'pages', n: w.days || (w.per % 20 === 0 ? w.per / 20 : w.per), from: w.pos} : {mode:'pages', n:5, from: R().page || 1}; }
   view = v; render(); window.scrollTo(0, 0);
@@ -1496,6 +1535,10 @@ app.addEventListener('click', e => {
   if (a === 'wdStop'){ S.wird = null; save(); view = 'home'; render(); return; }
   /* start sessions */
   if (a === 'hifzGo'){ if (hasNewLeft()) startSession([{type:'new', idx:S.nextNew}]); return; }
+  if (a === 'rcKind'){ rc.kind = v; render(); return; }
+  if (a === 'rcJuz'){ rc.j = +v; render(); return; }
+  if (a === 'rcGo'){ startRecite(rc); return; }
+  if (a === 'rdReciteSura'){ const s = gidToSA(RD.sel)[0]; retReader = true; startRecite({kind:'surah', s}); return; }
   if (a === 'revExtra'){ const ex = pickPages(true); if (ex.length){ startSession(ex.map(p => ({type:'review', page:p, extra:true}))); sess.banner = 'مراجعة إضافية: ' + countWord(ex.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') + '.'; render(); } return; }
   if (a === 'revGo'){ const todo = reviewTodo(); if (todo.length) startSession(todo.map(x => Object.assign({}, x))); return; }
   if (a === 'practice'){ startSession([{type:'practice', idx:+v}]); return; }
@@ -1567,6 +1610,8 @@ app.addEventListener('click', e => {
 });
 app.addEventListener('change', e => {
   if (e.target.id === 'hdSel'){ hd.n = +e.target.value; render(); }
+  if (e.target.id === 'rcSel'){ rc.s = +e.target.value; render(); }
+  if (e.target.id === 'rcA' || e.target.id === 'rcB'){ const n = Math.max(1, Math.min(604, Math.round(+e.target.value) || 1)); rc[e.target.id === 'rcA' ? 'a' : 'b'] = n; e.target.value = n; const el = document.getElementById('rcSum'); if (el) el.textContent = rcSum(rc); }
 });
 render();
 </script>
