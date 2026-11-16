@@ -291,6 +291,10 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .shd{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem}
 .stx{font-family:var(--f-quran);font-size:1.35rem;line-height:2.1}
 .stx mark{background:color-mix(in srgb,var(--gold) 35%,transparent);color:inherit;border-radius:4px;padding:0 2px}
+.dock{position:sticky;bottom:0;z-index:5;margin:auto -16px -96px;padding:10px 16px max(12px,env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line);box-shadow:0 -4px 14px rgb(0 0 0 / .06);display:flex;flex-direction:column;gap:8px}
+.dock .bigrep{width:118px;height:118px;margin:0 auto}
+.dock .bigrep b{font-size:2.2rem}
+.dock>p.muted{margin:0;font-size:.85rem}
 .okbanner{background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good);border-radius:12px;padding:10px 12px;font-weight:600;font-size:.9rem}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -982,10 +986,11 @@ function vSession(){
     h += `<p class="muted">اقرأ الآية بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'} تنتقل للآية التالية تلقائيًا.</p>`;
     h += `<div class="dots" aria-hidden="true">${ay.map((y, yi) => `<i class="${(sess.reps[y.s + ':' + y.a] || 0) >= R0 ? 'ok' : yi === ri ? 'on' : ''}"></i>`).join('')}</div>`;
     h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus"><div class="t">${esc(x.txt)} <span class="num">﴿${AR(x.a)}﴾</span></div></div>`;
-    h += `<button class="bigrep ${full ? 'full' : ''}" data-act="rep" data-v="${key}" style="--deg:${Math.min(r, R0) * 360 / R0}deg"><span class="in">${r ? `<b>${AR(r)}</b><small>من ${AR(R0)}</small>` : `<b class="go">ابدأ</b><small>${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'}</small>`}</span></button>
+    h += `<div class="dock"><button class="bigrep ${full ? 'full' : ''}" data-act="rep" data-v="${key}" style="--deg:${Math.min(r, R0) * 360 / R0}deg"><span class="in">${r ? `<b>${AR(r)}</b><small>من ${AR(R0)}</small>` : `<b class="go">ابدأ</b><small>${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'}</small>`}</span></button>
       <p class="muted" style="text-align:center">${full ? 'أتممت تكرار هذه الآية' : 'اضغط بعد كل تكرار'}</p>`;
     h += `<div class="rnav"><button class="btn ghost" data-act="ri" data-v="${ri - 1}" ${ri === 0 ? 'disabled' : ''}>الآية السابقة</button><button class="btn ghost" data-act="ri" data-v="${ri + 1}" ${ri >= ay.length - 1 ? 'disabled' : ''}>الآية التالية</button></div>`;
     if (allDone || ri === ay.length - 1) h += `<button class="btn" data-act="toTest">${allDone ? 'اختبر نفسك الآن' : 'جاهز، اختبرني'}</button>`;
+    h += `</div>`;
   } else {
     let k = 0, words = '';
     chunkAyat(c).forEach((x, xi) => {
