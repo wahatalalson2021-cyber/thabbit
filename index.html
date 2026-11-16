@@ -1332,6 +1332,7 @@ function pageHtml(p){
 function layoutPage(){
   const box = document.getElementById('mlines'); if (!box) return;
   const W = box.clientWidth;
+  if (box.classList.contains('big') && isLand()){ wasLand = true; render(); return; }
   if (box.classList.contains('big')){ box.style.fontSize = W / (rsize() === 1 ? 11.25 : 7) + 'px'; box.querySelectorAll('.flow').forEach(fitFlow); return; }
   box.style.fontSize = '20px';
   const lines = [...box.querySelectorAll('.ml:not(.sh):not(.bs)')];
@@ -1366,7 +1367,11 @@ function fitFlow(f){
 const LANDQ = matchMedia('(orientation: landscape) and (max-height: 600px)');
 const isLand = () => LANDQ.matches;
 let wasLand = isLand();
-window.addEventListener('resize', () => { if (view !== 'reader') return; if (isLand() !== wasLand){ wasLand = isLand(); render(); } else layoutPage(); });
+/* iPhone reports the rotation in steps (resize first, orientation later), so check on every signal and once more shortly after. */
+function landCheck(){ if (view !== 'reader') return false; const l = isLand(); if (l !== wasLand){ wasLand = l; render(); return true; } return false; }
+window.addEventListener('resize', () => { if (view !== 'reader') return; if (!landCheck()) layoutPage(); setTimeout(landCheck, 300); });
+window.addEventListener('orientationchange', () => { setTimeout(landCheck, 150); setTimeout(landCheck, 600); });
+if (LANDQ.addEventListener) LANDQ.addEventListener('change', landCheck);
 const ICON = {
   prev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
   next:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
