@@ -451,30 +451,54 @@ let ASR = null, asrLoad = null;
 function loadASR(onProg){
   if (ASR) return Promise.resolve(ASR);
   if (!asrLoad) asrLoad = (async () => {
+    labLog('تحميل مكتبة التشغيل');
     const T = await import(TJS);
     T.env.allowLocalModels = true; T.env.allowRemoteModels = false; T.env.localModelPath = new URL('./models/', location.href).href;
+    try { T.env.backends.onnx.wasm.numThreads = 1; } catch (e) {}
+    labLog('المكتبة جاهزة، أبدأ تحميل النموذج');
     ASR = await T.pipeline('automatic-speech-recognition', 'tarteel-base', {dtype: {encoder_model: 'q8', decoder_model_merged: 'q8'}, device: 'wasm', progress_callback: onProg});
     return ASR;
   })().catch(e => { asrLoad = null; throw e; });
   return asrLoad;
 }
 let labRec = null;
+const LABLOG = []; let labT0 = 0;
+function labLog(m){ LABLOG.push(Math.round((performance.now() - labT0) / 1000) + 's ' + m); if (LABLOG.length > 40) LABLOG.shift(); }
+window.addEventListener('error', e => { if (LAB) labLog('خطأ: ' + (e.message || e)); });
+window.addEventListener('unhandledrejection', e => { if (LAB) labLog('خطأ: ' + (e.reason && e.reason.message || e.reason)); });
 function labBox(){
   const L = sess.lab || {st:'idle'}, busy = L.st === 'loading' || L.st === 'working';
-  const label = L.st === 'rec' ? 'أنهيت، اكتب ما قرأته' : L.st === 'loading' ? 'أحمّل نموذج القرآن...' : L.st === 'working' ? 'أكتب ما قرأته...' : 'سمّع بنموذج القرآن (تجريبي)';
+  const label = L.st === 'rec' ? 'أنهيت، اكتب ما قرأته' : L.st === 'loading' ? 'أحمّل نموذج القرآن...' : L.st === 'working' ? 'أكتب ما قرأته...' : L.st === 'ready' ? 'ابدأ التسجيل' : 'سمّع بنموذج القرآن (تجريبي)';
   return `<div class="mic-box lab"><button class="mic ${L.st === 'rec' ? 'on' : ''}" data-act="labMic" ${busy ? 'disabled' : ''}>${MIC_SVG}${label}</button>
-    ${L.msg ? `<p class="live">${esc(L.msg)}</p>` : ''}${L.err ? `<p class="err">${esc(L.err)}</p>` : ''}</div>`;
+    ${L.msg ? `<p class="live" id="labmsg">${esc(L.msg)}</p>` : ''}${L.err ? `<p class="err">${esc(L.err)}</p><p class="muted" dir="auto" style="font-size:.75rem;margin:0">${esc(LABLOG.slice(-4).join(' | '))}</p>` : ''}</div>`;
 }
 const labSet = (o) => { sess.lab = Object.assign(sess.lab || {st:'idle'}, o); if (view === 'session') render(); };
+/* Model files are about 105 MB (fixed total), shown as one counter. Then the phone prepares the model in memory, which can take a while. */
+const LAB_MB = 105;
 async function labStart(){
   const s0 = sess;
-  labSet({st:'loading', msg:'', err:''});
+  if (ASR){ labSet({st:'ready', msg:'النموذج جاهز. اضغط «ابدأ التسجيل» ثم اقرأ.', err:''}); return; }
+  labT0 = performance.now(); LABLOG.length = 0; labLog('بدء: ' + navigator.userAgent.slice(0, 60));
+  labSet({st:'loading', msg:'أبدأ التحميل...', err:''});
+  const files = {}; let prepTimer = null, prepStart = 0;
+  const showMsg = m => { if (sess !== s0) return; sess.lab.msg = m; const el = document.getElementById('labmsg'); if (el) el.textContent = m; else render(); };
   try {
-    const files = {};
-    await loadASR(pr => { if (pr.status === 'progress' && pr.total){ files[pr.file] = [pr.loaded, pr.total]; const v = Object.values(files), a = v.reduce((x, y) => x + y[0], 0), b = v.reduce((x, y) => x + y[1], 0);
-      if (sess === s0 && b > 5e6) labSet({msg:'تحميل النموذج مرة واحدة فقط: ' + AR(Math.round(a / b * 100)) + '٪ من ' + AR(Math.round(b / 1048576)) + ' ميجابايت'}); } });
-  } catch (e) { if (sess === s0) labSet({st:'idle', msg:'', err:'تعذّر تحميل النموذج. تأكد من الإنترنت وحاول مرة أخرى. (' + (e && e.message || e) + ')'}); return; }
+    await loadASR(pr => {
+      if (pr.status === 'progress' && pr.total){ files[pr.file] = pr.loaded;
+        const mb = Object.values(files).reduce((x, y) => x + y, 0) / 1048576;
+        showMsg('تحميل النموذج مرة واحدة فقط: ' + AR(Math.min(LAB_MB, Math.round(mb))) + ' من ' + AR(LAB_MB) + ' ميجابايت تقريبًا'); }
+      else if (pr.status === 'done') labLog('اكتمل: ' + pr.file);
+      else if (pr.status === 'initiate') labLog('بدأ: ' + pr.file);
+      if (pr.status === 'done' && /decoder/.test(pr.file || '') && !prepTimer){ prepStart = Date.now(); labLog('أجهّز النموذج');
+        prepTimer = setInterval(() => showMsg('اكتمل التحميل. أجهّز النموذج على جهازك... ' + AR(Math.round((Date.now() - prepStart) / 1000)) + ' ثانية (قد يستغرق دقيقة أو أكثر أول مرة)'), 1000); }
+    });
+  } catch (e) { clearInterval(prepTimer); labLog('فشل: ' + (e && e.message || e)); if (sess === s0) labSet({st:'idle', msg:'', err:'تعذّر تجهيز النموذج على هذا الجهاز. (' + (e && e.message || e) + ')'}); return; }
+  clearInterval(prepTimer); labLog('النموذج جاهز');
   if (sess !== s0) return;
+  labSet({st:'ready', msg:'النموذج جاهز. اضغط «ابدأ التسجيل» ثم اقرأ.', err:''});
+}
+async function labRecord(){
+  const s0 = sess;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     const mr = new MediaRecorder(stream), parts = [];
@@ -482,7 +506,7 @@ async function labStart(){
     mr.onstop = () => { stream.getTracks().forEach(t => t.stop()); labWork(new Blob(parts, {type: mr.mimeType || 'audio/mp4'}), s0); };
     labRec = {mr, t0: Date.now()}; mr.start(1000);
     labSet({st:'rec', msg:'أسجّل الآن. اقرأ من حفظك، ثم اضغط الزر عند الانتهاء.'});
-  } catch (e) { labSet({st:'idle', msg:'', err:'لم يُسمح باستخدام الميكروفون. (' + (e && e.name || e) + ')'}); }
+  } catch (e) { labLog('ميكروفون: ' + (e && e.name || e)); labSet({st:'ready', msg:'', err:'تعذّر تشغيل الميكروفون. اسمح لـ Safari باستخدامه ثم اضغط «ابدأ التسجيل» مرة أخرى. (' + (e && e.name || e) + ')'}); }
 }
 function labStop(){ if (labRec && labRec.mr.state !== 'inactive'){ labRec.audioSec = (Date.now() - labRec.t0) / 1000; labRec.mr.stop(); labSet({st:'working', msg:'أكتب ما قرأته...'}); } }
 /* Whisper reads at most 30 s at a time: cut long recordings at the quietest moment, keeping pieces under ~25 s. */
@@ -515,7 +539,7 @@ async function labWork(blob, s0){
     sess.finalText = texts.join(' '); sess.interim = ''; sess.usedMic = true; sess.engine = 'model';
     sess.labTime = {audio: dec.duration, proc}; recompute(true); sess.reveal = sess.total;
     labSet({st:'idle', msg:'', err:''});
-  } catch (e) { if (sess === s0) labSet({st:'idle', msg:'', err:'تعذّرت كتابة التلاوة. (' + (e && e.message || e) + ')'}); }
+  } catch (e) { labLog('كتابة: ' + (e && e.message || e)); if (sess === s0) labSet({st:'ready', msg:'', err:'تعذّرت كتابة التلاوة. (' + (e && e.message || e) + ')'}); }
 }
 
 /* ---------- recitation matching ---------- */
@@ -1793,13 +1817,13 @@ app.addEventListener('click', e => {
     const t = sess.queue[sess.pos], c = itemChunk(t), [s1, a1] = gidToSA(c.r[0][0]), [s2, a2] = gidToSA(c.r[c.r.length - 1][1]);
     const rep = ['تقرير تسميع - ثبّت', 'المقطع: ' + Q[s1 - 1][0] + ' ' + a1 + ' إلى ' + Q[s2 - 1][0] + ' ' + a2, 'الجهاز: ' + navigator.userAgent, 'المحرك: ' + (sess.engine === 'model' ? 'نموذج القرآن' + (sess.labTime ? ' (تلاوة ' + Math.round(sess.labTime.audio) + ' ث، كتابة ' + Math.round(sess.labTime.proc) + ' ث)' : '') : 'خدمة الجوال'),
       'الكلمات الحمراء: ' + chunkAyat(c).flatMap(x => x.txt.split(' ')).filter((_, i) => sess.ws[i] === 'miss').join('، '),
-      'النص المسموع: ' + (sess.finalText || '').trim(), 'الدفعات:', ...SRLOG.map((run, i) => '#' + (i + 1) + '\n' + run.join('\n'))].join('\n');
+      'النص المسموع: ' + (sess.finalText || '').trim(), ...(LABLOG.length ? ['سجل نموذج القرآن:', ...LABLOG] : []), 'الدفعات:', ...SRLOG.map((run, i) => '#' + (i + 1) + '\n' + run.join('\n'))].join('\n');
     const done = () => toast('نُسخ التقرير. الصقه في المحادثة مع Claude.');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(rep).then(done, () => { prompt('انسخ النص:', rep); });
     else prompt('انسخ النص:', rep);
     return;
   }
-  if (a === 'labMic'){ if (sess.lab && sess.lab.st === 'rec') labStop(); else if (!sess.lab || sess.lab.st === 'idle'){ stopMic(); labStart(); } return; }
+  if (a === 'labMic'){ const st = sess.lab && sess.lab.st; if (st === 'rec') labStop(); else if (st === 'ready') labRecord(); else if (!st || st === 'idle'){ stopMic(); labStart(); } return; }
   if (a === 'heardAll'){ sess.showAll = !sess.showAll; render(); return; }
   if (a === 'beepTog'){ S.beep = S.beep === false; save(); if (S.beep) { audioUnlock(); beep(); } render(); return; }
   if (a === 'mic'){
