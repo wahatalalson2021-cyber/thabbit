@@ -708,7 +708,14 @@ function render(){
   }
   app.innerHTML = h;
   if (view === 'reader' && RD && RD.status === 'ok'){ layoutPage(); focusSura(); }
+  if (view === 'session' && sess && sess.listening) followWord();
   if (view === 'search' && sFocus){ sFocus = false; const el = document.getElementById('qSearch'); if (el){ el.focus(); const n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} } }
+}
+function followWord(){
+  const el = document.querySelector('.w.cur'); if (!el) return;
+  const dock = document.querySelector('.dock'), r = el.getBoundingClientRect();
+  const bottom = (dock ? dock.getBoundingClientRect().top : innerHeight) - 24;
+  if (r.top < 70 || r.bottom > bottom) window.scrollBy({top: r.top - Math.max(90, (bottom - 70) * 0.3), behavior: 'smooth'});
 }
 function focusSura(){
   if (!RD.focus) return;
@@ -1007,6 +1014,7 @@ function vSession(){
     const allShown = sess.reveal >= k;
     h += `<p class="muted">${t.type === 'new' ? 'الآيات مخفية الآن. اقرأها من حفظك بصوت مسموع، واكشف الكلمة إذا توقفت.' : 'اقرأ من حفظك بصوت مسموع من أوله. أول كلمتين ظاهرتان لتبدأ.'}</p>${words}`;
     if (!allShown){
+      h += `<div class="dock">`;
       if (DICT){
         h += `<div class="mic-box"><button class="mic ${sess.listening ? 'on' : ''}" data-act="mic">${MIC_SVG}${sess.listening ? 'أنهيت التسميع' : sess.p > 0 ? 'تابع التسميع بصوتك' : 'سمّع بصوتك'}</button>
           <p class="live" id="live" aria-live="polite">${sess.listening ? esc(liveText) || hearMsg() : ''}</p>
@@ -1015,7 +1023,7 @@ function vSession(){
       } else if (DICT === null){
         h += `<p class="muted">${IN_CLAUDE ? 'التسميع بالصوت يعمل من نسخة التطبيق المستقلة، لأن صفحات Claude لا تسمح بالميكروفون. هنا اقرأ من حفظك ثم قيّم نفسك.' : 'هذا المتصفح لا يدعم التسميع بالصوت. جرّب Chrome أو Safari، أو اقرأ من حفظك ثم قيّم نفسك.'}</p>`;
       }
-      h += `<div class="rnav"><button class="btn soft" data-act="next">اكشف الكلمة التالية</button><button class="btn ghost" data-act="all">أنهيت، أظهر النص</button></div>`;
+      h += `<div class="rnav"><button class="btn soft" data-act="next">اكشف الكلمة التالية</button><button class="btn ghost" data-act="all">أنهيت، أظهر النص</button></div></div>`;
     } else {
       const hints = sess.peeked.size;
       const misses = Object.values(sess.ws).filter(x => x === 'miss').length;
