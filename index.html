@@ -298,6 +298,8 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .beeptog{display:flex;align-items:center;justify-content:center;gap:6px;border:0;background:none;color:var(--muted);font-size:.85rem;padding:2px}
 .beeptog svg{width:18px;height:18px}
 .beeptog[aria-pressed="true"]{color:var(--accent)}
+.toast{position:fixed;top:max(14px,env(safe-area-inset-top));left:16px;right:16px;z-index:50;background:var(--good);color:#fff;border-radius:12px;padding:12px 14px;font-weight:600;font-size:.92rem;box-shadow:0 6px 20px rgb(0 0 0 / .18);transition:opacity .5s,transform .5s}
+.toast.out{opacity:0;transform:translateY(-10px)}
 .okbanner{background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good);border-radius:12px;padding:10px 12px;font-weight:600;font-size:.9rem}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -844,6 +846,11 @@ function vHome(){
 const HOME_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>';
 function inprog(){ const ip = S.inprog; return ip && S.chunks[ip.idx] && !S.learned[ip.idx] && Object.values(ip.reps || {}).some(n => n > 0) ? ip : null; }
 function keepProgress(){ const t = sess && sess.queue[sess.pos]; if (t && t.type === 'new'){ S.inprog = {idx:t.idx, reps:sess.reps, ri:sess.ri || 0}; save(); } }
+function toast(msg){
+  const old = document.querySelector('.toast'); if (old) old.remove();
+  const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = '✓ ' + msg;
+  document.body.appendChild(el); setTimeout(() => el.classList.add('out'), 4200); setTimeout(() => el.remove(), 4800);
+}
 function vHifzMenu(){
   const ip = inprog(), opts = [];
   if (ip){ const c = S.chunks[ip.idx], n = chunkAyat(c).length;
@@ -1029,12 +1036,11 @@ function vSession(){
   const kind = t.type === 'new' ? 'حفظ جديد' : t.type === 'practice' ? 'مراجعة حرة' : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
   const title = t.page ? `صفحة ${AR(t.page)} · ${cShort(c)}` : cLabel(c);
   let h = `<main><div class="sess-top"><button class="x homebtn" data-act="quit">${HOME_SVG}الرئيسية</button><div class="steps">${steps}</div></div>${confirmBox === 'quit' ? `<div class="confirm"><p>هل تريد الخروج؟ ${t.type === 'new' ? 'تكرارك في هذا المقطع لن يُحفظ، وتستطيع العودة إليه من شاشة «اليوم».' : 'ما أنهيته من مراجعات محفوظ، والباقي ينتظرك.'}</p><div class="rnav"><button class="btn" data-act="cancel">أكمل</button><button class="btn danger" data-act="quit">خروج</button></div></div>` : ''}
-    <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>`;
+    <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>${sess.banner ? `<div class="okbanner">✓ ${sess.banner}</div>` : ''}`;
   if (sess.phase === 'read'){
     const ay = chunkAyat(c), ri = Math.min(sess.ri || 0, ay.length - 1), x = ay[ri], key = x.s + ':' + x.a, r = sess.reps[key] || 0, full = r >= R0;
     const allDone = ay.every(y => (sess.reps[y.s + ':' + y.a] || 0) >= R0);
     h = h.replace('<span class="chip">' + kind + '</span>', `<span class="kindtxt">${kind} · الآية ${AR(ri + 1)} من ${AR(ay.length)}</span>`);
-    if (sess.fresh) h += `<div class="okbanner">✓ بدأت خطتك: ${hifzName(S.hifz)} · ${paceName(S.hifz)}. هذا أول مقطع.</div>`;
     h += `<p class="muted">اقرأ الآية بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'} تنتقل للآية التالية تلقائيًا.</p>`;
     h += `<div class="dots" aria-hidden="true">${ay.map((y, yi) => `<i class="${(sess.reps[y.s + ':' + y.a] || 0) >= R0 ? 'ok' : yi === ri ? 'on' : ''}"></i>`).join('')}</div>`;
     h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus"><div class="t">${esc(x.txt)} <span class="num">﴿${AR(x.a)}﴾</span></div></div>`;
@@ -1447,13 +1453,19 @@ app.addEventListener('click', e => {
   if (a === 'hdPtype'){ hd.ptype = v; hd.pn = v === 'days' ? 30 : v === 'ayah' ? 3 : 1; render(); return; }
   if (a === 'hdPn'){ hd.pn = +v; render(); return; }
   if (a === 'hdReps'){ hd.reps = +v; render(); return; }
-  if (a === 'hdSave'){ saveHifz(); confirmBox = null; if (S.chunks.length){ startSession([{type:'new', idx:0}]); sess.fresh = true; render(); } else { view = 'home'; render(); } window.scrollTo(0, 0); return; }
+  if (a === 'hdSave'){ saveHifz(); confirmBox = null; if (S.chunks.length){ startSession([{type:'new', idx:0}]); sess.banner = `بدأت خطتك: ${hifzName(S.hifz)} · ${paceName(S.hifz)}. هذا أول مقطع.`; render(); } else { view = 'home'; render(); } window.scrollTo(0, 0); return; }
   /* review setup */
   if (a === 'rvJuz'){ const j = +v, i = rvd.known.indexOf(j); if (i >= 0) rvd.known.splice(i, 1); else rvd.known.push(j); render(); return; }
   if (a === 'rvAll'){ rvd.known = v === '1' ? Array.from({length:30}, (_, i) => i + 1) : []; render(); return; }
   if (a === 'rvUnit'){ rvd.unit = v; rvd.n = v === 'pages' ? 5 : 1; render(); return; }
   if (a === 'rvN'){ rvd.n = +v; render(); return; }
-  if (a === 'rvSave'){ const keep = S.rev; S.rev = {known:rvd.known.sort((x, y) => x - y), unit:rvd.unit, n:rvd.n, ptr: keep.ptr || 0, pg: keep.pg || {}, day:null}; save(); view = 'home'; render(); window.scrollTo(0, 0); return; }
+  if (a === 'rvSave'){ const keep = S.rev; S.rev = {known:rvd.known.sort((x, y) => x - y), unit:rvd.unit, n:rvd.n, ptr: keep.ptr || 0, pg: keep.pg || {}, day:null}; save();
+    const todo = reviewTodo();
+    if (todo.length){ const pg = todo.filter(x => x.page).length, ch = todo.length - pg;
+      startSession(todo.map(x => Object.assign({}, x)));
+      sess.banner = 'بدأت مراجعتك لليوم: ' + [ch ? countWord(ch, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') : '', pg ? countWord(pg, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') : ''].filter(Boolean).join(' و') + '. هذه أولها.'; render(); }
+    else { view = 'home'; render(); toast(rvd.known.length || Object.keys(S.learned).length ? 'حُفظت خطة المراجعة. لا مراجعة متبقية اليوم.' : 'حُفظت خطة المراجعة. اختر الأجزاء التي تحفظها، أو ابدأ الحفظ، لتظهر لك مراجعة.'); }
+    window.scrollTo(0, 0); return; }
   /* daily reading setup */
   if (a === 'wdMode'){ wd.mode = v; wd.n = v === 'pages' ? 5 : v === 'juz' ? 1 : 30; render(); return; }
   if (a === 'wdN'){ wd.n = +v; render(); return; }
@@ -1461,7 +1473,8 @@ app.addEventListener('click', e => {
   if (a === 'wdSave'){
     const per = wd.mode === 'pages' ? wd.n : wd.mode === 'juz' ? wd.n * 20 : Math.ceil(604 / wd.n);
     const pos = wd.mode === 'khatma' ? 1 : (wd.from || 1);
-    S.wird = {per, days: wd.mode === 'khatma' ? wd.n : null, pos, day: today(), from: pos}; save(); view = 'home'; render(); window.scrollTo(0, 0); return;
+    S.wird = {per, days: wd.mode === 'khatma' ? wd.n : null, pos, day: today(), from: pos}; save();
+    const wt = wirdToday(); openReader(pos, 'home'); toast(`بدأ وردك: ${wirdName(S.wird)}. اليوم من صفحة ${AR(wt.from)} إلى ${AR(wt.to)}.`); return;
   }
   if (a === 'wdStop'){ S.wird = null; save(); view = 'home'; render(); return; }
   /* start sessions */
