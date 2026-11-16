@@ -163,6 +163,8 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .mlist{max-height:40vh;overflow-y:auto}
 .flow{display:block;text-align:justify;text-align-last:center;line-height:2.3;background-image:linear-gradient(to bottom,transparent calc(100% - 1px),color-mix(in srgb,var(--accent) 28%,transparent) calc(100% - 1px));background-size:100% 2.3em;padding:0 .08em}
 .flow .mw{display:inline-block;line-height:1;vertical-align:middle}
+.flow.fit{text-align:right;text-align-last:auto}
+.flow .fl{display:flex;align-items:center;height:2.3em;flex-wrap:nowrap}
 .big .sh,.big .bs{font-size:.55em;margin:.3em 0}
 .big .ml{height:2.1em}
 .rbar{display:flex;align-items:center;gap:10px}
@@ -1329,7 +1331,7 @@ function pageHtml(p){
 function layoutPage(){
   const box = document.getElementById('mlines'); if (!box) return;
   const W = box.clientWidth;
-  if (box.classList.contains('big')){ box.style.fontSize = W / (rsize() === 1 ? 9 : 7) + 'px'; return; }
+  if (box.classList.contains('big')){ box.style.fontSize = W / (rsize() === 1 ? 9 : 7) + 'px'; box.querySelectorAll('.flow').forEach(fitFlow); return; }
   box.style.fontSize = '20px';
   const lines = [...box.querySelectorAll('.ml:not(.sh):not(.bs)')];
   const sums = lines.map(l => { let s = 0; for (const c of l.children) s += c.getBoundingClientRect().width; return s; });
@@ -1340,6 +1342,24 @@ function layoutPage(){
   box.style.fontSize = fs + 'px';
   if (box.classList.contains('opening')) return;
   lines.forEach((l, i) => l.classList.toggle('full', !l.classList.contains('ctr') && sums[i] * fs / 20 > W * 0.86));
+}
+/* Large text: let words wrap naturally, then even out each line, but never stretch a gap beyond a small cap.
+   Plain justify made huge holes when only 3 or 4 big words fit on a line. */
+function fitFlow(f){
+  if (f.dataset.src == null) f.dataset.src = f.innerHTML; else f.innerHTML = f.dataset.src;
+  f.classList.remove('fit');
+  const ws = [...f.querySelectorAll('.mw')]; if (!ws.length) return;
+  const em = parseFloat(getComputedStyle(f).fontSize), W = f.clientWidth - 2, lines = [];
+  let top = null;
+  ws.forEach(w => { const t = w.offsetTop; if (top === null || t > top + em){ lines.push([]); top = t; } lines[lines.length - 1].push(w); });
+  const base = em * 0.28, cap = em * 0.75;
+  f.innerHTML = lines.map((ln, i) => {
+    const sum = ln.reduce((a, w) => a + w.getBoundingClientRect().width, 0), gaps = ln.length - 1;
+    const gap = gaps ? (W - sum) / gaps : 0, last = i === lines.length - 1;
+    const st = last ? `justify-content:center;column-gap:${base}px` : gap <= cap ? 'justify-content:space-between' : `justify-content:flex-start;column-gap:${cap}px`;
+    return `<div class="fl" style="${st}">${ln.map(w => w.outerHTML).join('')}</div>`;
+  }).join('');
+  f.classList.add('fit');
 }
 window.addEventListener('resize', () => { if (view === 'reader') layoutPage(); });
 const ICON = {
