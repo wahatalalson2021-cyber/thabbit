@@ -244,6 +244,43 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .mopen{align-self:flex-start;margin-top:4px;background:var(--accent);color:var(--accent-ink);border-radius:10px;padding:7px 14px;font-weight:600;font-size:.9rem}
 .sh.flash .shb{animation:shflash 1.6s ease-out 2}
 @keyframes shflash{0%,100%{box-shadow:0 0 0 0 transparent}40%{box-shadow:0 0 0 .35em color-mix(in srgb,var(--gold) 55%,transparent)}}
+
+/* home: hero, tiles, mushaf card, footer */
+:root{--sky:#e3f0ec;--cloud:#ffffff;--mosque:#9cc9bf;--mosque-far:#c3ded7;--lamp:#c9952e;--glow:#ffd77a}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--sky:#132a26;--cloud:#1d3532;--mosque:#2a4b45;--mosque-far:#21403b;--lamp:#d9a542;--glow:#ffcf6b}}
+:root[data-theme="dark"]{--sky:#132a26;--cloud:#1d3532;--mosque:#2a4b45;--mosque-far:#21403b;--lamp:#d9a542;--glow:#ffcf6b}
+.hero{position:relative;margin:-20px -16px 0;padding:16px 16px 22px;min-height:210px;background:linear-gradient(to bottom,var(--sky),var(--bg));overflow:hidden;display:flex;flex-direction:column;justify-content:space-between}
+.heroart{position:absolute;inset:0;width:100%;height:100%}
+.heroart .clouds{fill:var(--cloud);opacity:.85}
+.heroart .mosque{fill:var(--mosque)}
+.heroart .mosque.far{fill:var(--mosque-far)}
+.heroart .cord{stroke:var(--lamp);stroke-width:1;fill:none}
+.heroart .lanterns{fill:var(--lamp)}
+.heroart .lanterns .body{fill:color-mix(in srgb,var(--lamp) 70%,#fff)}
+.heroart .lanterns .flame{fill:var(--glow)}
+.heroart .glow{fill:var(--glow);opacity:.28}
+.herotop{position:relative;display:flex;justify-content:flex-start}
+.emblem svg{width:46px;height:54px;display:block;filter:drop-shadow(0 3px 6px rgb(0 0 0 / .15))}
+.emblem .e1{fill:var(--accent)}.emblem .e2{fill:none;stroke:var(--gold);stroke-width:1.5}.emblem .e3{color:var(--gold)}
+.herotxt{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:10px}
+.hello{font-size:1.15rem;font-weight:600;color:var(--accent)}
+.herotxt h1{font-size:1.75rem}
+.herotxt .chip{margin-top:8px}
+.swoosh{width:150px;height:10px;border-bottom:2px solid var(--gold);border-radius:0 0 50% 50%;opacity:.8}
+.tile{overflow:hidden;background:linear-gradient(160deg,var(--surface),color-mix(in srgb,var(--accent) 5%,var(--surface)));box-shadow:0 4px 14px rgb(0 0 0 / .06)}
+.tilebg{position:absolute;left:-10%;bottom:-6px;width:85%;height:70%;fill:var(--accent);opacity:.06;pointer-events:none}
+.tmain{position:relative;min-height:150px}
+.tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
+.tgo svg{width:18px;height:18px}
+.tile .tmain .tline{padding-left:40px}
+.dlcard.fancy{position:relative;overflow:hidden;background-color:color-mix(in srgb,var(--gold) 7%,var(--surface));background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='-24 -24 48 48'%3E%3Cg fill='none' stroke='%23b5882e' stroke-opacity='.13' stroke-width='1'%3E%3Crect x='-12' y='-12' width='24' height='24'/%3E%3Crect x='-12' y='-12' width='24' height='24' transform='rotate(45)'/%3E%3C/g%3E%3C/svg%3E");border-color:color-mix(in srgb,var(--gold) 35%,var(--line))}
+.dlcard.fancy .mimg{width:104px;height:120px}
+.gdiv{display:block;width:70%;height:1px;background:linear-gradient(to left,transparent,var(--gold),transparent)}
+.dlbtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px}
+.homefoot{display:flex;align-items:center;gap:10px;color:var(--gold);margin:6px 0 0}
+.homefoot .fl{flex:1;height:1px;background:linear-gradient(to left,transparent,var(--gold))}
+.homefoot .fl:last-child{background:linear-gradient(to right,transparent,var(--gold))}
+.homefoot .fstar svg{width:30px;height:30px;display:block}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -673,13 +710,41 @@ const TI = {
   rev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4"/></svg>',
   wird:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4"/></svg>'
 };
+/* ---------- home artwork (hand-drawn vector, follows the theme colours) ---------- */
+function mosqueShape(x, s, minarets){
+  /* a mosque silhouette at x, scaled by s: body, three domes, arches, minarets */
+  const g = [];
+  g.push(`<rect x="${x - 60 * s}" y="${150 - 40 * s}" width="${120 * s}" height="${40 * s}" rx="${2 * s}"/>`);
+  g.push(`<path d="M${x - 34 * s} ${150 - 40 * s}q${34 * s}-${62 * s} ${68 * s} 0z"/>`);
+  g.push(`<rect x="${x - 1.5 * s}" y="${150 - 108 * s}" width="${3 * s}" height="${10 * s}"/><circle cx="${x}" cy="${150 - 110 * s}" r="${3 * s}"/>`);
+  [-46, 46].forEach(d => { g.push(`<path d="M${x + d * s - 14 * s} ${150 - 40 * s}q${14 * s}-${30 * s} ${28 * s} 0z"/>`); });
+  if (minarets) [-70, 70].forEach(d => {
+    g.push(`<rect x="${x + d * s - 4 * s}" y="${150 - 118 * s}" width="${8 * s}" height="${118 * s}"/>`);
+    g.push(`<rect x="${x + d * s - 7 * s}" y="${150 - 84 * s}" width="${14 * s}" height="${4 * s}" rx="${1.5 * s}"/>`);
+    g.push(`<path d="M${x + d * s - 5 * s} ${150 - 118 * s}l${5 * s}-${16 * s} ${5 * s} ${16 * s}z"/>`);
+  });
+  return g.join('');
+}
+const HERO_SVG = `<svg class="heroart" viewBox="0 0 400 160" preserveAspectRatio="xMinYMax meet" aria-hidden="true">
+  <g class="clouds"><ellipse cx="300" cy="40" rx="70" ry="16"/><ellipse cx="335" cy="30" rx="40" ry="14"/><ellipse cx="90" cy="58" rx="80" ry="14"/><ellipse cx="60" cy="48" rx="38" ry="13"/><ellipse cx="190" cy="22" rx="50" ry="10"/></g>
+  <g class="mosque far">${mosqueShape(150, .62, true)}</g>
+  <g class="mosque">${mosqueShape(105, .9, true)}<rect x="0" y="148" width="260" height="12"/></g>
+  <g class="lanterns">
+    <path class="cord" d="M30 0v46M62 0v26"/>
+    <g transform="translate(30 46)"><circle class="glow" r="16"/><path d="M-7 0h14l-2 4h-10z"/><path d="M-8 4q8-6 16 0l-1 18q-7 4-14 0z" class="body"/><path d="M-6 22h12l-2 4h-8z"/><circle cy="13" r="3.2" class="flame"/></g>
+    <g transform="translate(62 26)"><circle class="glow" r="11"/><path d="M-5 0h10l-1.5 3h-7z"/><path d="M-6 3q6-4.5 12 0l-1 13q-5 3-10 0z" class="body"/><path d="M-4 16h8l-1.5 3h-5z"/><circle cy="9.5" r="2.4" class="flame"/></g>
+  </g></svg>`;
+const TILE_BG = `<svg class="tilebg" viewBox="0 0 400 160" preserveAspectRatio="xMinYMax meet" aria-hidden="true"><g>${mosqueShape(150, 1, true)}</g></svg>`;
+const STAR8 = '<svg viewBox="-20 -20 40 40" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6"><rect x="-11" y="-11" width="22" height="22"/><rect x="-11" y="-11" width="22" height="22" transform="rotate(45)"/><circle r="5"/></g></svg>';
+const FOOT_SVG = `<div class="homefoot" aria-hidden="true"><span class="fl"></span><span class="fstar">${STAR8}</span><span class="fl"></span></div>`;
+const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>';
+const EMBLEM = `<span class="emblem" aria-hidden="true"><svg viewBox="0 0 48 56"><path d="M4 56V22Q4 6 24 2Q44 6 44 22v34z" class="e1"/><path d="M9 52V24Q9 11 24 7Q39 11 39 24v28z" class="e2"/><g transform="translate(24 30)" class="e3">${STAR8.replace('<svg viewBox="-20 -20 40 40" aria-hidden="true">', '').replace('</svg>', '')}</g></svg></span>`;
 function tile(key, title, line, act, v, done, edit){
-  return `<div class="tile ${done ? 'done' : ''}"><button class="tmain" data-act="${act}" data-v="${v || ''}"><span class="tic">${done ? '✓' : TI[key]}</span><b>${title}</b><span class="tline">${line}</span></button>${edit ? `<button class="tedit" data-act="${edit}" aria-label="تعديل ${title}">تعديل</button>` : ''}</div>`;
+  return `<div class="tile ${done ? 'done' : ''}">${TILE_BG}<button class="tmain" data-act="${act}" data-v="${v || ''}"><span class="tic">${done ? '✓' : TI[key]}</span><b>${title}</b><span class="tline">${line}</span><span class="tgo">${CHEV}</span></button>${edit ? `<button class="tedit" data-act="${edit}" aria-label="تعديل ${title}">تعديل</button>` : ''}</div>`;
 }
 function vHome(){
   const st = streak();
-  let h = `<div class="top"><span class="brand">ثبّت</span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div>`;
-  h += `<div><h1>ماذا تريد اليوم؟</h1></div><div class="tiles">`;
+  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}</div><div class="herotxt"><p class="hello">مرحبًا بك</p><h1>ماذا تريد اليوم؟</h1><span class="swoosh"></span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div></header><div class="tiles">`;
   const rp = R().page;
   h += tile('read', 'قراءة', rp ? 'أكمل من صفحة ' + AR(rp) : 'افتح المصحف', 'rdOpen', rp || 1);
   if (!S.hifz) h += tile('hifz', 'حفظ', 'اختر ما تحفظه ومقداره', 'go', 'setupHifz');
@@ -705,6 +770,7 @@ function vHome(){
   }
   h += dlCard(true);
   h += installCard();
+  h += FOOT_SVG;
   return h;
 }
 
@@ -1149,19 +1215,23 @@ async function startDownload(k){
   } catch (e) { d.state = 'idle'; d.err = 'توقف التحميل بسبب انقطاع الإنترنت. سيكمل تلقائيًا من حيث توقف عند عودة الاتصال.'; }
   if (view === 'read' || view === 'home') render();
 }
-const MUSHAF_SVG = '<svg class="mimg" viewBox="0 0 120 150" aria-hidden="true"><defs><linearGradient id="mg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14806f"/><stop offset="1" stop-color="#0a4f47"/></linearGradient></defs>' +
-  '<rect x="14" y="10" width="96" height="132" rx="6" fill="#e8dcc0"/><rect x="10" y="6" width="96" height="132" rx="6" fill="url(#mg)"/>' +
-  '<rect x="18" y="14" width="80" height="116" rx="3" fill="none" stroke="#d9b45a" stroke-width="2"/><rect x="23" y="19" width="70" height="106" rx="2" fill="none" stroke="#d9b45a" stroke-width=".8" stroke-dasharray="3 2"/>' +
-  '<g transform="translate(58 72)" fill="none" stroke="#e6c46e" stroke-width="1.6"><rect x="-20" y="-20" width="40" height="40"/><rect x="-20" y="-20" width="40" height="40" transform="rotate(45)"/><circle r="11" fill="#e6c46e" fill-opacity=".18"/><circle r="5" fill="#e6c46e" stroke="none"/></g>' +
-  '<g fill="#d9b45a"><path d="M18 14h10l-10 10z"/><path d="M98 14h-10l10 10z"/><path d="M18 130h10l-10-10z"/><path d="M98 130h-10l10-10z"/></g></svg>';
+const MUSHAF_SVG = '<svg class="mimg" viewBox="0 0 130 150" aria-hidden="true"><defs><linearGradient id="mg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#17806f"/><stop offset=".55" stop-color="#0d5f55"/><stop offset="1" stop-color="#083f39"/></linearGradient><linearGradient id="mp" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#efe6cf"/><stop offset="1" stop-color="#d9caa4"/></linearGradient></defs>' +
+  '<ellipse cx="64" cy="143" rx="52" ry="5" fill="#000" opacity=".12"/>' +
+  '<path d="M22 14l90-6v124l-90 6z" fill="#0a4a43"/><path d="M24 18l86-6v118l-86 6z" fill="url(#mp)"/>' +
+  '<g stroke="#c9b88f" stroke-width=".6">' + Array.from({length:9}, (_, k) => `<path d="M25 ${30 + k * 11}l84-6"/>`).join('') + '</g>' +
+  '<path d="M12 10l90-6v126l-90 6z" fill="url(#mg)"/>' +
+  '<path d="M19 16l76-5v112l-76 5z" fill="none" stroke="#d9b45a" stroke-width="1.6"/><path d="M24 21l66-4.3v102l-66 4.3z" fill="none" stroke="#d9b45a" stroke-width=".7" stroke-dasharray="2.5 2"/>' +
+  '<g transform="translate(57 69) skewY(-3.4)" stroke="#e6c46e" fill="none"><g stroke-width="1.5"><rect x="-19" y="-19" width="38" height="38"/><rect x="-19" y="-19" width="38" height="38" transform="rotate(45)"/></g><circle r="13" stroke-width="1"/><circle r="9" fill="#e6c46e" fill-opacity=".2" stroke-width=".8"/><path d="M0-6l1.7 4.3L6-1.9 2.6 1l1.1 4.6L0 3.2-3.7 5.6-2.6 1-6-1.9l4.3-.4z" fill="#e6c46e" stroke="none"/></g>' +
+  '<g fill="#d9b45a"><path d="M19 16h9l-9 9z"/><path d="M95 11h-9l9 9z" /><path d="M19 128h9l-9-9z"/><path d="M95 123h-9l9-9z"/></g></svg>';
+const CLOUD = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 8"/><path d="M12 11v9M9 17l3 3 3-3"/></svg>';
 function dlCard(big){
   if (IN_CLAUDE) return '';
   const k = dlKind(), d = dls[k], img = big ? MUSHAF_SVG : '';
   const name = k === 'tj' ? 'مصحف التجويد الملوّن' : 'المصحف';
   const size = k === 'tj' ? '٥٢' : '٣٨';
-  if (d.state === 'done') return big ? `<button class="card dlcard mcard" data-act="rdOpen" data-v="${R().page || 1}">${img}<span class="dltxt"><b class="mtitle">المصحف الشريف</b><span class="muted">${k === 'tj' ? 'مصحف التجويد الملوّن' : 'مصحف المدينة النبوية'} · محمّل على جهازك، يعمل بدون إنترنت ✓</span><span class="mopen">${R().page ? 'أكمل من صفحة ' + AR(R().page) : 'افتح المصحف'}</span></span></button>` : `<div class="card"><div class="row"><h3>${name} محمّل على جهازك</h3><span class="chip">✓</span></div><p class="muted">تستطيع القراءة بدون إنترنت.</p></div>`;
-  if (d.state === 'run') return `<div class="card dlcard">${img}<div class="dltxt"><h3>جاري تحميل ${name}...</h3><div class="bar" style="color:var(--accent)"><i style="width:${d.pct}%"></i></div><p class="muted">${AR(d.pct)}٪ · أبقِ التطبيق مفتوحًا حتى ينتهي.</p></div></div>`;
-  return `<div class="card dlcard">${img}<div class="dltxt"><h3>حمّل ${name} على جهازك</h3><p class="muted">لتقرأ القرآن كاملًا بدون إنترنت. حجمه حوالي ${size} ميجابايت، ويُفضَّل تحميله على شبكة Wi-Fi.</p>${d.err ? `<p class="err">${d.err}</p>` : ''}<button class="btn soft" data-act="dlStart">تحميل ${name}</button></div></div>`;
+  if (d.state === 'done') return big ? `<button class="card dlcard mcard fancy" data-act="rdOpen" data-v="${R().page || 1}">${img}<span class="dltxt"><b class="mtitle">المصحف الشريف</b><span class="muted">${k === 'tj' ? 'مصحف التجويد الملوّن' : 'مصحف المدينة النبوية'} · محمّل على جهازك، يعمل بدون إنترنت ✓</span><span class="mopen">${R().page ? 'أكمل من صفحة ' + AR(R().page) : 'افتح المصحف'}</span></span></button>` : `<div class="card"><div class="row"><h3>${name} محمّل على جهازك</h3><span class="chip">✓</span></div><p class="muted">تستطيع القراءة بدون إنترنت.</p></div>`;
+  if (d.state === 'run') return `<div class="card dlcard${big ? ' fancy' : ''}">${img}<div class="dltxt"><h3>جاري تحميل ${name}...</h3><div class="bar" style="color:var(--accent)"><i style="width:${d.pct}%"></i></div><p class="muted">${AR(d.pct)}٪ · أبقِ التطبيق مفتوحًا حتى ينتهي.</p></div></div>`;
+  return `<div class="card dlcard${big ? ' fancy' : ''}">${img}<div class="dltxt"><h3>${k === 'tj' ? 'مصحف التجويد الملوّن على جوالك' : 'المصحف الشريف على جوالك'}</h3>${big ? '<span class="gdiv"></span>' : ''}<p class="muted">حمّله مرة واحدة، واقرأ القرآن كاملًا بدون إنترنت. حجمه حوالي ${size} ميجابايت، ويُفضَّل تحميله على شبكة Wi-Fi.</p>${d.err ? `<p class="err">${d.err}</p>` : ''}<button class="btn dlbtn" data-act="dlStart">${CLOUD}تحميل المصحف</button></div></div>`;
 }
 function vRead(){
   const r = R();
