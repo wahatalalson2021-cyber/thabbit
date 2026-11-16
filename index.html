@@ -1010,7 +1010,7 @@ function vHome(){
   else if (newDoneToday()) h += tile('hifz', 'حفظ', 'حفظت ورد اليوم · اضغط لمقطع إضافي', 'go', 'hifzMenu', true, 'goHifz');
   else h += tile('hifz', 'حفظ', 'اليوم: ' + cShort(S.chunks[S.nextNew]), 'go', 'hifzMenu', false, 'goHifz');
   const todo = reviewTodo(), anyRev = Object.keys(S.learned).length || S.arch.length || (S.rev.known || []).length;
-  if (!anyRev) h += tile('rev', 'مراجعة', 'حدّد ما تحفظه ومقدار مراجعتك', 'go', 'setupReview');
+  if (!anyRev) h += tile('rev', 'مراجعة', 'سمّع ما تحفظه، أو حدّد خطة مراجعتك', 'go', 'revMenu');
   else if (!todo.length) h += tile('rev', 'مراجعة', 'أنهيت مراجعة اليوم · اضغط لمراجعة إضافية', 'go', 'revMenu', true, 'goReview');
   else { const pg = todo.filter(x => x.page).length, ch = todo.length - pg, dn = (S.rev.tot || 0) - todo.length;
     h += tile('rev', 'مراجعة', (dn > 0 ? 'أكمل مراجعتك: بقي ' : 'اليوم: ') + [ch ? countWord(ch, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') : '', pg ? countWord(pg, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') : ''].filter(Boolean).join(' و'), 'go', 'revMenu', false, 'goReview'); }
@@ -1174,7 +1174,7 @@ function vSetupReview(){
       <div class="rnav"><button class="btn ghost" data-act="rvAll" data-v="1">القرآن كاملًا</button><button class="btn ghost" data-act="rvAll" data-v="0">لا شيء</button></div></div>
     <div class="card"><h3>كم تراجع يوميًا؟</h3>${seg('rvUnit', [['pages','صفحات'],['surah','سور'],['juz','أجزاء']], d.unit)}${seg('rvN', nums, d.n, nums.length)}
       <p class="muted">${d.known.length ? `تراجع ${AR(d.n)} ${d.unit === 'pages' ? pagesWord(d.n) : d.unit === 'surah' ? (d.n === 1 ? 'سورة' : 'سور') : (d.n === 1 ? 'جزء' : 'أجزاء')} يوميًا بالترتيب، وتعود الصفحات الضعيفة أسرع.` : 'اختر الأجزاء التي تحفظها أولًا.'}</p></div>
-    <button class="btn" data-act="rvSave">حفظ</button></main>`;
+    ${rvd.err ? `<p class="err">${rvd.err}</p>` : ''}<button class="btn" data-act="rvSave">حفظ</button></main>`;
 }
 
 /* ---------- setup: daily reading ---------- */
@@ -1738,10 +1738,11 @@ app.addEventListener('click', e => {
   if (a === 'hdReps'){ hd.reps = +v; render(); return; }
   if (a === 'hdSave'){ saveHifz(); confirmBox = null; if (S.chunks.length){ startSession([{type:'new', idx:0}]); sess.banner = `بدأت خطتك: ${hifzName(S.hifz)} · ${paceName(S.hifz)}. هذا أول مقطع.`; render(); } else { view = 'home'; render(); } window.scrollTo(0, 0); return; }
   /* review setup */
-  if (a === 'rvJuz'){ const j = +v, i = rvd.known.indexOf(j); if (i >= 0) rvd.known.splice(i, 1); else rvd.known.push(j); render(); return; }
+  if (a === 'rvJuz'){ rvd.err = ''; const j = +v, i = rvd.known.indexOf(j); if (i >= 0) rvd.known.splice(i, 1); else rvd.known.push(j); render(); return; }
   if (a === 'rvAll'){ rvd.known = v === '1' ? Array.from({length:30}, (_, i) => i + 1) : []; render(); return; }
   if (a === 'rvUnit'){ rvd.unit = v; rvd.n = v === 'pages' ? 5 : 1; render(); return; }
   if (a === 'rvN'){ rvd.n = +v; render(); return; }
+  if (a === 'rvSave' && !rvd.known.length && !Object.keys(S.learned).length && !S.arch.length){ rvd.err = 'اختر من الأعلى جزءًا واحدًا على الأقل مما تحفظه، حتى يجد التطبيق ما تراجعه.'; render(); const el = document.querySelector('.err'); if (el) el.scrollIntoView({block:'center'}); return; }
   if (a === 'rvSave'){ const keep = S.rev; S.rev = {known:rvd.known.sort((x, y) => x - y), unit:rvd.unit, n:rvd.n, ptr: keep.ptr || 0, pg: keep.pg || {}, day:null}; save();
     const todo = reviewTodo();
     if (todo.length){ const pg = todo.filter(x => x.page).length, ch = todo.length - pg;
