@@ -312,6 +312,7 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .rcnum{display:block;width:100%;margin-top:4px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:1.1rem;text-align:center}
 .btn svg{width:20px;height:20px;vertical-align:-4px;margin-inline-end:6px}
 .askmore{display:flex;flex-direction:column;gap:10px}
+.labbanner{background:#7a4fb5;color:#fff;border-radius:12px;padding:9px 12px;font-weight:600;font-size:.88rem;text-align:center}
 .mic-box.lab .mic{background:#7a4fb5}
 .mic-box.lab .mic:disabled{opacity:.75}
 .okbanner{background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good);border-radius:12px;padding:10px 12px;font-weight:600;font-size:.9rem}
@@ -442,9 +443,9 @@ function streak(){
 /* ---------- LAB (test link only, ?lab=1): Quran-trained speech model running on the phone ----------
    Records the recitation, then a Whisper model fine-tuned on Quran recitation (tarteel-ai/whisper-base-ar-quran,
    Apache-2.0) writes it out on the device, and the normal matcher colours the words. The regular link never loads any of it. */
-const LAB = (() => { try { const q = location.search;
-  if (/[?&]lab=1/.test(q)) localStorage.setItem('thabbit-lab', '1'); if (/[?&]lab=0/.test(q)) localStorage.removeItem('thabbit-lab');
-  return localStorage.getItem('thabbit-lab') === '1'; } catch (e) { return false; } })();
+const LAB = (() => { const q = location.search, on = /[?&]lab=1/.test(q);
+  try { if (on) localStorage.setItem('thabbit-lab', '1'); if (/[?&]lab=0/.test(q)){ localStorage.removeItem('thabbit-lab'); return false; }
+    return on || localStorage.getItem('thabbit-lab') === '1'; } catch (e) { return on; } })();
 const TJS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js';
 let ASR = null, asrLoad = null;
 function loadASR(onProg){
@@ -1020,6 +1021,7 @@ function vHome(){
   else if (!wt.left) h += tile('wird', 'ورد يومي', 'أتممت ورد اليوم', 'rdOpen', S.wird.pos > 604 ? 1 : S.wird.pos, true, 'goWird');
   else h += tile('wird', 'ورد يومي', `صفحة ${AR(wt.from)} إلى ${AR(wt.to)} · بقي ${AR(wt.left)}`, 'rdOpen', S.wird.pos, false, 'goWird');
   h += '</div>';
+  if (LAB) h = `<div class="labbanner">الوضع التجريبي مفعّل: زر «سمّع بنموذج القرآن» يظهر في شاشة التسميع</div>` + h;
   if (S.hifz && S.chunks.length){
     const learnedAyat = Object.keys(S.learned).reduce((n, i) => n + (S.chunks[i] ? nAyat(S.chunks[i]) : 0), 0);
     const total = S.chunks.reduce((n, c) => n + nAyat(c), 0), pct = Math.round(learnedAyat / total * 100);
