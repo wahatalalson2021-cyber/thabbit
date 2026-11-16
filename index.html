@@ -460,6 +460,8 @@ function lev(a,b){ const m=a.length,n=b.length; if(!m) return n; if(!n) return m
 /* A missing, extra or swapped و / ف at the start is a real memorization slip (common between similar verses), so it never counts as a match. */
 const WF = 'وف';
 function prefixSlip(v, sp){ return (WF.includes(v[0]) && v.slice(1) === sp) || (WF.includes(sp[0]) && sp.slice(1) === v) || (WF.includes(v[0]) && WF.includes(sp[0]) && v[0] !== sp[0] && v.slice(1) === sp.slice(1)); }
+/* و / ف that the recognizer added in front (heard "ويخطف" for "يخطف"): often its own error, so "unclear", not red. */
+const extraWF = (vs, sp) => WF.includes(sp[0]) && vs.some(v => v === sp.slice(1));
 function same(vs, sp){ if(!sp) return false; return vs.some(v => !prefixSlip(v, sp) && lev(v, sp) <= (v.length <= 2 ? 0 : v.length <= 5 ? 1 : 2)); }
 
 let DICT, dictState = 'idle', liveText = '';
@@ -653,6 +655,7 @@ function preLen(){
 /* Tajweed: a reader may merge words or change the final noon (idgham, iqlab, ikhfa), so the recognizer writes what it hears.
    1) A word ending in noon also matches its merged sound before the next word: "من ربهم" -> "مر", "من بعد" -> "مم". */
 function tajweedVariants(E){
+  E.forEach(vs => { if (vs.some(v => /^[وف]?لله$|^[وف]?الله$/.test(v)) && !vs.includes('اللهم')) vs.push('اللهم'); });
   for (let i = 0; i + 1 < E.length; i++){
     const L = E[i + 1][0][0], add = [];
     E[i].forEach(v => { if (v.length > 1 && v.endsWith('ن')){ if ('يرملون'.includes(L)) add.push(v.slice(0, -1) + L); if (L === 'ب') add.push(v.slice(0, -1) + 'م'); } });
@@ -702,6 +705,12 @@ function processSpoken(flush){
       if (PRE.has(w) && !same(E[sess.p], w) && !(w2 && same(E[sess.p], w2)) && !E[sess.p].some(v => prefixSlip(v, w))){ sess.spoken.shift(); continue; }
     }
     if (sess.muq && sess.muq.has(sess.p)){ const n = muqLen(sess.muq.get(sess.p)); if (n > 1 || (n === 1 && !same(E[sess.p], w))){ sess.spoken.splice(0, n); if (!sess.ws[sess.p]) sess.ws[sess.p] = 'ok'; sess.p++; sess.m2 = 0; sess.bad = []; continue; } }
+    { let fixed = false;
+      for (let q = sess.p - 1; q >= 0 && q >= sess.p - 6; q--){
+        if ((sess.ws[q] === 'miss' || sess.ws[q] === 'soft') && same(E[q], w) && (q === sess.p - 1 || (sess.spoken[1] && E[q + 1] && same(E[q + 1], sess.spoken[1])))){
+          sess.ws[q] = 'ok'; delete sess.heard[q]; sess.spoken.shift(); sess.m2 = 0; sess.bad = []; fixed = true; break; }
+      }
+      if (fixed) continue; }
     let hit = -1, used = 1, span = 1;
     for (let j = 0; j < 4 && sess.p + j < E.length; j++){
       if (same(E[sess.p + j], w)){ hit = j; used = 1; break; }
@@ -717,7 +726,7 @@ function processSpoken(flush){
       if (!(hit > 0 && nxt && ahead && (same(ahead, nxt) || (sess.spoken[used + 1] && same(ahead, nxt + sess.spoken[used + 1]))))){ sess.spoken.shift(); sess.m2 = 0; sess.bad = []; continue; }
     }
     if (hit < 0 && !flush && sess.spoken.length === 1) break;
-    if (hit < 0 && sess.m2 === 0 && nearWord(E[sess.p], w)){
+    if (hit < 0 && sess.m2 === 0 && (nearWord(E[sess.p], w) || extraWF(E[sess.p], w))){
       /* close but not exact: probably the recognizer, so mark it "unclear" (orange), not a mistake */
       sess.spoken.shift(); if (!sess.ws[sess.p]){ sess.ws[sess.p] = 'soft'; sess.heard[sess.p] = w; } sess.p++; sess.bad = []; continue;
     }
