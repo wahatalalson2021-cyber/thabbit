@@ -1332,7 +1332,7 @@ function pageHtml(p){
 function layoutPage(){
   const box = document.getElementById('mlines'); if (!box) return;
   const W = box.clientWidth;
-  if (box.classList.contains('big')){ box.style.fontSize = W / (rsize() === 1 ? 9 : 7) + 'px'; box.querySelectorAll('.flow').forEach(fitFlow); return; }
+  if (box.classList.contains('big')){ box.style.fontSize = W / (rsize() === 1 ? 11.25 : 7) + 'px'; box.querySelectorAll('.flow').forEach(fitFlow); return; }
   box.style.fontSize = '20px';
   const lines = [...box.querySelectorAll('.ml:not(.sh):not(.bs)')];
   const sums = lines.map(l => { let s = 0; for (const c of l.children) s += c.getBoundingClientRect().width; return s; });
