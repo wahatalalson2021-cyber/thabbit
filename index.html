@@ -684,7 +684,15 @@ function muqLen(letters){
   return j >= Math.max(1, Math.ceil(names.length * 0.6)) ? i : 0;
 }
 /* A word the reader already passed (within the last ~20 words): he is repeating a phrase, which is normal while reciting. */
-function isRepeat(w){ const E = sess.exp; for (let q = sess.p - 1; q >= 0 && q >= sess.p - 20; q--) if (E[q].some(v => v === w || (w.length >= 6 && v.length >= 6 && !prefixSlip(v, w) && lev(v, w) <= 1))) return true; return false; }
+/* It counts as a repeat if it is the word just before, or the heard word after it continues the earlier text in order;
+   a lone earlier word followed by the next expected word is a substitution (a real slip), not a repeat. */
+function isRepeat(w, nxt){ const E = sess.exp;
+  for (let q = sess.p - 1; q >= 0 && q >= sess.p - 20; q--)
+    if (E[q].some(v => v === w || (w.length >= 6 && v.length >= 6 && !prefixSlip(v, w) && lev(v, w) <= 1))){
+      if (q === sess.p - 1) return true;
+      if (nxt && E[q + 1] && (same(E[q + 1], nxt) || E[q + 1].some(v => v === nxt))) return true;
+    }
+  return false; }
 function processSpoken(flush){
   const E = sess.exp;
   while (sess.spoken.length && sess.p < E.length){
@@ -701,7 +709,8 @@ function processSpoken(flush){
       const nx = E[sess.p + j + 1];
       if (nx && joinedMatch(E[sess.p + j], nx, w)){ hit = j; used = 1; span = 2; break; }
     }
-    if (hit !== 0 && isRepeat(w)){
+    if (hit !== 0 && !sess.spoken[1] && !flush && sess.p > 0) break;
+    if (hit !== 0 && isRepeat(w, sess.spoken[1])){
       /* ambiguous: the word is both earlier and a bit ahead. Going forward only if the next heard word also follows. */
       const nxt = sess.spoken[used], ahead = hit > 0 ? E[sess.p + hit + span] : null;
       if (hit > 0 && !nxt && !flush) break;
@@ -715,8 +724,9 @@ function processSpoken(flush){
     sess.spoken.splice(0, hit < 0 ? 1 : used);
     if (hit < 0){ sess.bad.push(w); if (++sess.m2 >= 2){ if (!sess.ws[sess.p]){ sess.ws[sess.p] = sess.bad.some(quranWord) ? 'miss' : 'soft'; sess.heard[sess.p] = sess.bad.join(' '); } sess.p++; sess.m2 = 0; sess.bad = []; } continue; }
     /* words jumped over: short particles (من، في، ما، لا) are often dropped by the recognizer in tarteel, so they are "unclear", not wrong */
-    for (let j = 0; j < hit; j++) if (!sess.ws[sess.p + j]){ const short = (Math.max(...E[sess.p + j].map(v => v.length)) <= 3 && !sess.bad.some(b => E[sess.p + j].some(v => prefixSlip(v, b))))
-        || (hit === 1 && sess.bad.length === 1 && !quranWord(sess.bad[0])); sess.ws[sess.p + j] = short ? 'soft' : 'miss'; sess.heard[sess.p + j] = sess.bad.join(' '); }
+    for (let j = 0; j < hit; j++) if (!sess.ws[sess.p + j]){ const slip = sess.bad.some(b => E[sess.p + j].some(v => prefixSlip(v, b)));
+      /* red only when a different Quranic word was heard in its place; nothing heard, or garbled sound, is "unclear" */
+      const short = !slip && (Math.max(...E[sess.p + j].map(v => v.length)) <= 3 || !sess.bad.some(quranWord)); sess.ws[sess.p + j] = short ? 'soft' : 'miss'; sess.heard[sess.p + j] = sess.bad.join(' '); }
     sess.bad = [];
     for (let j = hit; j < hit + span; j++) if (!sess.ws[sess.p + j]) sess.ws[sess.p + j] = 'ok';
     sess.p += hit + span; sess.m2 = 0;
