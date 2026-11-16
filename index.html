@@ -311,6 +311,7 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .toast.out{opacity:0;transform:translateY(-10px)}
 #rcA,#rcB{display:block;width:100%;margin-top:4px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:1.1rem;text-align:center}
 .btn svg{width:20px;height:20px;vertical-align:-4px;margin-inline-end:6px}
+.askmore{display:flex;flex-direction:column;gap:10px}
 .okbanner{background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good);border-radius:12px;padding:10px 12px;font-weight:600;font-size:.9rem}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -1209,17 +1210,24 @@ function whyBox(){
   const word = chunkAyat(itemChunk(sess.queue[sess.pos])).flatMap(x => x.txt.split(' '))[i], h = sess.heard[i];
   return `<div class="whybox"><b>${esc(word)}</b><span>${h ? 'سمع التطبيق: «' + esc(h) + '»' : 'لم يسمع التطبيق شيئًا مكانها'}</span><small>${sess.ws[i] === 'soft' ? 'برتقالي: غالبًا من خدمة التعرّف على الكلام، لا يُحسب خطأ.' : 'أحمر: يُحسب خطأ. إن كنت قرأتها صحيحة فأرسل اسم السورة ورقم الآية مع هذه الجملة.'}</small></div>`;
 }
-function vSessionDone(){
-  const t = today();
+function vSessionDone(kinds){
+  const t = today(), k = kinds || new Set();
   const next = [...Object.values(S.learned), ...S.arch].map(c => c.due).filter(d => d > t).sort((a, b) => a - b)[0];
+  let more = '';
+  /* After memorizing, offer to keep going with the next section right away. */
+  if (k.has('new') && hasNewLeft()) more = `<div class="card askmore"><h3>هل تريد الاستمرار في الحفظ؟</h3><p class="muted">المقطع التالي: ${cLabel(S.chunks[S.nextNew])}</p>
+    <button class="btn" data-act="hifzToday">نعم، احفظ المقطع التالي</button><button class="btn ghost" data-act="tab" data-v="home">يكفي اليوم</button></div>`;
+  else if (k.has('new') && S.hifz) more = `<div class="card askmore"><h3>أتممت حفظ ${hifzName(S.hifz)}</h3><p class="muted">ما شاء الله. تستطيع اختيار هدف جديد من قائمة الحفظ.</p><button class="btn" data-act="go" data-v="hifzMenu">اختر هدفًا جديدًا</button></div>`;
+  else if (k.has('review') && reviewTodo().length) more = `<div class="card askmore"><h3>هل تريد إكمال مراجعة اليوم؟</h3><p class="muted">بقي ${(l => { const pg = l.filter(x => x.page).length, ch = l.length - pg; return [ch ? countWord(ch, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') : '', pg ? countWord(pg, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') : ''].filter(Boolean).join(' و'); })(reviewTodo())} في مراجعة اليوم.</p>
+    <button class="btn" data-act="revGo">نعم، أكمل المراجعة</button><button class="btn ghost" data-act="tab" data-v="home">لاحقًا</button></div>`;
   return `<main><div class="card" style="text-align:center;gap:14px;margin-top:24px"><div class="done-mark">بارك الله فيك</div>
     <p>انتهت الجلسة.</p>${next != null ? `<p class="muted">أقرب مراجعة ${next - t === 1 ? 'غدًا' : 'بعد ' + AR(next - t) + ' أيام'}.</p>` : ''}
-    <button class="btn" data-act="tab" data-v="home">عودة إلى اليوم</button></div></main>`;
+    ${more ? '' : '<button class="btn" data-act="tab" data-v="home">عودة إلى اليوم</button>'}</div>${more}</main>`;
 }
 function advance(){
   stopMic(); liveText = '';
   sess.pos++;
-  if (sess.pos >= sess.queue.length){ sess = null; if (retReader && RD){ retReader = false; openReader(RD.page, RD.back); return; } view = 'done'; app.innerHTML = vSessionDone(); window.scrollTo(0, 0); return; }
+  if (sess.pos >= sess.queue.length){ const kinds = new Set(sess.queue.map(q => q.type)); sess = null; if (retReader && RD){ retReader = false; openReader(RD.page, RD.back); return; } view = 'done'; app.innerHTML = vSessionDone(kinds); window.scrollTo(0, 0); return; }
   initStep(); render(); window.scrollTo(0, 0);
 }
 
