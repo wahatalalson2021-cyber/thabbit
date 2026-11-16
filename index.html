@@ -687,11 +687,17 @@ function genReview(){
   const r = S.rev, t = today(), items = [];
   dueList().forEach(i => items.push({type:'review', idx:i}));
   archDue().forEach(i => items.push({type:'review', arch:i}));
-  const kp = knownPages();
+  pickPages().forEach(p => items.push({type:'review', page:p}));
+  r.day = t; r.todo = items; r.tot = items.length; save();
+}
+/* Next known pages to review, following the reader's unit and amount. extra=true skips pages already reviewed today. */
+function pickPages(extra){
+  const r = S.rev, t = today(), kp0 = knownPages(), picked = [];
+  const kp = extra ? kp0.filter(p => !(r.pg && r.pg[p] && r.pg[p].last === t)) : kp0;
   if (kp.length && r.n){
-    const picked = [];
+    const start = Math.max(0, kp.indexOf(kp0[r.ptr % (kp0.length || 1)]));
     if (r.unit === 'surah'){
-      let i = r.ptr % kp.length, seen = 0, lastS = null, guard = 0;
+      let i = start, seen = 0, lastS = null, guard = 0;
       while (guard++ < kp.length){
         const p = kp[i], s = gidToSA(PSTART[p])[0];
         if (s !== lastS){ if (seen === r.n) break; seen++; lastS = s; }
@@ -699,14 +705,12 @@ function genReview(){
       }
     } else {
       const quota = r.unit === 'juz' ? r.n * 20 : r.n;
-      const weak = kp.filter(p => r.pg && r.pg[p] && r.pg[p].g === 1).slice(0, Math.ceil(quota / 3));
-      picked.push(...weak);
-      let i = r.ptr % kp.length, guard = 0;
+      if (!extra) picked.push(...kp.filter(p => r.pg && r.pg[p] && r.pg[p].g === 1).slice(0, Math.ceil(quota / 3)));
+      let i = start, guard = 0;
       while (picked.length < quota && guard++ < kp.length){ const p = kp[i]; if (!picked.includes(p)) picked.push(p); i = (i + 1) % kp.length; }
     }
-    picked.forEach(p => items.push({type:'review', page:p}));
   }
-  r.day = t; r.todo = items; save();
+  return picked;
 }
 function reviewTodo(){ if (S.rev.day !== today() || !S.rev.todo) genReview(); return S.rev.todo; }
 function gradePage(p, g){
@@ -742,6 +746,7 @@ function render(){
   else if (view === 'reader') h = vReader();
   else if (view === 'setupHifz') h = vSetupHifz();
   else if (view === 'hifzMenu') h = vHifzMenu();
+  else if (view === 'revMenu') h = vRevMenu();
   else if (view === 'search') h = vSearch();
   else if (view === 'setupReview') h = vSetupReview();
   else if (view === 'setupWird') h = vSetupWird();
@@ -823,9 +828,9 @@ function vHome(){
   else h += tile('hifz', 'حفظ', 'اليوم: ' + cShort(S.chunks[S.nextNew]), 'go', 'hifzMenu', false, 'goHifz');
   const todo = reviewTodo(), anyRev = Object.keys(S.learned).length || S.arch.length || (S.rev.known || []).length;
   if (!anyRev) h += tile('rev', 'مراجعة', 'حدّد ما تحفظه ومقدار مراجعتك', 'go', 'setupReview');
-  else if (!todo.length) h += tile('rev', 'مراجعة', 'لا مراجعة متبقية اليوم', 'go', 'setupReview', true);
-  else { const pg = todo.filter(x => x.page).length, ch = todo.length - pg;
-    h += tile('rev', 'مراجعة', 'اليوم: ' + [ch ? countWord(ch, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') : '', pg ? countWord(pg, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') : ''].filter(Boolean).join(' و'), 'revGo', '', false, 'goReview'); }
+  else if (!todo.length) h += tile('rev', 'مراجعة', 'أنهيت مراجعة اليوم · اضغط لمراجعة إضافية', 'go', 'revMenu', true, 'goReview');
+  else { const pg = todo.filter(x => x.page).length, ch = todo.length - pg, dn = (S.rev.tot || 0) - todo.length;
+    h += tile('rev', 'مراجعة', (dn > 0 ? 'أكمل مراجعتك: بقي ' : 'اليوم: ') + [ch ? countWord(ch, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') : '', pg ? countWord(pg, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') : ''].filter(Boolean).join(' و'), 'go', 'revMenu', false, 'goReview'); }
   const wt = wirdToday();
   if (!wt) h += tile('wird', 'ورد يومي', 'حدّد وردك اليومي من القراءة', 'go', 'setupWird');
   else if (wt.finished) h += tile('wird', 'ورد يومي', 'ختمت القرآن، تقبّل الله منك', 'go', 'setupWird', true);
@@ -850,6 +855,18 @@ function toast(msg){
   const old = document.querySelector('.toast'); if (old) old.remove();
   const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = '✓ ' + msg;
   document.body.appendChild(el); setTimeout(() => el.classList.add('out'), 4200); setTimeout(() => el.remove(), 4800);
+}
+function vRevMenu(){
+  const todo = reviewTodo(), tot = Math.max(S.rev.tot || 0, todo.length), done = tot - todo.length, opts = [];
+  const desc = list => { const pg = list.filter(x => x.page).length, ch = list.length - pg; return [ch ? countWord(ch, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') : '', pg ? countWord(pg, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') : ''].filter(Boolean).join(' و'); };
+  if (todo.length){ const f = todo[0], c = itemChunk(f);
+    opts.push(`<button class="opt big" data-act="revGo"><span class="tic">${TI.rev}</span><span><b>${done ? 'أكمل مراجعة اليوم' : 'مراجعة اليوم'}</b><span class="muted" style="display:block">${done ? 'راجعت ' + AR(done) + ' من ' + AR(tot) + ' · بقي ' + desc(todo) : desc(todo)} · تبدأ من ${f.page ? 'صفحة ' + AR(f.page) : cShort(c)}</span></span></button>`); }
+  else if (tot) opts.push(`<div class="opt big done"><span class="tic">✓</span><span><b>أنهيت مراجعة اليوم</b><span class="muted" style="display:block">تقبّل الله منك</span></span></div>`);
+  const ex = !todo.length && knownPages().length ? pickPages(true) : [];
+  if (ex.length) opts.push(`<button class="opt big" data-act="revExtra"><span class="tic">+</span><span><b>راجع مقدارًا إضافيًا</b><span class="muted" style="display:block">${countWord(ex.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')} تبدأ من صفحة ${AR(ex[0])}</span></span></button>`);
+  opts.push(`<button class="opt big" data-act="go" data-v="setupReview"><span class="tic">+</span><span><b>مراجعة جديدة</b><span class="muted" style="display:block">غيّر ما تراجعه ومقدار مراجعتك اليومية</span></span></button>`);
+  const r = S.rev, kn = (r.known || []).length;
+  return `<main>${back()}<div><h1>المراجعة</h1>${kn && r.n ? `<p class="muted">خطتك الحالية: تحفظ ${countWord(kn, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا')} · تراجع ${r.unit === 'surah' ? countWord(r.n, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : r.unit === 'juz' ? countWord(r.n, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : countWord(r.n, 'صفحة واحدة', 'صفحتين', 'صفحات', 'صفحة')} يوميًا</p>` : ''}</div><div class="btns">${opts.join('')}</div></main>`;
 }
 function vHifzMenu(){
   const ip = inprog(), opts = [];
@@ -1479,6 +1496,7 @@ app.addEventListener('click', e => {
   if (a === 'wdStop'){ S.wird = null; save(); view = 'home'; render(); return; }
   /* start sessions */
   if (a === 'hifzGo'){ if (hasNewLeft()) startSession([{type:'new', idx:S.nextNew}]); return; }
+  if (a === 'revExtra'){ const ex = pickPages(true); if (ex.length){ startSession(ex.map(p => ({type:'review', page:p, extra:true}))); sess.banner = 'مراجعة إضافية: ' + countWord(ex.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') + '.'; render(); } return; }
   if (a === 'revGo'){ const todo = reviewTodo(); if (todo.length) startSession(todo.map(x => Object.assign({}, x))); return; }
   if (a === 'practice'){ startSession([{type:'practice', idx:+v}]); return; }
   if (a === 'quit'){ confirmBox = null; stopMic(); sess = null; if (retReader && RD){ retReader = false; openReader(RD.page, RD.back); return; } view = 'home'; render(); return; }
