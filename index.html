@@ -578,11 +578,32 @@ function recompute(flush){
   processSpoken(flush);
 }
 const PRE = new Set(['بسم','الله','الرحمن','الرحيم','اعوذ','بالله','من','الشيطان','الرجيم'].map(w => normSpoken(w)));
+const PHR = [['اعوذ','بالله','من','الشيطان','الرجيم'], ['بسم','الله','الرحمن','الرحيم']].map(a => a.map(normSpoken));
+const near = (a, b) => !!b && lev(a, b) <= (a.length <= 3 ? 0 : 1);
+/* Length of an isti'adha or basmala the reader said before the section or a new surah (0 if none). Skipped when the text itself starts with it (al-Fatiha). */
+function preLen(){
+  const E = sess.exp, sp = sess.spoken, p = sess.p;
+  for (const ph of PHR){
+    if (same(E[p], ph[0]) && E[p + 1] && same(E[p + 1], ph[1])) continue;
+    let i, j;
+    if (near(ph[0], sp[0])){ i = 1; j = 1; } else if (near(ph[0] + ph[1], sp[0])){ i = 1; j = 2; } else continue;
+    while (i < sp.length && j < ph.length){
+      if (near(ph[j], sp[i])){ i++; j++; }
+      else if (j + 1 < ph.length && near(ph[j + 1], sp[i])){ i++; j += 2; }
+      else break;
+    }
+    if (j >= 2 || i >= sp.length) return i;
+  }
+  return 0;
+}
 function processSpoken(flush){
   const E = sess.exp;
   while (sess.spoken.length && sess.p < E.length){
     const w = sess.spoken[0], w2 = sess.spoken.length > 1 ? w + sess.spoken[1] : null;
-    if (sess.p === 0 && PRE.has(w) && !same(E[0], w) && !(w2 && same(E[0], w2))){ sess.spoken.shift(); continue; }
+    if (sess.p === 0 || (sess.bounds && sess.bounds.has(sess.p))){
+      const n = preLen(); if (n){ sess.spoken.splice(0, n); continue; }
+      if (PRE.has(w) && !same(E[sess.p], w) && !(w2 && same(E[sess.p], w2))){ sess.spoken.shift(); continue; }
+    }
     let hit = -1, used = 1;
     for (let j = 0; j < 4 && sess.p + j < E.length; j++){
       if (same(E[sess.p + j], w)){ hit = j; used = 1; break; }
@@ -971,7 +992,8 @@ function initStep(){
   sess.reveal = t.type === 'new' ? 1 : 2;
   sess.shown = new Set();
   sess.peeked = new Set();
-  sess.exp = chunkAyat(itemChunk(t)).flatMap(x => x.txt.split(' ').map(expVariants));
+  { const ay = chunkAyat(itemChunk(t)); sess.exp = []; sess.bounds = new Set();
+    ay.forEach(x => { if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length); x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); }); }
   sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = '';
 }
 function chunkAyat(c){ const out = []; segs(c).forEach((sg, si) => { for (let a = sg.a; a <= sg.b; a++) out.push({s:sg.s, a, txt:Q[sg.s - 1][1][a - 1], head: a === sg.a && (si > 0 || a === 1)}); }); return out; }
