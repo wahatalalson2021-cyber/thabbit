@@ -448,7 +448,13 @@ function expVariants(w){
   const b = baseNorm(w.replace(/ٰ/g,'').replace(HAR,''));
   return a === b ? [a] : [a, b];
 }
-const normSpoken = w => baseNorm(w.replace(HAR,''));
+/* "ألف" in "ألف لام ميم" is sometimes written as the number 1000. */
+const SPNUM = {'1000':'الف', '١٠٠٠':'الف', '1,000':'الف'};
+const normSpoken = w => baseNorm((SPNUM[w.trim()] || w).replace(HAR,''));
+/* Every word form in the Quran. A heard word that is not one of them is the recognizer garbling sound, not the reader
+   saying a different word (a real slip almost always swaps in another Quranic word). */
+let QVOC = null;
+function quranWord(w){ if (!QVOC){ QVOC = new Set(); Q.forEach(q => q[1].forEach(t => t.split(' ').forEach(x => expVariants(x).forEach(v => QVOC.add(v))))); } return QVOC.has(w); }
 function lev(a,b){ const m=a.length,n=b.length; if(!m) return n; if(!n) return m; let p=Array.from({length:n+1},(_,j)=>j);
   for(let i=1;i<=m;i++){ const c=[i]; for(let j=1;j<=n;j++) c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1)); p=c; } return p[n]; }
 /* A missing, extra or swapped و / ف at the start is a real memorization slip (common between similar verses), so it never counts as a match. */
@@ -707,9 +713,10 @@ function processSpoken(flush){
       sess.spoken.shift(); if (!sess.ws[sess.p]){ sess.ws[sess.p] = 'soft'; sess.heard[sess.p] = w; } sess.p++; sess.bad = []; continue;
     }
     sess.spoken.splice(0, hit < 0 ? 1 : used);
-    if (hit < 0){ sess.bad.push(w); if (++sess.m2 >= 2){ if (!sess.ws[sess.p]){ sess.ws[sess.p] = 'miss'; sess.heard[sess.p] = sess.bad.join(' '); } sess.p++; sess.m2 = 0; sess.bad = []; } continue; }
+    if (hit < 0){ sess.bad.push(w); if (++sess.m2 >= 2){ if (!sess.ws[sess.p]){ sess.ws[sess.p] = sess.bad.some(quranWord) ? 'miss' : 'soft'; sess.heard[sess.p] = sess.bad.join(' '); } sess.p++; sess.m2 = 0; sess.bad = []; } continue; }
     /* words jumped over: short particles (من، في، ما، لا) are often dropped by the recognizer in tarteel, so they are "unclear", not wrong */
-    for (let j = 0; j < hit; j++) if (!sess.ws[sess.p + j]){ const short = Math.max(...E[sess.p + j].map(v => v.length)) <= 3 && !sess.bad.some(b => E[sess.p + j].some(v => prefixSlip(v, b))); sess.ws[sess.p + j] = short ? 'soft' : 'miss'; sess.heard[sess.p + j] = sess.bad.join(' '); }
+    for (let j = 0; j < hit; j++) if (!sess.ws[sess.p + j]){ const short = (Math.max(...E[sess.p + j].map(v => v.length)) <= 3 && !sess.bad.some(b => E[sess.p + j].some(v => prefixSlip(v, b))))
+        || (hit === 1 && sess.bad.length === 1 && !quranWord(sess.bad[0])); sess.ws[sess.p + j] = short ? 'soft' : 'miss'; sess.heard[sess.p + j] = sess.bad.join(' '); }
     sess.bad = [];
     for (let j = hit; j < hit + span; j++) if (!sess.ws[sess.p + j]) sess.ws[sess.p + j] = 'ok';
     sess.p += hit + span; sess.m2 = 0;
