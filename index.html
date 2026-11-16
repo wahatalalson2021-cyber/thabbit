@@ -312,6 +312,8 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 #rcA,#rcB{display:block;width:100%;margin-top:4px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:1.1rem;text-align:center}
 .btn svg{width:20px;height:20px;vertical-align:-4px;margin-inline-end:6px}
 .askmore{display:flex;flex-direction:column;gap:10px}
+.mic-box.lab .mic{background:#7a4fb5}
+.mic-box.lab .mic:disabled{opacity:.75}
 .okbanner{background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good);border-radius:12px;padding:10px 12px;font-weight:600;font-size:.9rem}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -435,6 +437,84 @@ function markDay(){ S.days[today()] = 1; }
 function streak(){
   let t = today(); if (!S.days[t]) t--;
   let n = 0; while (S.days[t]){ n++; t--; } return n;
+}
+
+/* ---------- LAB (test link only, ?lab=1): Quran-trained speech model running on the phone ----------
+   Records the recitation, then a Whisper model fine-tuned on Quran recitation (tarteel-ai/whisper-base-ar-quran,
+   Apache-2.0) writes it out on the device, and the normal matcher colours the words. The regular link never loads any of it. */
+const LAB = (() => { try { const q = location.search;
+  if (/[?&]lab=1/.test(q)) localStorage.setItem('thabbit-lab', '1'); if (/[?&]lab=0/.test(q)) localStorage.removeItem('thabbit-lab');
+  return localStorage.getItem('thabbit-lab') === '1'; } catch (e) { return false; } })();
+const TJS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js';
+let ASR = null, asrLoad = null;
+function loadASR(onProg){
+  if (ASR) return Promise.resolve(ASR);
+  if (!asrLoad) asrLoad = (async () => {
+    const T = await import(TJS);
+    T.env.allowLocalModels = true; T.env.allowRemoteModels = false; T.env.localModelPath = new URL('./models/', location.href).href;
+    ASR = await T.pipeline('automatic-speech-recognition', 'tarteel-base', {dtype: {encoder_model: 'q8', decoder_model_merged: 'q8'}, device: 'wasm', progress_callback: onProg});
+    return ASR;
+  })().catch(e => { asrLoad = null; throw e; });
+  return asrLoad;
+}
+let labRec = null;
+function labBox(){
+  const L = sess.lab || {st:'idle'}, busy = L.st === 'loading' || L.st === 'working';
+  const label = L.st === 'rec' ? 'أنهيت، اكتب ما قرأته' : L.st === 'loading' ? 'أحمّل نموذج القرآن...' : L.st === 'working' ? 'أكتب ما قرأته...' : 'سمّع بنموذج القرآن (تجريبي)';
+  return `<div class="mic-box lab"><button class="mic ${L.st === 'rec' ? 'on' : ''}" data-act="labMic" ${busy ? 'disabled' : ''}>${MIC_SVG}${label}</button>
+    ${L.msg ? `<p class="live">${esc(L.msg)}</p>` : ''}${L.err ? `<p class="err">${esc(L.err)}</p>` : ''}</div>`;
+}
+const labSet = (o) => { sess.lab = Object.assign(sess.lab || {st:'idle'}, o); if (view === 'session') render(); };
+async function labStart(){
+  const s0 = sess;
+  labSet({st:'loading', msg:'', err:''});
+  try {
+    const files = {};
+    await loadASR(pr => { if (pr.status === 'progress' && pr.total){ files[pr.file] = [pr.loaded, pr.total]; const v = Object.values(files), a = v.reduce((x, y) => x + y[0], 0), b = v.reduce((x, y) => x + y[1], 0);
+      if (sess === s0 && b > 5e6) labSet({msg:'تحميل النموذج مرة واحدة فقط: ' + AR(Math.round(a / b * 100)) + '٪ من ' + AR(Math.round(b / 1048576)) + ' ميجابايت'}); } });
+  } catch (e) { if (sess === s0) labSet({st:'idle', msg:'', err:'تعذّر تحميل النموذج. تأكد من الإنترنت وحاول مرة أخرى. (' + (e && e.message || e) + ')'}); return; }
+  if (sess !== s0) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    const mr = new MediaRecorder(stream), parts = [];
+    mr.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
+    mr.onstop = () => { stream.getTracks().forEach(t => t.stop()); labWork(new Blob(parts, {type: mr.mimeType || 'audio/mp4'}), s0); };
+    labRec = {mr, t0: Date.now()}; mr.start(1000);
+    labSet({st:'rec', msg:'أسجّل الآن. اقرأ من حفظك، ثم اضغط الزر عند الانتهاء.'});
+  } catch (e) { labSet({st:'idle', msg:'', err:'لم يُسمح باستخدام الميكروفون. (' + (e && e.name || e) + ')'}); }
+}
+function labStop(){ if (labRec && labRec.mr.state !== 'inactive'){ labRec.audioSec = (Date.now() - labRec.t0) / 1000; labRec.mr.stop(); labSet({st:'working', msg:'أكتب ما قرأته...'}); } }
+/* Whisper reads at most 30 s at a time: cut long recordings at the quietest moment, keeping pieces under ~25 s. */
+function labPieces(y){
+  const sr = 16000, out = []; let start = 0;
+  const win = 8000, loud = i => { let s = 0; for (let k = i; k < i + win && k < y.length; k++) s += y[k] * y[k]; return s; };
+  while ((y.length - start) / sr > 25){
+    let best = start + 12 * sr, bv = Infinity;
+    for (let i = start + 12 * sr; i < start + 24 * sr; i += 1600){ const v = loud(i); if (v < bv){ bv = v; best = i + win / 2; } }
+    out.push(y.subarray(start, best)); start = best;
+  }
+  out.push(y.subarray(start)); return out;
+}
+async function labWork(blob, s0){
+  const t0 = performance.now();
+  try {
+    const buf = await blob.arrayBuffer(), AC0 = new (window.AudioContext || window.webkitAudioContext)();
+    const dec = await AC0.decodeAudioData(buf); AC0.close && AC0.close();
+    const off = new OfflineAudioContext(1, Math.ceil(dec.duration * 16000), 16000), src = off.createBufferSource();
+    src.buffer = dec; src.connect(off.destination); src.start(); const y = (await off.startRendering()).getChannelData(0);
+    const pieces = labPieces(y), texts = [];
+    for (let i = 0; i < pieces.length; i++){
+      if (sess !== s0) return;
+      labSet({msg: 'أكتب ما قرأته...' + (pieces.length > 1 ? ' الجزء ' + AR(i + 1) + ' من ' + AR(pieces.length) : '')});
+      const r = await ASR(pieces[i], {max_new_tokens: 220});
+      texts.push(String(r.text || '').replace(/<\|[^|]*\|>/g, '').trim());
+    }
+    if (sess !== s0) return;
+    const proc = (performance.now() - t0) / 1000;
+    sess.finalText = texts.join(' '); sess.interim = ''; sess.usedMic = true; sess.engine = 'model';
+    sess.labTime = {audio: dec.duration, proc}; recompute(true); sess.reveal = sess.total;
+    labSet({st:'idle', msg:'', err:''});
+  } catch (e) { if (sess === s0) labSet({st:'idle', msg:'', err:'تعذّرت كتابة التلاوة. (' + (e && e.message || e) + ')'}); }
 }
 
 /* ---------- recitation matching ---------- */
@@ -1182,7 +1262,7 @@ function initStep(){
       if ((x.a === 1 || (x.s === 42 && x.a === 2)) && MUQ.has(first)) sess.muq.set(sess.exp.length, first);
       x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
     tajweedVariants(sess.exp); }
-  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false; SRLOG.length = 0;
+  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false; SRLOG.length = 0; sess.lab = null; sess.labTime = null; sess.engine = null;
 }
 function chunkAyat(c){ const out = []; segs(c).forEach((sg, si) => { for (let a = sg.a; a <= sg.b; a++) out.push({s:sg.s, a, txt:Q[sg.s - 1][1][a - 1], head: a === sg.a && (si > 0 || a === 1)}); }); return out; }
 function headHtml(x, multi){ return (multi ? `<div class="shead">${sName(x.s)}</div>` : '') + (x.a === 1 && x.s !== 1 && x.s !== 9 ? `<div class="basmala">${BASMALA}</div>` : ''); }
@@ -1226,7 +1306,8 @@ function vSession(){
     h += `<p class="muted">${t.type === 'new' ? 'الآيات مخفية الآن. اقرأها من حفظك بصوت مسموع، واكشف الكلمة إذا توقفت.' : 'اقرأ من حفظك بصوت مسموع من أوله. أول كلمتين ظاهرتان لتبدأ.'}</p>${words}`;
     if (!allShown){
       h += `<div class="dock">`;
-      if (DICT){
+      if (LAB) h += labBox();
+      if (DICT && !(sess.lab && sess.lab.st !== 'idle')){
         h += `<div class="mic-box"><button class="mic ${sess.listening ? 'on' : ''}" data-act="mic">${MIC_SVG}${sess.listening ? 'أنهيت التسميع' : sess.p > 0 ? 'تابع التسميع بصوتك' : 'سمّع بصوتك'}</button>
           <button class="beeptog" data-act="beepTog" aria-pressed="${S.beep !== false}">${S.beep !== false ? BELL_SVG + 'صوت التنبيه عند الخطأ: يعمل' : BELL_OFF_SVG + 'صوت التنبيه عند الخطأ: مغلق'}</button>
           <p class="live" id="live" aria-live="polite">${sess.listening ? esc(liveText) || hearMsg() : ''}</p>
@@ -1246,7 +1327,7 @@ function vSession(){
       const S3 = sug === 3 ? 'sug' : '', S2 = sug === 2 ? 'sug' : '', S1 = sug === 1 ? 'sug' : '';
       if (sess.usedMic){
         h += `<div class="result"><span class="chip">${AR(okN)} كلمة صحيحة</span>${misses ? `<span class="chip warn" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)">${AR(misses)} خطأ أو تجاوز (بالأحمر)</span>` : ''}${softs ? `<span class="chip soft">${AR(softs)} لم تُسمع بوضوح</span>` : ''}${hints ? `<span class="chip warn">${AR(hints)} مساعدة</span>` : ''}${unreached ? `<span class="chip warn">${AR(unreached)} لم تُقرأ</span>` : ''}</div>
-          <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} الاقتراح مُعلَّم، والقرار لك.${misses || softs ? ' اضغط أي كلمة ملونة لترى ماذا سمع التطبيق.' : ''}</p>${whyBox()}
+          <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} الاقتراح مُعلَّم، والقرار لك.${misses || softs ? ' اضغط أي كلمة ملونة لترى ماذا سمع التطبيق.' : ''}</p>${sess.labTime ? `<p class="muted">نموذج القرآن (تجريبي): مدة التلاوة ${AR(Math.round(sess.labTime.audio))} ثانية، ووقت الكتابة ${AR(Math.round(sess.labTime.proc))} ثانية.</p>` : ''}${whyBox()}
           <button class="beeptog" data-act="heardAll">${sess.showAll ? 'إخفاء النص المسموع' : 'اعرض كل ما سمعه التطبيق'}</button>${sess.showAll ? `<div class="whybox"><small>هذا ما كتبته خدمة التعرّف على الكلام من صوتك:</small><span>${esc((sess.finalText || '').trim()) || '—'}</span><button class="btn soft" data-act="copyReport">انسخ التقرير لإرساله</button></div>` : ''}`;
       } else {
         h += `<p class="muted">${hints ? 'احتجت إلى ' + AR(hints) + ' ' + (hints === 1 ? 'كلمة' : hints === 2 ? 'كلمتين' : 'كلمات') + ' مساعدة (باللون البرتقالي).' : 'قارن قراءتك بالنص أعلاه.'} كيف كان حفظك؟</p>`;
@@ -1697,7 +1778,7 @@ app.addEventListener('click', e => {
   if (a === 'peek'){ const i = +v; if (sess.reveal >= sess.total && sess.ws[i]){ sess.why = sess.why === i ? null : i; render(); return; } if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
   if (a === 'copyReport'){
     const t = sess.queue[sess.pos], c = itemChunk(t), [s1, a1] = gidToSA(c.r[0][0]), [s2, a2] = gidToSA(c.r[c.r.length - 1][1]);
-    const rep = ['تقرير تسميع - ثبّت', 'المقطع: ' + Q[s1 - 1][0] + ' ' + a1 + ' إلى ' + Q[s2 - 1][0] + ' ' + a2, 'الجهاز: ' + navigator.userAgent,
+    const rep = ['تقرير تسميع - ثبّت', 'المقطع: ' + Q[s1 - 1][0] + ' ' + a1 + ' إلى ' + Q[s2 - 1][0] + ' ' + a2, 'الجهاز: ' + navigator.userAgent, 'المحرك: ' + (sess.engine === 'model' ? 'نموذج القرآن' + (sess.labTime ? ' (تلاوة ' + Math.round(sess.labTime.audio) + ' ث، كتابة ' + Math.round(sess.labTime.proc) + ' ث)' : '') : 'خدمة الجوال'),
       'الكلمات الحمراء: ' + chunkAyat(c).flatMap(x => x.txt.split(' ')).filter((_, i) => sess.ws[i] === 'miss').join('، '),
       'النص المسموع: ' + (sess.finalText || '').trim(), 'الدفعات:', ...SRLOG.map((run, i) => '#' + (i + 1) + '\n' + run.join('\n'))].join('\n');
     const done = () => toast('نُسخ التقرير. الصقه في المحادثة مع Claude.');
@@ -1705,6 +1786,7 @@ app.addEventListener('click', e => {
     else prompt('انسخ النص:', rep);
     return;
   }
+  if (a === 'labMic'){ if (sess.lab && sess.lab.st === 'rec') labStop(); else if (!sess.lab || sess.lab.st === 'idle'){ stopMic(); labStart(); } return; }
   if (a === 'heardAll'){ sess.showAll = !sess.showAll; render(); return; }
   if (a === 'beepTog'){ S.beep = S.beep === false; save(); if (S.beep) { audioUnlock(); beep(); } render(); return; }
   if (a === 'mic'){

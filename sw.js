@@ -1,9 +1,9 @@
 /* Offline support: always try the network first (so updates arrive at once), fall back to the saved copy when offline. */
-const CACHE = 'thabbit-v3';
+const CACHE = 'thabbit-v4';
 const MCACHE = 'thabbit-mushaf-v1';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== MCACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== MCACHE && !k.startsWith('transformers')).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
@@ -13,6 +13,8 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (url.origin !== location.origin) return;
+  /* The Quran speech model (about 100 MB) is saved by its own library; don't keep a second copy here. */
+  if (url.pathname.includes('/models/')) return;
   e.respondWith(
     fetch(e.request, {cache: 'no-store'}).then(res => {
       const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return res;

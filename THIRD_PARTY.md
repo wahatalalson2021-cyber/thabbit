@@ -25,3 +25,9 @@ From **quran-meta** v7.0.0 (Hafs lists), MIT License, Copyright (c) 2020 Quran-C
 ## Tajweed colour mushaf
 - tajweed.json: built from QUL's open exports (qpc-v4 words, qpc-v4-tajweed-15-lines layout), https://qul.tarteel.ai
 - The colour page fonts (KFGQPC V4, 1441H) are © King Fahd Glorious Qur'an Printing Complex, published by QUL. They are NOT included in this repository; the app loads them from the @tlawat/mushaf-fonts-qpc-v4-tajweed package on jsDelivr, unmodified. Their notice reads: "NOT FOR SALE, ONLY CHARITABLE (SADAQA) PURPOSE ONLY. PRINTING AND PUBLISHING NOT PERMITTED WITHOUT PRIOR PERMISSION FROM KING FAHAD GLORIOUS QURAN PRINTING COMPLEX." This app is free.
+
+## Quran speech model (test link only)
+- Model: tarteel-ai/whisper-base-ar-quran by Tarteel AI, fine-tuned from OpenAI Whisper base. Licence: Apache License 2.0.
+  Source: https://huggingface.co/tarteel-ai/whisper-base-ar-quran
+- Converted to ONNX and quantized to 8-bit for on-device use (files in /models/tarteel-base). Weights are otherwise unchanged.
+- Runs in the browser with Transformers.js (@huggingface/transformers, Apache License 2.0), loaded from jsDelivr.
