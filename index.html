@@ -515,22 +515,24 @@ function engDelete(){ caches.delete('transformers-cache').catch(() => {}); try {
 const useEngine = () => ENG.st === 'ready';
 
 /* Live capture: raw sound from the microphone, cut into pieces at pauses, each piece written out by the model. */
-let REC = null;
+let REC = null; const ENGLOG = []; let engT0 = 0;
+function engLog(m){ if (!ENGLOG.length) engT0 = performance.now(); ENGLOG.push(((performance.now() - engT0) / 1000).toFixed(1) + 's ' + m); if (ENGLOG.length > 60) ENGLOG.shift(); }
 async function engStart(){
   const s0 = sess, Ctx = window.AudioContext || window.webkitAudioContext;
   const ctx = new Ctx();                                   // created inside the tap, so the iPhone allows it
   REC = {s0, ctx, q: [], busy: false, stopping: false, seg: [], segN: 0, speech: 0, sil: 0, noise: 0.003, pre: [], blocks: [], cands: []};
   sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.interim = ''; sess.hear = 'audio'; sess.micTip = false; sess.engine = 'model';
   liveText = ASR ? '' : 'أجهّز المحرك الدقيق... ابدأ القراءة'; render();
-  try { REC.stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}}); }
+  ENGLOG.length = 0; engLog('بدء · ' + (ASR ? 'المحرك في الذاكرة' : 'تحميل المحرك من الجهاز'));
+  try { REC.stream = await navigator.mediaDevices.getUserMedia({audio: true}); }
   catch (e) { engClose(); if (sess === s0){ sess.listening = false; sess.micErr = 'لم يُسمح باستخدام الميكروفون. اسمح لـ Safari باستخدامه ثم حاول مرة أخرى.'; render(); } return; }
   if (!REC || REC.s0 !== sess){ engClose(); return; }
   const src = ctx.createMediaStreamSource(REC.stream); REC.src = src;
   try {   /* sound is collected on the audio thread, so none is lost while the phone is busy */
     await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([CAPTURE_SRC], {type: 'text/javascript'})));
     const node = new AudioWorkletNode(ctx, 'thabbit-capture'), mute = ctx.createGain(); mute.gain.value = 0;
-    node.port.onmessage = e => engAudio(e.data, ctx.sampleRate); src.connect(node); node.connect(mute); mute.connect(ctx.destination); REC.proc = node;
-  } catch (e) {
+    node.port.onmessage = e => engAudio(e.data, ctx.sampleRate); src.connect(node); node.connect(mute); mute.connect(ctx.destination); REC.proc = node; engLog('التقاط: worklet ' + ctx.sampleRate);
+  } catch (e) { engLog('التقاط: script ' + ctx.sampleRate + ' (' + (e && e.message || e) + ')');
     const proc = ctx.createScriptProcessor(4096, 1, 1); src.connect(proc); proc.connect(ctx.destination); REC.proc = proc;
     proc.onaudioprocess = ev => engAudio(new Float32Array(ev.inputBuffer.getChannelData(0)), ctx.sampleRate);
   }
@@ -543,40 +545,46 @@ const CAPTURE_SRC = `class C extends AudioWorkletProcessor { constructor(){ supe
 registerProcessor('thabbit-capture', C);`;
 function engAudio(x, rate){
   const R0 = REC; if (!R0 || R0.stopping) return;
-  const ratio = rate / 16000, n = Math.floor(x.length / ratio), y = new Float32Array(n);   // to 16 kHz (average)
-  for (let i = 0; i < n; i++){ const a = Math.floor(i * ratio), b = Math.min(x.length, Math.floor((i + 1) * ratio)); let s = 0; for (let k = a; k < b; k++) s += x[k]; y[i] = s / Math.max(1, b - a); }
-  let e = 0; for (let i = 0; i < n; i++) e += y[i] * y[i]; const rms = Math.sqrt(e / Math.max(1, n)), dur = n / 16000;
+  R0.rate = rate; const y = x, n = x.length;
+  let e = 0; for (let i = 0; i < n; i++) e += y[i] * y[i]; const rms = Math.sqrt(e / Math.max(1, n)), dur = n / rate;
   if (rms < R0.noise * 2) R0.noise = R0.noise * 0.95 + rms * 0.05;
   const thr = Math.max(R0.noise * 3, 0.006), loud = rms > thr;
-  if (loud){ if (R0.segN && R0.sil >= 0.3) R0.cands.push({k: R0.seg.length, sil: R0.sil, at: R0.segN / 16000});   // a pause inside the piece: a possible cut point
+  if (loud){ if (R0.segN && R0.sil >= 0.25) R0.cands.push({k: R0.seg.length, sil: R0.sil, at: R0.segN / rate});   // a pause inside the piece: a possible cut point
     R0.speech += dur; R0.sil = 0; if (sess && sess.hear !== 'speech'){ sess.hear = 'speech'; engLive(); } } else R0.sil += dur;
   if (!R0.segN && !loud){ R0.pre.push(y); if (R0.pre.length > 4) R0.pre.shift(); return; }   // keep a little sound before speech starts
   if (!R0.segN){ R0.pre.forEach(b => { R0.seg.push(b); R0.blocks.push(0); R0.segN += b.length; }); R0.pre = []; }
   R0.seg.push(y); R0.blocks.push(rms); R0.segN += n;
-  /* The model learned from whole ayat, so a piece must start at an ayah start: cut only at a long pause (an ayah end).
-     A piece that grows too long is cut at its longest pause. */
-  const segSec = R0.segN / 16000;
-  if (segSec >= 2 && R0.speech >= 1 && R0.sil >= 0.8) engCut(R0.seg.length);
-  else if (segSec >= 24){
-    const c = R0.cands.filter(x => x.at >= 5).sort((a, b) => b.sil - a.sil)[0];
+  /* Cut at each pause of half a second (usually an ayah end or a waqf), so words colour soon after they are read.
+     A piece that grows past 12 s is cut at its longest pause. */
+  const segSec = R0.segN / rate;
+  if (segSec >= 1.5 && R0.speech >= 0.8 && R0.sil >= 0.5) engCut(R0.seg.length);
+  else if (segSec >= 12){
+    const c = R0.cands.filter(x => x.at >= 3).sort((a, b) => b.sil - a.sil)[0];
     if (c) engCut(c.k);
     else { let best = R0.blocks.length - 1, bv = Infinity; for (let i = Math.round(R0.blocks.length / 2); i < R0.blocks.length - 1; i++) if (R0.blocks[i] < bv){ bv = R0.blocks[i]; best = i + 1; } engCut(best); }
   }
 }
 function engCut(k){
-  const R0 = REC; const part = R0.seg.slice(0, k), len = part.reduce((a, b) => a + b.length, 0), out = new Float32Array(len); let o = 0;
-  part.forEach(b => { out.set(b, o); o += b.length; });
+  const R0 = REC, rate = R0.rate || 48000; const part = R0.seg.slice(0, k), len = part.reduce((a, b) => a + b.length, 0), raw = new Float32Array(len); let o = 0;
+  part.forEach(b => { raw.set(b, o); o += b.length; });
   R0.seg = R0.seg.slice(k); R0.blocks = R0.blocks.slice(k); R0.segN = R0.seg.reduce((a, b) => a + b.length, 0); R0.speech = 0; R0.sil = 0;
-  R0.cands = R0.cands.filter(x => x.k > k).map(x => ({k: x.k - k, sil: x.sil, at: x.at - len / 16000}));
-  if (len > 16000 * 0.6) { R0.q.push(out); engPump(); }
+  R0.cands = R0.cands.filter(x => x.k > k).map(x => ({k: x.k - k, sil: x.sil, at: x.at - len / rate}));
+  if (len < rate * 0.6) return;
+  /* convert to the model's 16 kHz with the browser's own careful converter, keeping pieces in order */
+  const slot = {y: null}; R0.q.push(slot);
+  const off = new OfflineAudioContext(1, Math.ceil(len * 16000 / rate), 16000), buf = off.createBuffer(1, len, rate); buf.copyToChannel(raw, 0);
+  const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start();
+  off.startRendering().then(r => { slot.y = r.getChannelData(0); engPump(); }, () => { slot.y = new Float32Array(0); engPump(); });
 }
 async function engPump(){
   const R0 = REC; if (!R0 || R0.busy || !ASR) return;
   if (!R0.q.length){ if (R0.stopping) engFinish(); return; }
+  if (!R0.q[0].y) return;                       // the next piece is still being converted
   R0.busy = true; liveText = 'أكتب ما قرأته...'; engLive();
-  try { const y = R0.q.shift(), r = await ASR(y, {max_new_tokens: Math.min(220, 30 + Math.round(y.length / 16000 * 9))}); const t = engClean(r.text);
+  try { const y = R0.q.shift().y; if (!y.length) throw 0; const t0 = performance.now(), r = await ASR(y, {max_new_tokens: Math.min(220, 30 + Math.round(y.length / 16000 * 9))}); const t = engClean(r.text);
+    engLog('قطعة ' + (y.length / 16000).toFixed(1) + 'ث · كتابة ' + ((performance.now() - t0) / 1000).toFixed(1) + 'ث · ' + t);
     if (sess === R0.s0 && t){ sess.finalText = (sess.finalText || '') + ' ' + t; sess.interim = ''; recompute(false); } }
-  catch (e) { if (sess === R0.s0) sess.micErr = 'تعذّرت كتابة جزء من التلاوة. (' + (e && e.message || e) + ')'; }
+  catch (e) { if (e !== 0){ engLog('خطأ: ' + (e && e.message || e)); if (sess === R0.s0) sess.micErr = 'تعذّرت كتابة جزء من التلاوة. (' + (e && e.message || e) + ')'; } }
   R0.busy = false; liveText = R0.stopping ? 'أكتب آخر ما قرأته...' : '';
   if (REC === R0 && view === 'session') render();
   engPump();
@@ -590,7 +598,7 @@ function engLive(){ const el = document.getElementById('live'); if (el) el.textC
 /* The reader pressed "finished" (or reached the end): cut what is left, write it, then show the result. */
 function engStop(){
   const R0 = REC; if (!R0 || R0.stopping) return;
-  if (R0.segN > 16000 * 0.4 && R0.speech > 0.3) engCut(R0.seg.length);
+  if (R0.segN > (R0.rate || 48000) * 0.4 && R0.speech > 0.3) engCut(R0.seg.length);
   R0.stopping = true; engRelease(R0);
   if (sess === R0.s0){ sess.draining = true; liveText = R0.q.length || R0.busy ? 'أكتب آخر ما قرأته...' : ''; render(); }
   if (!ASR && !asrLoad) engFinish(); else engPump();
@@ -1898,7 +1906,7 @@ app.addEventListener('click', e => {
     const t = sess.queue[sess.pos], c = itemChunk(t), [s1, a1] = gidToSA(c.r[0][0]), [s2, a2] = gidToSA(c.r[c.r.length - 1][1]);
     const rep = ['تقرير تسميع - ثبّت', 'المقطع: ' + Q[s1 - 1][0] + ' ' + a1 + ' إلى ' + Q[s2 - 1][0] + ' ' + a2, 'الجهاز: ' + navigator.userAgent, 'المحرك: ' + (sess.engine === 'model' ? 'المحرك الدقيق (نموذج القرآن)' : 'خدمة الجوال') + ' · حالة المحرك: ' + ENG.st,
       'الكلمات الحمراء: ' + chunkAyat(c).flatMap(x => x.txt.split(' ')).filter((_, i) => sess.ws[i] === 'miss').join('، '),
-      'النص المسموع: ' + (sess.finalText || '').trim(), 'الدفعات:', ...SRLOG.map((run, i) => '#' + (i + 1) + '\n' + run.join('\n'))].join('\n');
+      'النص المسموع: ' + (sess.finalText || '').trim(), ...(sess.engine === 'model' && ENGLOG.length ? ['سجل المحرك:', ...ENGLOG] : []), 'الدفعات:', ...SRLOG.map((run, i) => '#' + (i + 1) + '\n' + run.join('\n'))].join('\n');
     const done = () => toast('نُسخ التقرير. الصقه في المحادثة مع Claude.');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(rep).then(done, () => { prompt('انسخ النص:', rep); });
     else prompt('انسخ النص:', rep);
