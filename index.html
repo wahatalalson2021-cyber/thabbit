@@ -459,6 +459,7 @@ function same(vs, sp){ if(!sp) return false; return vs.some(v => !prefixSlip(v, 
 let DICT, dictState = 'idle', liveText = '';
 /* Voice: the browser's own Arabic speech recognition (Chrome, Safari). Claude's pages block the microphone, so inside Claude we fall back to self-grading. */
 const IN_CLAUDE = (() => { try { return window.self !== window.top || !!window.claude; } catch (e) { return true; } })();
+const SRLOG = [];
 function makeWebSpeech(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR || IN_CLAUDE) return null;
@@ -495,25 +496,32 @@ function makeWebSpeech(){
         /* The whole text of this listening run, built from ALL results every time. iPhone rarely marks results final and moves
            resultIndex forward, so reading only from resultIndex lost earlier words. Some browsers also repeat earlier text
            inside a later result (cumulative), so a result that extends the previous one replaces it instead of being added. */
+        /* A later result that starts with (almost) the same words as the previous one is a revised copy of it, not new speech:
+           keep the longer copy instead of adding both. Small changes (a comma, one re-heard word) are tolerated. */
+        const nw = t => t.split(/\s+/).map(x => x.replace(/[^\u0621-\u064A]/g, '')).filter(Boolean);
+        const revises = (a, b) => { const x = nw(a), y = nw(b), m = Math.min(x.length, y.length); if (!m) return false;
+          let k = 0; for (let i = 0; i < m; i++) if (x[i] === y[i]) k++; return k >= (m < 3 ? m : Math.ceil(m * 0.6)); };
         const runText = res => { const parts = [];
           for (let i = 0; i < res.length; i++){ const t = (res[i][0] && res[i][0].transcript || '').trim(); if (!t) continue;
             const prev = parts[parts.length - 1];
-            if (prev && t.startsWith(prev)) parts[parts.length - 1] = t; else if (!(prev && prev.startsWith(t))) parts.push(t); }
+            if (prev && revises(prev, t)){ if (nw(t).length >= nw(prev).length) parts[parts.length - 1] = t; }
+            else parts.push(t); }
           return parts.join(' '); };
         rec = new SR(); rec.lang = 'ar-SA'; rec.interimResults = true; rec.continuous = !android; rec.maxAlternatives = 1;
-        rec.onstart = () => { if (!started){ started = true; resolve(); } st = 'listening'; emit('s', {state:'listening'}); emit('h', {stage:'audio'}); };
+        rec.onstart = () => { SRLOG.push([]); if (SRLOG.length > 12) SRLOG.shift(); if (!started){ started = true; resolve(); } st = 'listening'; emit('s', {state:'listening'}); emit('h', {stage:'audio'}); };
         rec.onaudiostart = () => emit('h', {stage:'audio'});
         rec.onsoundstart = () => emit('h', {stage:'sound'});
         rec.onspeechstart = () => emit('h', {stage:'speech'});
         rec.onresult = e => {
           heard = true; restarts = 0;
+          const run = SRLOG[SRLOG.length - 1]; if (run){ run.length = 0; for (let i = 0; i < e.results.length; i++) run.push((e.results[i].isFinal ? 'F: ' : 'I: ') + (e.results[i][0] ? e.results[i][0].transcript : '')); }
           lastInterim = runText(e.results);
           emit('p', {text:lastInterim});
         };
         rec.onerror = e => { if (e.error !== 'no-speech' && e.error !== 'aborted') err = ERR[e.error] || 'upstream_error'; };
         rec.onend = () => {
           if (lastInterim.trim()){ emit('f', {text:' ' + lastInterim}); lastInterim = ''; emit('p', {text:''}); }
-          if (st === 'listening' && !stopReason && !err && !LOCAL && (heard || restarts < 1)){ restarts++; heard = false; try { begin(rec); return; } catch (x) {} }
+          if (st === 'listening' && !stopReason && !err && !LOCAL && (heard || restarts < 1)){ restarts++; heard = false; SRLOG.push([]); if (SRLOG.length > 12) SRLOG.shift(); try { begin(rec); return; } catch (x) {} }
           const reason = stopReason || err || 'stopped';
           rec = null; st = 'idle'; stopReason = null; emit('p', {text:''});
           if (stream){ stream.getTracks().forEach(x => x.stop()); stream = null; }
@@ -588,7 +596,7 @@ function micFail(code){
   }
   return MIC_ERR[code] ? MIC_ERR[code] + diag(code) : '';
 }
-function stopMic(){ if (DICT && dictState !== 'idle') DICT.stop().catch(() => {}); if (sess) sess.listening = false; }
+function stopMic(){ if (DICT && dictState !== 'idle') DICT.stop().catch(() => {}); if (sess){ if (sess.listening && sess.interim){ sess.finalText = (sess.finalText || '') + ' ' + sess.interim; sess.interim = ''; } sess.listening = false; } }
 function feed(text){
   if (!/[\u0621-\u064A]/.test(text) && /[A-Za-z]/.test(text)) sess.micErr = 'الخدمة تكتب كلامك بلغة غير العربية. اجعل لغة المتصفح العربية ثم حاول مرة أخرى.' + diag('lang');
   sess.finalText = (sess.finalText || '') + ' ' + text; sess.interim = '';
@@ -1148,7 +1156,7 @@ function initStep(){
       if ((x.a === 1 || (x.s === 42 && x.a === 2)) && MUQ.has(first)) sess.muq.set(sess.exp.length, first);
       x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
     tajweedVariants(sess.exp); }
-  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false;
+  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false; SRLOG.length = 0;
 }
 function chunkAyat(c){ const out = []; segs(c).forEach((sg, si) => { for (let a = sg.a; a <= sg.b; a++) out.push({s:sg.s, a, txt:Q[sg.s - 1][1][a - 1], head: a === sg.a && (si > 0 || a === 1)}); }); return out; }
 function headHtml(x, multi){ return (multi ? `<div class="shead">${sName(x.s)}</div>` : '') + (x.a === 1 && x.s !== 1 && x.s !== 9 ? `<div class="basmala">${BASMALA}</div>` : ''); }
@@ -1213,7 +1221,7 @@ function vSession(){
       if (sess.usedMic){
         h += `<div class="result"><span class="chip">${AR(okN)} كلمة صحيحة</span>${misses ? `<span class="chip warn" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)">${AR(misses)} خطأ أو تجاوز (بالأحمر)</span>` : ''}${softs ? `<span class="chip soft">${AR(softs)} لم تُسمع بوضوح</span>` : ''}${hints ? `<span class="chip warn">${AR(hints)} مساعدة</span>` : ''}${unreached ? `<span class="chip warn">${AR(unreached)} لم تُقرأ</span>` : ''}</div>
           <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} الاقتراح مُعلَّم، والقرار لك.${misses || softs ? ' اضغط أي كلمة ملونة لترى ماذا سمع التطبيق.' : ''}</p>${whyBox()}
-          <button class="beeptog" data-act="heardAll">${sess.showAll ? 'إخفاء النص المسموع' : 'اعرض كل ما سمعه التطبيق'}</button>${sess.showAll ? `<div class="whybox"><small>هذا ما كتبته خدمة التعرّف على الكلام من صوتك:</small><span>${esc((sess.finalText || '').trim()) || '—'}</span></div>` : ''}`;
+          <button class="beeptog" data-act="heardAll">${sess.showAll ? 'إخفاء النص المسموع' : 'اعرض كل ما سمعه التطبيق'}</button>${sess.showAll ? `<div class="whybox"><small>هذا ما كتبته خدمة التعرّف على الكلام من صوتك:</small><span>${esc((sess.finalText || '').trim()) || '—'}</span><button class="btn soft" data-act="copyReport">انسخ التقرير لإرساله</button></div>` : ''}`;
       } else {
         h += `<p class="muted">${hints ? 'احتجت إلى ' + AR(hints) + ' ' + (hints === 1 ? 'كلمة' : hints === 2 ? 'كلمتين' : 'كلمات') + ' مساعدة (باللون البرتقالي).' : 'قارن قراءتك بالنص أعلاه.'} كيف كان حفظك؟</p>`;
       }
@@ -1661,6 +1669,16 @@ app.addEventListener('click', e => {
   if (a === 'hifzResume'){ const ip = inprog(); if (ip){ startSession([{type:'new', idx:ip.idx}]); sess.reps = Object.assign({}, ip.reps); sess.ri = ip.ri || 0; render(); } return; }
   if (a === 'toTest'){ sess.phase = 'test'; render(); window.scrollTo(0, 0); return; }
   if (a === 'peek'){ const i = +v; if (sess.reveal >= sess.total && sess.ws[i]){ sess.why = sess.why === i ? null : i; render(); return; } if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
+  if (a === 'copyReport'){
+    const t = sess.queue[sess.pos], c = itemChunk(t), [s1, a1] = gidToSA(c.r[0][0]), [s2, a2] = gidToSA(c.r[c.r.length - 1][1]);
+    const rep = ['تقرير تسميع - ثبّت', 'المقطع: ' + Q[s1 - 1][0] + ' ' + a1 + ' إلى ' + Q[s2 - 1][0] + ' ' + a2, 'الجهاز: ' + navigator.userAgent,
+      'الكلمات الحمراء: ' + chunkAyat(c).flatMap(x => x.txt.split(' ')).filter((_, i) => sess.ws[i] === 'miss').join('، '),
+      'النص المسموع: ' + (sess.finalText || '').trim(), 'الدفعات:', ...SRLOG.map((run, i) => '#' + (i + 1) + '\n' + run.join('\n'))].join('\n');
+    const done = () => toast('نُسخ التقرير. الصقه في المحادثة مع Claude.');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(rep).then(done, () => { prompt('انسخ النص:', rep); });
+    else prompt('انسخ النص:', rep);
+    return;
+  }
   if (a === 'heardAll'){ sess.showAll = !sess.showAll; render(); return; }
   if (a === 'beepTog'){ S.beep = S.beep === false; save(); if (S.beep) { audioUnlock(); beep(); } render(); return; }
   if (a === 'mic'){
