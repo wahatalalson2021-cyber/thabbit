@@ -291,6 +291,7 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .shd{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem}
 .stx{font-family:var(--f-quran);font-size:1.35rem;line-height:2.1}
 .stx mark{background:color-mix(in srgb,var(--gold) 35%,transparent);color:inherit;border-radius:4px;padding:0 2px}
+.okbanner{background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 40%,transparent);color:var(--good);border-radius:12px;padding:10px 12px;font-weight:600;font-size:.9rem}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -977,6 +978,7 @@ function vSession(){
     const ay = chunkAyat(c), ri = Math.min(sess.ri || 0, ay.length - 1), x = ay[ri], key = x.s + ':' + x.a, r = sess.reps[key] || 0, full = r >= R0;
     const allDone = ay.every(y => (sess.reps[y.s + ':' + y.a] || 0) >= R0);
     h = h.replace('<span class="chip">' + kind + '</span>', `<span class="kindtxt">${kind} · الآية ${AR(ri + 1)} من ${AR(ay.length)}</span>`);
+    if (sess.fresh) h += `<div class="okbanner">✓ بدأت خطتك: ${hifzName(S.hifz)} · ${paceName(S.hifz)}. هذا أول مقطع.</div>`;
     h += `<p class="muted">اقرأ الآية بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'} تنتقل للآية التالية تلقائيًا.</p>`;
     h += `<div class="dots" aria-hidden="true">${ay.map((y, yi) => `<i class="${(sess.reps[y.s + ':' + y.a] || 0) >= R0 ? 'ok' : yi === ri ? 'on' : ''}"></i>`).join('')}</div>`;
     h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus"><div class="t">${esc(x.txt)} <span class="num">﴿${AR(x.a)}﴾</span></div></div>`;
@@ -1386,7 +1388,7 @@ app.addEventListener('click', e => {
   if (a === 'hdPtype'){ hd.ptype = v; hd.pn = v === 'days' ? 30 : v === 'ayah' ? 3 : 1; render(); return; }
   if (a === 'hdPn'){ hd.pn = +v; render(); return; }
   if (a === 'hdReps'){ hd.reps = +v; render(); return; }
-  if (a === 'hdSave'){ saveHifz(); confirmBox = null; view = 'home'; render(); window.scrollTo(0, 0); return; }
+  if (a === 'hdSave'){ saveHifz(); confirmBox = null; if (S.chunks.length){ startSession([{type:'new', idx:0}]); sess.fresh = true; render(); } else { view = 'home'; render(); } window.scrollTo(0, 0); return; }
   /* review setup */
   if (a === 'rvJuz'){ const j = +v, i = rvd.known.indexOf(j); if (i >= 0) rvd.known.splice(i, 1); else rvd.known.push(j); render(); return; }
   if (a === 'rvAll'){ rvd.known = v === '1' ? Array.from({length:30}, (_, i) => i + 1) : []; render(); return; }
