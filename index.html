@@ -661,6 +661,16 @@ function nearWord(vs, w){
   return vs.some(v => { if (v.length < 4 || prefixSlip(v, w)) return false; const sv = stem(v), d = lev(sv, sw);
     return d <= (sv.length <= 4 ? 1 : sv.length <= 7 ? 2 : 3) && d < Math.ceil(sv.length / 2); });
 }
+/* Disjointed letters (الم، كهيعص، حم...) are recited by letter names: "ألف لام ميم". */
+const MUQ = new Set(['الم','المص','الر','المر','كهيعص','طه','طسم','طس','يس','ص','حم','عسق','ق','ن']);
+const LNAME = {'ا':'الف','ل':'لام','م':'ميم','ص':'صاد','ر':'را','ك':'كاف','ه':'ها','ي':'يا','ع':'عين','ط':'طا','س':'سين','ح':'حا','ق':'قاف','ن':'نون'};
+function muqLen(letters){
+  const names = [...letters].map(c => LNAME[c]), sp = sess.spoken; let i = 0, j = 0;
+  while (i < sp.length && j < names.length){ if (sp[i] && lev(names[j], sp[i]) <= 1){ i++; j++; } else if (j + 1 < names.length && sp[i] && lev(names[j + 1], sp[i]) <= 1){ i++; j += 2; } else break; }
+  return j >= Math.max(1, Math.ceil(names.length * 0.6)) ? i : 0;
+}
+/* A word the reader already passed (within the last ~20 words): he is repeating a phrase, which is normal while reciting. */
+function isRepeat(w){ const E = sess.exp; for (let q = sess.p - 1; q >= 0 && q >= sess.p - 20; q--) if (E[q].some(v => v === w || (w.length >= 6 && v.length >= 6 && !prefixSlip(v, w) && lev(v, w) <= 1))) return true; return false; }
 function processSpoken(flush){
   const E = sess.exp;
   while (sess.spoken.length && sess.p < E.length){
@@ -669,12 +679,19 @@ function processSpoken(flush){
       const n = preLen(); if (n){ sess.spoken.splice(0, n); continue; }
       if (PRE.has(w) && !same(E[sess.p], w) && !(w2 && same(E[sess.p], w2)) && !E[sess.p].some(v => prefixSlip(v, w))){ sess.spoken.shift(); continue; }
     }
+    if (sess.muq && sess.muq.has(sess.p)){ const n = muqLen(sess.muq.get(sess.p)); if (n > 1 || (n === 1 && !same(E[sess.p], w))){ sess.spoken.splice(0, n); if (!sess.ws[sess.p]) sess.ws[sess.p] = 'ok'; sess.p++; sess.m2 = 0; sess.bad = []; continue; } }
     let hit = -1, used = 1, span = 1;
     for (let j = 0; j < 4 && sess.p + j < E.length; j++){
       if (same(E[sess.p + j], w)){ hit = j; used = 1; break; }
       if (w2 && same(E[sess.p + j], w2)){ hit = j; used = 2; break; }
       const nx = E[sess.p + j + 1];
       if (nx && joinedMatch(E[sess.p + j], nx, w)){ hit = j; used = 1; span = 2; break; }
+    }
+    if (hit !== 0 && isRepeat(w)){
+      /* ambiguous: the word is both earlier and a bit ahead. Going forward only if the next heard word also follows. */
+      const nxt = sess.spoken[used], ahead = hit > 0 ? E[sess.p + hit + span] : null;
+      if (hit > 0 && !nxt && !flush) break;
+      if (!(hit > 0 && nxt && ahead && (same(ahead, nxt) || (sess.spoken[used + 1] && same(ahead, nxt + sess.spoken[used + 1]))))){ sess.spoken.shift(); sess.m2 = 0; sess.bad = []; continue; }
     }
     if (hit < 0 && !flush && sess.spoken.length === 1) break;
     if (hit < 0 && sess.m2 === 0 && nearWord(E[sess.p], w)){
@@ -1125,7 +1142,11 @@ function initStep(){
   sess.shown = new Set();
   sess.peeked = new Set();
   { const ay = chunkAyat(itemChunk(t)); sess.exp = []; sess.bounds = new Set();
-    ay.forEach(x => { if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length); x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
+    sess.muq = new Map();
+    ay.forEach(x => { if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length);
+      const first = baseNorm(x.txt.split(' ')[0].replace(HAR, ''));
+      if ((x.a === 1 || (x.s === 42 && x.a === 2)) && MUQ.has(first)) sess.muq.set(sess.exp.length, first);
+      x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
     tajweedVariants(sess.exp); }
   sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false;
 }
