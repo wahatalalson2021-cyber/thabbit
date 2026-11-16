@@ -100,6 +100,12 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .w{border-radius:6px;transition:background .15s,color .15s}
 .w.hid{color:transparent;background:linear-gradient(var(--mask),var(--mask)) 0 58%/100% 1em no-repeat;cursor:pointer;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .w.hint{color:var(--warn)}
+.w.soft{color:#c98a1a;text-decoration:underline dotted #c98a1a;text-underline-offset:10px}
+.w.why{background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:6px}
+.chip.soft{color:#a8700f;background:color-mix(in srgb,#e3a63a 18%,transparent)}
+.whybox{display:flex;flex-direction:column;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.whybox b{font-family:var(--quran,inherit);font-size:1.3rem}
+.whybox small{color:var(--muted)}
 .w.miss{color:var(--bad);text-decoration:underline wavy var(--bad);text-underline-offset:10px}
 .w.cur{outline:2px dashed var(--accent);outline-offset:2px}
 .mic-box{display:flex;flex-direction:column;gap:8px;align-items:stretch}
@@ -583,7 +589,7 @@ function feed(text){
 }
 /* Re-align everything heard so far (final + live text) against the ayat, so live text and corrections both count. */
 function recompute(flush){
-  sess.ws = {}; sess.p = 0; sess.m2 = 0;
+  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.heard = {}; sess.bad = [];
   sess.spoken = ((sess.finalText || '') + ' ' + (sess.interim || '')).split(/\s+/).map(normSpoken).filter(Boolean);
   processSpoken(flush);
   if (sess.listening) alertMiss();
@@ -641,13 +647,20 @@ function joinedMatch(e1, e2, w){
   for (const x of a) for (const y of b){ const c = x + y; if (Math.abs(c.length - w.length) <= 1){ const d = lev(c, w); if (d <= (c.length >= 6 ? 1 : 0) && d < dNext) return true; } }
   return false;
 }
+const stem = x => x.replace(/^([وفب]?)ال/, '$1');
+function nearWord(vs, w){
+  if (!w || w.length < 3) return false;
+  const sw = stem(w);
+  return vs.some(v => { if (v.length < 4 || prefixSlip(v, w)) return false; const sv = stem(v), d = lev(sv, sw);
+    return d <= (sv.length <= 4 ? 1 : sv.length <= 7 ? 2 : 3) && d < Math.ceil(sv.length / 2); });
+}
 function processSpoken(flush){
   const E = sess.exp;
   while (sess.spoken.length && sess.p < E.length){
     const w = sess.spoken[0], w2 = sess.spoken.length > 1 ? w + sess.spoken[1] : null;
     if (sess.p === 0 || (sess.bounds && sess.bounds.has(sess.p))){
       const n = preLen(); if (n){ sess.spoken.splice(0, n); continue; }
-      if (PRE.has(w) && !same(E[sess.p], w) && !(w2 && same(E[sess.p], w2))){ sess.spoken.shift(); continue; }
+      if (PRE.has(w) && !same(E[sess.p], w) && !(w2 && same(E[sess.p], w2)) && !E[sess.p].some(v => prefixSlip(v, w))){ sess.spoken.shift(); continue; }
     }
     let hit = -1, used = 1, span = 1;
     for (let j = 0; j < 4 && sess.p + j < E.length; j++){
@@ -657,9 +670,15 @@ function processSpoken(flush){
       if (nx && joinedMatch(E[sess.p + j], nx, w)){ hit = j; used = 1; span = 2; break; }
     }
     if (hit < 0 && !flush && sess.spoken.length === 1) break;
+    if (hit < 0 && sess.m2 === 0 && nearWord(E[sess.p], w)){
+      /* close but not exact: probably the recognizer, so mark it "unclear" (orange), not a mistake */
+      sess.spoken.shift(); if (!sess.ws[sess.p]){ sess.ws[sess.p] = 'soft'; sess.heard[sess.p] = w; } sess.p++; sess.bad = []; continue;
+    }
     sess.spoken.splice(0, hit < 0 ? 1 : used);
-    if (hit < 0){ if (++sess.m2 >= 2){ if (!sess.ws[sess.p]) sess.ws[sess.p] = 'miss'; sess.p++; sess.m2 = 0; } continue; }
-    for (let j = 0; j < hit; j++) if (!sess.ws[sess.p + j]) sess.ws[sess.p + j] = 'miss';
+    if (hit < 0){ sess.bad.push(w); if (++sess.m2 >= 2){ if (!sess.ws[sess.p]){ sess.ws[sess.p] = 'miss'; sess.heard[sess.p] = sess.bad.join(' '); } sess.p++; sess.m2 = 0; sess.bad = []; } continue; }
+    /* words jumped over: short particles (من، في، ما، لا) are often dropped by the recognizer in tarteel, so they are "unclear", not wrong */
+    for (let j = 0; j < hit; j++) if (!sess.ws[sess.p + j]){ const short = Math.max(...E[sess.p + j].map(v => v.length)) <= 3 && !sess.bad.some(b => E[sess.p + j].some(v => prefixSlip(v, b))); sess.ws[sess.p + j] = short ? 'soft' : 'miss'; sess.heard[sess.p + j] = sess.bad.join(' '); }
+    sess.bad = [];
     for (let j = hit; j < hit + span; j++) if (!sess.ws[sess.p + j]) sess.ws[sess.p + j] = 'ok';
     sess.p += hit + span; sess.m2 = 0;
   }
@@ -1101,7 +1120,7 @@ function initStep(){
   { const ay = chunkAyat(itemChunk(t)); sess.exp = []; sess.bounds = new Set();
     ay.forEach(x => { if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length); x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
     tajweedVariants(sess.exp); }
-  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set();
+  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null;
 }
 function chunkAyat(c){ const out = []; segs(c).forEach((sg, si) => { for (let a = sg.a; a <= sg.b; a++) out.push({s:sg.s, a, txt:Q[sg.s - 1][1][a - 1], head: a === sg.a && (si > 0 || a === 1)}); }); return out; }
 function headHtml(x, multi){ return (multi ? `<div class="shead">${sName(x.s)}</div>` : '') + (x.a === 1 && x.s !== 1 && x.s !== 9 ? `<div class="basmala">${BASMALA}</div>` : ''); }
@@ -1133,7 +1152,8 @@ function vSession(){
       if (x.head || xi === 0){ const hh = headHtml(x, multi); if (hh) words += (words ? '</div>' : '') + hh + '<div class="mushaf">'; else if (!words) words = '<div class="mushaf">'; }
       words += x.txt.split(' ').map(w => {
         const i = k++; const st = sess.ws[i]; const vis = i < sess.reveal || sess.shown.has(i) || st;
-        let cls = !vis ? 'hid' : st === 'miss' ? 'miss' : sess.peeked.has(i) ? 'hint' : '';
+        let cls = !vis ? 'hid' : st === 'miss' ? 'miss' : st === 'soft' ? 'soft' : sess.peeked.has(i) ? 'hint' : '';
+        if (sess.why === i) cls += ' why';
         if (sess.listening && i === sess.p) cls += ' cur';
         return `<span class="w ${cls}" data-act="peek" data-v="${i}">${esc(w)}</span>`;
       }).join(' ') + ` <span class="num">﴿${AR(x.a)}﴾</span> `;
@@ -1156,15 +1176,15 @@ function vSession(){
       h += `<div class="rnav"><button class="btn soft" data-act="next">اكشف الكلمة التالية</button><button class="btn ghost" data-act="all">أنهيت، أظهر النص</button></div></div>`;
     } else {
       const hints = sess.peeked.size;
-      const misses = Object.values(sess.ws).filter(x => x === 'miss').length;
+      const misses = Object.values(sess.ws).filter(x => x === 'miss').length, softs = Object.values(sess.ws).filter(x => x === 'soft').length;
       const okN = Object.values(sess.ws).filter(x => x === 'ok').length;
       const unreached = sess.usedMic ? Math.max(0, k - sess.p) : 0;
       const errs = misses + hints + unreached;
       const sug = sess.usedMic ? (errs === 0 ? 3 : errs <= 2 ? 2 : 1) : 0;
       const S3 = sug === 3 ? 'sug' : '', S2 = sug === 2 ? 'sug' : '', S1 = sug === 1 ? 'sug' : '';
       if (sess.usedMic){
-        h += `<div class="result"><span class="chip">${AR(okN)} كلمة صحيحة</span>${misses ? `<span class="chip warn" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)">${AR(misses)} خطأ أو تجاوز (بالأحمر)</span>` : ''}${hints ? `<span class="chip warn">${AR(hints)} مساعدة</span>` : ''}${unreached ? `<span class="chip warn">${AR(unreached)} لم تُقرأ</span>` : ''}</div>
-          <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} الاقتراح مُعلَّم، والقرار لك.</p>`;
+        h += `<div class="result"><span class="chip">${AR(okN)} كلمة صحيحة</span>${misses ? `<span class="chip warn" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)">${AR(misses)} خطأ أو تجاوز (بالأحمر)</span>` : ''}${softs ? `<span class="chip soft">${AR(softs)} لم تُسمع بوضوح</span>` : ''}${hints ? `<span class="chip warn">${AR(hints)} مساعدة</span>` : ''}${unreached ? `<span class="chip warn">${AR(unreached)} لم تُقرأ</span>` : ''}</div>
+          <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} الاقتراح مُعلَّم، والقرار لك.${misses || softs ? ' اضغط أي كلمة ملونة لترى ماذا سمع التطبيق.' : ''}</p>${whyBox()}`;
       } else {
         h += `<p class="muted">${hints ? 'احتجت إلى ' + AR(hints) + ' ' + (hints === 1 ? 'كلمة' : hints === 2 ? 'كلمتين' : 'كلمات') + ' مساعدة (باللون البرتقالي).' : 'قارن قراءتك بالنص أعلاه.'} كيف كان حفظك؟</p>`;
       }
@@ -1176,6 +1196,11 @@ function vSession(){
     }
   }
   return h + '</main>';
+}
+function whyBox(){
+  const i = sess.why; if (i == null || !sess.ws[i]) return '';
+  const word = chunkAyat(itemChunk(sess.queue[sess.pos])).flatMap(x => x.txt.split(' '))[i], h = sess.heard[i];
+  return `<div class="whybox"><b>${esc(word)}</b><span>${h ? 'سمع التطبيق: «' + esc(h) + '»' : 'لم يسمع التطبيق شيئًا مكانها'}</span><small>${sess.ws[i] === 'soft' ? 'برتقالي: غالبًا من خدمة التعرّف على الكلام، لا يُحسب خطأ.' : 'أحمر: يُحسب خطأ. إن كنت قرأتها صحيحة فأرسل اسم السورة ورقم الآية مع هذه الجملة.'}</small></div>`;
 }
 function vSessionDone(){
   const t = today();
@@ -1572,7 +1597,7 @@ app.addEventListener('click', e => {
   if (a === 'hifzToday'){ if (hasNewLeft()){ S.inprog = null; save(); startSession([{type:'new', idx:S.nextNew}]); } return; }
   if (a === 'hifzResume'){ const ip = inprog(); if (ip){ startSession([{type:'new', idx:ip.idx}]); sess.reps = Object.assign({}, ip.reps); sess.ri = ip.ri || 0; render(); } return; }
   if (a === 'toTest'){ sess.phase = 'test'; render(); window.scrollTo(0, 0); return; }
-  if (a === 'peek'){ const i = +v; if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
+  if (a === 'peek'){ const i = +v; if (sess.reveal >= sess.total && sess.ws[i]){ sess.why = sess.why === i ? null : i; render(); return; } if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
   if (a === 'beepTog'){ S.beep = S.beep === false; save(); if (S.beep) { audioUnlock(); beep(); } render(); return; }
   if (a === 'mic'){
     if (!DICT) return;
