@@ -441,7 +441,10 @@ function expVariants(w){
 const normSpoken = w => baseNorm(w.replace(HAR,''));
 function lev(a,b){ const m=a.length,n=b.length; if(!m) return n; if(!n) return m; let p=Array.from({length:n+1},(_,j)=>j);
   for(let i=1;i<=m;i++){ const c=[i]; for(let j=1;j<=n;j++) c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1)); p=c; } return p[n]; }
-function same(vs, sp){ if(!sp) return false; return vs.some(v => lev(v, sp) <= (v.length <= 2 ? 0 : v.length <= 5 ? 1 : 2)); }
+/* A missing, extra or swapped و / ف at the start is a real memorization slip (common between similar verses), so it never counts as a match. */
+const WF = 'وف';
+function prefixSlip(v, sp){ return (WF.includes(v[0]) && v.slice(1) === sp) || (WF.includes(sp[0]) && sp.slice(1) === v) || (WF.includes(v[0]) && WF.includes(sp[0]) && v[0] !== sp[0] && v.slice(1) === sp.slice(1)); }
+function same(vs, sp){ if(!sp) return false; return vs.some(v => !prefixSlip(v, sp) && lev(v, sp) <= (v.length <= 2 ? 0 : v.length <= 5 ? 1 : 2)); }
 
 let DICT, dictState = 'idle', liveText = '';
 /* Voice: the browser's own Arabic speech recognition (Chrome, Safari). Claude's pages block the microphone, so inside Claude we fall back to self-grading. */
@@ -620,6 +623,24 @@ function preLen(){
   }
   return 0;
 }
+/* Tajweed: a reader may merge words or change the final noon (idgham, iqlab, ikhfa), so the recognizer writes what it hears.
+   1) A word ending in noon also matches its merged sound before the next word: "من ربهم" -> "مر", "من بعد" -> "مم". */
+function tajweedVariants(E){
+  for (let i = 0; i + 1 < E.length; i++){
+    const L = E[i + 1][0][0], add = [];
+    E[i].forEach(v => { if (v.length > 1 && v.endsWith('ن')){ if ('يرملون'.includes(L)) add.push(v.slice(0, -1) + L); if (L === 'ب') add.push(v.slice(0, -1) + 'م'); } });
+    add.forEach(v => { if (!E[i].includes(v)) E[i].push(v); });
+  }
+}
+/* 2) One heard word may cover two written words joined in recitation: "فمن يعمل" -> "فميعمل", "قل أعوذ" -> "قلعوذ". */
+function joinedMatch(e1, e2, w){
+  if (!w || w.length < 3) return false;
+  const dNext = Math.min(...e2.map(v => lev(v, w)));
+  const a = new Set(); e1.forEach(v => { a.add(v); if (v.length > 1 && /[نم]$/.test(v)) a.add(v.slice(0, -1)); });
+  const b = new Set(); e2.forEach(v => { b.add(v); if (v.length > 2 && v[0] === 'ا') b.add(v.slice(1)); });
+  for (const x of a) for (const y of b){ const c = x + y; if (Math.abs(c.length - w.length) <= 1){ const d = lev(c, w); if (d <= (c.length >= 6 ? 1 : 0) && d < dNext) return true; } }
+  return false;
+}
 function processSpoken(flush){
   const E = sess.exp;
   while (sess.spoken.length && sess.p < E.length){
@@ -628,17 +649,19 @@ function processSpoken(flush){
       const n = preLen(); if (n){ sess.spoken.splice(0, n); continue; }
       if (PRE.has(w) && !same(E[sess.p], w) && !(w2 && same(E[sess.p], w2))){ sess.spoken.shift(); continue; }
     }
-    let hit = -1, used = 1;
+    let hit = -1, used = 1, span = 1;
     for (let j = 0; j < 4 && sess.p + j < E.length; j++){
       if (same(E[sess.p + j], w)){ hit = j; used = 1; break; }
       if (w2 && same(E[sess.p + j], w2)){ hit = j; used = 2; break; }
+      const nx = E[sess.p + j + 1];
+      if (nx && joinedMatch(E[sess.p + j], nx, w)){ hit = j; used = 1; span = 2; break; }
     }
     if (hit < 0 && !flush && sess.spoken.length === 1) break;
     sess.spoken.splice(0, hit < 0 ? 1 : used);
     if (hit < 0){ if (++sess.m2 >= 2){ if (!sess.ws[sess.p]) sess.ws[sess.p] = 'miss'; sess.p++; sess.m2 = 0; } continue; }
     for (let j = 0; j < hit; j++) if (!sess.ws[sess.p + j]) sess.ws[sess.p + j] = 'miss';
-    if (!sess.ws[sess.p + hit]) sess.ws[sess.p + hit] = 'ok';
-    sess.p += hit + 1; sess.m2 = 0;
+    for (let j = hit; j < hit + span; j++) if (!sess.ws[sess.p + j]) sess.ws[sess.p + j] = 'ok';
+    sess.p += hit + span; sess.m2 = 0;
   }
   if (sess.p >= E.length){ sess.reveal = E.length; stopMic(); }
 }
@@ -1076,7 +1099,8 @@ function initStep(){
   sess.shown = new Set();
   sess.peeked = new Set();
   { const ay = chunkAyat(itemChunk(t)); sess.exp = []; sess.bounds = new Set();
-    ay.forEach(x => { if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length); x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); }); }
+    ay.forEach(x => { if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length); x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
+    tajweedVariants(sess.exp); }
   sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set();
 }
 function chunkAyat(c){ const out = []; segs(c).forEach((sg, si) => { for (let a = sg.a; a <= sg.b; a++) out.push({s:sg.s, a, txt:Q[sg.s - 1][1][a - 1], head: a === sg.a && (si > 0 || a === 1)}); }); return out; }
