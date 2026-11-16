@@ -1352,11 +1352,11 @@ function fitFlow(f){
   const em = parseFloat(getComputedStyle(f).fontSize), W = f.clientWidth - 2, lines = [];
   let top = null;
   ws.forEach(w => { const t = w.offsetTop; if (top === null || t > top + em){ lines.push([]); top = t; } lines[lines.length - 1].push(w); });
-  const base = em * 0.28, cap = em * 0.75;
+  const base = em * 0.3, cap = em * 0.42;
   f.innerHTML = lines.map((ln, i) => {
     const sum = ln.reduce((a, w) => a + w.getBoundingClientRect().width, 0), gaps = ln.length - 1;
     const gap = gaps ? (W - sum) / gaps : 0, last = i === lines.length - 1;
-    const st = last ? `justify-content:center;column-gap:${base}px` : gap <= cap ? 'justify-content:space-between' : `justify-content:flex-start;column-gap:${cap}px`;
+    const st = last ? `justify-content:center;column-gap:${base}px` : gap <= cap ? 'justify-content:space-between' : `justify-content:center;column-gap:${base}px`;
     return `<div class="fl" style="${st}">${ln.map(w => w.outerHTML).join('')}</div>`;
   }).join('');
   f.classList.add('fit');
