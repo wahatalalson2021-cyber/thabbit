@@ -281,6 +281,16 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .homefoot .fl{flex:1;height:1px;background:linear-gradient(to left,transparent,var(--gold))}
 .homefoot .fl:last-child{background:linear-gradient(to right,transparent,var(--gold))}
 .homefoot .fstar svg{width:30px;height:30px;display:block}
+.homesearch{position:relative;display:flex;align-items:center;gap:10px;width:100%;margin-top:-14px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:12px 16px;color:var(--muted);font-size:.95rem;box-shadow:0 4px 14px rgb(0 0 0 / .06);text-align:start}
+.homesearch svg{color:var(--accent);flex:none}
+.sbox{display:flex;align-items:center;gap:10px;background:var(--surface);border:1.5px solid var(--accent);border-radius:999px;padding:4px 16px;color:var(--accent)}
+.sbox input{flex:1;border:0;background:none;font:inherit;font-size:1.05rem;padding:9px 0;color:var(--ink);outline:none;min-width:0}
+.sresults{display:flex;flex-direction:column;gap:10px}
+.scount{font-weight:600;color:var(--accent)}
+.sres{display:flex;flex-direction:column;gap:6px;text-align:start;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;width:100%}
+.shd{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.9rem}
+.stx{font-family:var(--f-quran);font-size:1.35rem;line-height:2.1}
+.stx mark{background:color-mix(in srgb,var(--gold) 35%,transparent);color:inherit;border-radius:4px;padding:0 2px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -682,6 +692,7 @@ function render(){
   else if (view === 'reader') h = vReader();
   else if (view === 'setupHifz') h = vSetupHifz();
   else if (view === 'hifzMenu') h = vHifzMenu();
+  else if (view === 'search') h = vSearch();
   else if (view === 'setupReview') h = vSetupReview();
   else if (view === 'setupWird') h = vSetupWird();
   else {
@@ -692,10 +703,11 @@ function render(){
   }
   app.innerHTML = h;
   if (view === 'reader' && RD && RD.status === 'ok'){ layoutPage(); focusSura(); }
+  if (view === 'search' && sFocus){ sFocus = false; const el = document.getElementById('qSearch'); if (el){ el.focus(); const n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} } }
 }
 function focusSura(){
   if (!RD.focus) return;
-  const el = document.querySelector(`.sh[data-sura="${RD.focus}"]`); RD.focus = null;
+  const el = RD.focus === 'sel' ? document.querySelector('.mw.sel') : document.querySelector(`.sh[data-sura="${RD.focus}"]`); RD.focus = null;
   if (!el) return;
   const head = document.querySelector('.rhead'), y = el.getBoundingClientRect().top + window.scrollY - (head ? head.offsetHeight : 0) - 12;
   window.scrollTo(0, Math.max(0, y)); el.classList.add('flash');
@@ -744,7 +756,7 @@ function tile(key, title, line, act, v, done, edit){
 }
 function vHome(){
   const st = streak();
-  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}</div><div class="herotxt"><p class="hello">مرحبًا بك</p><h1>ماذا تريد اليوم؟</h1><span class="swoosh"></span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div></header><div class="tiles">`;
+  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}</div><div class="herotxt"><p class="hello">مرحبًا بك</p><h1>ماذا تريد اليوم؟</h1><span class="swoosh"></span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button><div class="tiles">`;
   const rp = R().page;
   h += tile('read', 'قراءة', rp ? 'أكمل من صفحة ' + AR(rp) : 'افتح المصحف', 'rdOpen', rp || 1);
   if (!S.hifz) h += tile('hifz', 'حفظ', 'اختر ما تحفظه ومقداره', 'go', 'setupHifz');
@@ -785,6 +797,42 @@ function vHifzMenu(){
     opts.push(`<button class="opt big" data-act="hifzToday"><span class="tic">${done ? '+' : '١'}</span><span><b>${done ? 'احفظ المقطع التالي' : ip && ip.idx === S.nextNew ? 'ابدأ مقطع اليوم من أوله' : 'حفظ اليوم'}</b><span class="muted" style="display:block">${cLabel(c)}${done ? ' · أنهيت ورد اليوم، هذا مقطع إضافي' : ''}</span></span></button>`); }
   opts.push(`<button class="opt big" data-act="go" data-v="setupHifz"><span class="tic">+</span><span><b>حفظ جديد</b><span class="muted" style="display:block">اختر سورة أو ربعًا أو جزءًا آخر، ومقداره اليومي</span></span></button>`);
   return `<main>${back()}<div><h1>الحفظ</h1>${S.hifz ? `<p class="muted">خطتك الحالية: ${hifzName(S.hifz)} · ${paceName(S.hifz)}</p>` : ''}</div><div class="btns">${opts.join('')}</div></main>`;
+}
+/* ---------- search the Quran text (works offline; ignores diacritics and hamza forms) ---------- */
+const SEARCH_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>';
+let SIDX = null, sQuery = '', sLimit = 50, sFocus = false, sTimer = null;
+function searchIndex(){
+  if (SIDX) return SIDX;
+  SIDX = [];
+  Q.forEach((q, si) => q[1].forEach((txt, ai) => SIDX.push({g: GBASE[si] + ai + 1, w: txt.split(' ').map(expVariants)})));
+  return SIDX;
+}
+function runSearch(q){
+  const qs = q.split(/\s+/).map(normSpoken).filter(Boolean);
+  if (!qs.length || qs.join('').length < 2) return null;
+  const out = [];
+  for (const it of searchIndex()){
+    const hits = new Set(); let ok = true;
+    for (const qw of qs){ let found = false; it.w.forEach((vs, wi) => { if (vs.some(v => v.includes(qw))){ hits.add(wi); found = true; } }); if (!found){ ok = false; break; } }
+    if (ok){ let phrase = false; if (qs.length > 1){ for (let i = 0; i + qs.length <= it.w.length && !phrase; i++) phrase = qs.every((qw, k) => it.w[i + k].some(v => v.includes(qw))); } out.push({g: it.g, hits, phrase}); }
+  }
+  return qs.length > 1 ? out.filter(r => r.phrase).concat(out.filter(r => !r.phrase)) : out;
+}
+function searchResults(){
+  const res = runSearch(sQuery);
+  if (res === null) return `<p class="muted">اكتب كلمة أو جزءًا من آية، بدون تشكيل. مثال: الصلاة، رحمة، يا أيها الذين آمنوا.</p>`;
+  if (!res.length) return `<p class="muted">لم أجد «${esc(sQuery)}» في المصحف. جرّب كتابتها بطريقة أخرى أو بكلمة أقصر.</p>`;
+  let h = `<p class="scount">وُجدت في ${AR(res.length)} ${res.length === 1 ? 'آية' : res.length === 2 ? 'آيتين' : res.length <= 10 ? 'آيات' : 'آية'}</p>`;
+  h += res.slice(0, sLimit).map(r => { const [s, a] = gidToSA(r.g);
+    const txt = Q[s - 1][1][a - 1].split(' ').map((w, wi) => r.hits.has(wi) ? `<mark>${esc(w)}</mark>` : esc(w)).join(' ');
+    return `<button class="sres" data-act="sOpen" data-v="${r.g}"><span class="shd"><b>سورة ${Q[s - 1][0]}</b><span class="muted">الآية ${AR(a)} · صفحة ${AR(gPage(r.g))}</span></span><span class="stx">${txt} <span class="num">﴿${AR(a)}﴾</span></span></button>`; }).join('');
+  if (res.length > sLimit) h += `<button class="btn ghost" data-act="sMore">عرض المزيد (${AR(res.length - sLimit)})</button>`;
+  return h;
+}
+function vSearch(){
+  return `<main>${back()}<div><h1>البحث في القرآن</h1></div>
+    <label class="sbox">${SEARCH_SVG}<input id="qSearch" type="search" value="${esc(sQuery)}" placeholder="اكتب كلمة أو أكثر" autocomplete="off" enterkeyhint="search" aria-label="ابحث في القرآن"></label>
+    <div id="qRes" class="sresults">${searchResults()}</div></main>`;
 }
 /* ---------- setup: memorization ---------- */
 function newHd(){
@@ -1264,7 +1312,7 @@ app.addEventListener('touchend', e => {
   if (Math.abs(dx) > 60 && Math.abs(dy) < 60) goPage(RD.page + (dx > 0 ? 1 : -1));
 });
 document.addEventListener('keydown', e => { if (view !== 'reader') return; if (e.key === 'ArrowLeft') goPage(RD.page + 1); else if (e.key === 'ArrowRight') goPage(RD.page - 1); });
-app.addEventListener('input', e => { if (e.target.id === 'rdSearch'){ rdQuery = e.target.value; const el = document.getElementById('rdList'); if (el) el.innerHTML = suraRows(); } });
+app.addEventListener('input', e => { if (e.target.id === 'qSearch'){ sQuery = e.target.value; sLimit = 50; clearTimeout(sTimer); sTimer = setTimeout(() => { const el = document.getElementById('qRes'); if (el) el.innerHTML = searchResults(); }, 250); return; } if (e.target.id === 'rdSearch'){ rdQuery = e.target.value; const el = document.getElementById('rdList'); if (el) el.innerHTML = suraRows(); } });
 
 /* ---------- install as an app ---------- */
 let installEvt = null;
@@ -1317,6 +1365,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* ---------- events ---------- */
 function go(v){
   if (v === 'setupHifz'){ hd = newHd(); confirmBox = null; }
+  if (v === 'search') sFocus = true;
   if (v === 'setupReview') rvd = {known:[...(S.rev.known || [])], unit:S.rev.unit || 'pages', n:S.rev.n || 5};
   if (v === 'setupWird'){ const w = S.wird; wd = w ? {mode: w.days ? 'khatma' : w.per % 20 === 0 ? 'juz' : 'pages', n: w.days || (w.per % 20 === 0 ? w.per / 20 : w.per), from: w.pos} : {mode:'pages', n:5, from: R().page || 1}; }
   view = v; render(); window.scrollTo(0, 0);
@@ -1396,6 +1445,8 @@ app.addEventListener('click', e => {
   }
   /* reading */
   if (a === 'rdOpen'){ openReader(+v, view); return; }
+  if (a === 'sOpen'){ const g = +v; openReader(gPage(g), 'search'); RD.sel = g; RD.focus = 'sel'; render(); return; }
+  if (a === 'sMore'){ sLimit += 50; const el = document.getElementById('qRes'); if (el) el.innerHTML = searchResults(); return; }
   if (a === 'rdSura'){ const s = +v; openReader(SURA_START[s - 1], view); RD.fs = s; RD.focus = s; render(); return; }
   if (a === 'rdBack'){ const b = RD && RD.back && !['reader', 'session', 'done'].includes(RD.back) ? RD.back : 'read'; view = b; render(); window.scrollTo(0, 0); return; }
   if (a === 'rdNext'){ goPage(RD.page + 1); return; }
