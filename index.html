@@ -309,7 +309,7 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .beeptog[aria-pressed="true"]{color:var(--accent)}
 .toast{position:fixed;top:max(14px,env(safe-area-inset-top));left:16px;right:16px;z-index:50;background:var(--good);color:#fff;border-radius:12px;padding:12px 14px;font-weight:600;font-size:.92rem;box-shadow:0 6px 20px rgb(0 0 0 / .18);transition:opacity .5s,transform .5s}
 .toast.out{opacity:0;transform:translateY(-10px)}
-#rcA,#rcB{display:block;width:100%;margin-top:4px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:1.1rem;text-align:center}
+.rcnum{display:block;width:100%;margin-top:4px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:1.1rem;text-align:center}
 .btn svg{width:20px;height:20px;vertical-align:-4px;margin-inline-end:6px}
 .askmore{display:flex;flex-direction:column;gap:10px}
 .mic-box.lab .mic{background:#7a4fb5}
@@ -1041,12 +1041,17 @@ function toast(msg){
 }
 /* ---------- recite what you already know (inside review) ---------- */
 let rc = null;
+const nAy = s => Q[s - 1][1].length;
+/* Reads both Arabic-Indic (١٢٣) and Western (123) digits: the iPhone's Arabic keyboard types the first kind. */
+const toNum = t => parseInt(String(t).replace(/[٠-٩]/g, c => c.charCodeAt(0) - 0x660).replace(/[۰-۹]/g, c => c.charCodeAt(0) - 0x6F0).replace(/[^0-9]/g, ''), 10);
 function rcRange(d){
   if (d.kind === 'surah') return [GBASE[d.s - 1] + 1, GBASE[d.s]];
+  if (d.kind === 'ayat'){ const n = nAy(d.s), a = Math.min(n, Math.max(1, Math.min(d.fa, d.ta))), b = Math.min(n, Math.max(1, Math.max(d.fa, d.ta))); return [saToG(d.s, a), saToG(d.s, b)]; }
   if (d.kind === 'juz') return [JSTART[d.j], d.j === 30 ? GBASE[114] : JSTART[d.j + 1] - 1];
   const a = Math.min(d.a, d.b), b = Math.max(d.a, d.b); return [PSTART[a], PSTART[b + 1] - 1];
 }
-function rcName(d){ return d.kind === 'surah' ? 'سورة ' + Q[d.s - 1][0] : d.kind === 'juz' ? 'الجزء ' + AR(d.j) : 'الصفحات ' + AR(Math.min(d.a, d.b)) + ' إلى ' + AR(Math.max(d.a, d.b)); }
+function rcName(d){ if (d.kind === 'ayat'){ const [g1, g2] = rcRange(d); return 'سورة ' + Q[d.s - 1][0] + ': الآيات ' + AR(gidToSA(g1)[1]) + ' إلى ' + AR(gidToSA(g2)[1]); }
+  return d.kind === 'surah' ? 'سورة ' + Q[d.s - 1][0] : d.kind === 'juz' ? 'الجزء ' + AR(d.j) : 'الصفحات ' + AR(Math.min(d.a, d.b)) + ' إلى ' + AR(Math.max(d.a, d.b)); }
 /* One item per mushaf page, holding only the ayat of the chosen range on that page. */
 function reciteItems(G1, G2){
   const out = [];
@@ -1062,12 +1067,15 @@ function startRecite(d){
 function rcSum(d){ const [G1, G2] = rcRange(d), n = gPage(G2) - gPage(G1) + 1; return `${rcName(d)} · ${countWord(n, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')}${n > 1 ? '، تسمّعها صفحة بعد صفحة' : ''}.`; }
 function vRecite(){
   const d = rc; let body = '';
-  if (d.kind === 'surah') body = `<label class="muted" for="rcSel">اختر السورة</label><select id="rcSel">${Q.map((q, i) => `<option value="${i + 1}" ${d.s === i + 1 ? 'selected' : ''}>${AR(i + 1)}. سورة ${q[0]}</option>`).join('')}</select>`;
+  const suraSel = `<label class="muted" for="rcSel">اختر السورة</label><select id="rcSel">${Q.map((q, i) => `<option value="${i + 1}" ${d.s === i + 1 ? 'selected' : ''}>${AR(i + 1)}. سورة ${q[0]}</option>`).join('')}</select>`;
+  const numIn = (id, lbl, val) => `<label class="muted">${lbl}<input id="${id}" class="rcnum" type="text" inputmode="numeric" autocomplete="off" value="${AR(val)}"></label>`;
+  if (d.kind === 'surah') body = suraSel;
+  else if (d.kind === 'ayat') body = suraSel + `<div class="rnav">${numIn('rcFA', 'من آية', d.fa)}${numIn('rcTA', 'إلى آية', d.ta)}</div><p class="muted" style="margin:0">عدد آيات السورة: ${AR(nAy(d.s))}</p>`;
   else if (d.kind === 'juz') body = `<div class="jgrid">${Array.from({length:30}, (_, i) => `<button data-act="rcJuz" data-v="${i + 1}" aria-pressed="${d.j === i + 1}">${AR(i + 1)}</button>`).join('')}</div>`;
-  else body = `<div class="rnav"><label class="muted">من صفحة<input id="rcA" type="number" inputmode="numeric" min="1" max="604" value="${d.a}"></label><label class="muted">إلى صفحة<input id="rcB" type="number" inputmode="numeric" min="1" max="604" value="${d.b}"></label></div>`;
+  else body = `<div class="rnav">${numIn('rcA', 'من صفحة', d.a)}${numIn('rcB', 'إلى صفحة', d.b)}</div>`;
   return `<main>${back('revMenu')}
     <div><h1>سمّع ما تختاره</h1><p class="muted">اختبر حفظك لسورة أو جزء أو صفحات تحفظها. الكلمات مخفية، وتسمّع بصوتك صفحة بعد صفحة.</p></div>
-    <div class="card"><h3>ماذا تريد أن تسمّع؟</h3>${seg('rcKind', [['surah','سورة'],['juz','جزء'],['pages','صفحات']], d.kind)}${body}
+    <div class="card"><h3>ماذا تريد أن تسمّع؟</h3>${seg('rcKind', [['surah','سورة'],['ayat','آيات'],['juz','جزء'],['pages','صفحات']], d.kind)}${body}
       <p class="muted" id="rcSum">${rcSum(d)}</p></div>
     <button class="btn" data-act="rcGo">ابدأ التسميع</button></main>`;
 }
@@ -1661,7 +1669,9 @@ app.addEventListener('touchend', e => {
   if (Math.abs(dx) > 60 && Math.abs(dy) < 60) goPage(RD.page + (dx > 0 ? 1 : -1));
 });
 document.addEventListener('keydown', e => { if (view !== 'reader') return; if (e.key === 'ArrowLeft') goPage(RD.page + 1); else if (e.key === 'ArrowRight') goPage(RD.page - 1); });
-app.addEventListener('input', e => { if (e.target.id === 'qSearch'){ sQuery = e.target.value; sLimit = 50; clearTimeout(sTimer); sTimer = setTimeout(() => { const el = document.getElementById('qRes'); if (el) el.innerHTML = searchResults(); }, 250); return; } if (e.target.id === 'rdSearch'){ rdQuery = e.target.value; const el = document.getElementById('rdList'); if (el) el.innerHTML = suraRows(); } });
+const RCF = {rcA:'a', rcB:'b', rcFA:'fa', rcTA:'ta'};
+function rcRead(el){ const k = RCF[el.id], n = toNum(el.value); if (!n) return; const max = k === 'fa' || k === 'ta' ? nAy(rc.s) : 604; rc[k] = Math.max(1, Math.min(max, n)); const sum = document.getElementById('rcSum'); if (sum) sum.textContent = rcSum(rc); }
+app.addEventListener('input', e => { if (RCF[e.target.id]){ rcRead(e.target); return; } if (e.target.id === 'qSearch'){ sQuery = e.target.value; sLimit = 50; clearTimeout(sTimer); sTimer = setTimeout(() => { const el = document.getElementById('qRes'); if (el) el.innerHTML = searchResults(); }, 250); return; } if (e.target.id === 'rdSearch'){ rdQuery = e.target.value; const el = document.getElementById('rdList'); if (el) el.innerHTML = suraRows(); } });
 
 /* ---------- install as an app ---------- */
 let installEvt = null;
@@ -1715,7 +1725,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 function go(v){
   if (v === 'setupHifz'){ hd = newHd(); confirmBox = null; }
   if (v === 'search') sFocus = true;
-  if (v === 'recite' && !rc){ const p = R().page || 1, sa = gidToSA(PSTART[p]); rc = {kind:'surah', s:sa[0], j:juzOf(p), a:p, b:Math.min(604, p + 1)}; }
+  if (v === 'recite' && !rc){ const p = R().page || 1, sa = gidToSA(PSTART[p]); rc = {kind:'surah', s:sa[0], j:juzOf(p), a:p, b:Math.min(604, p + 1), fa:1, ta:nAy(sa[0])}; }
   if (v === 'setupReview') rvd = {known:[...(S.rev.known || [])], unit:S.rev.unit || 'pages', n:S.rev.n || 5};
   if (v === 'setupWird'){ const w = S.wird; wd = w ? {mode: w.days ? 'khatma' : w.per % 20 === 0 ? 'juz' : 'pages', n: w.days || (w.per % 20 === 0 ? w.per / 20 : w.per), from: w.pos} : {mode:'pages', n:5, from: R().page || 1}; }
   view = v; render(); window.scrollTo(0, 0);
@@ -1850,8 +1860,8 @@ app.addEventListener('click', e => {
 });
 app.addEventListener('change', e => {
   if (e.target.id === 'hdSel'){ hd.n = +e.target.value; render(); }
-  if (e.target.id === 'rcSel'){ rc.s = +e.target.value; render(); }
-  if (e.target.id === 'rcA' || e.target.id === 'rcB'){ const n = Math.max(1, Math.min(604, Math.round(+e.target.value) || 1)); rc[e.target.id === 'rcA' ? 'a' : 'b'] = n; e.target.value = n; const el = document.getElementById('rcSum'); if (el) el.textContent = rcSum(rc); }
+  if (e.target.id === 'rcSel'){ rc.s = +e.target.value; rc.fa = 1; rc.ta = nAy(rc.s); render(); }
+  if (RCF[e.target.id]){ rcRead(e.target); e.target.value = AR(rc[RCF[e.target.id]]); }
 });
 render();
 </script>
