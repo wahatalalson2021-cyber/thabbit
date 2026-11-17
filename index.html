@@ -954,10 +954,23 @@ function spanNear(k, heard, back){
 const FOLD = {'ث':'س','ص':'س','ذ':'ز','ظ':'ز','ض':'د','ط':'ت','ق':'ك','ح':'ه','ع':'ا','غ':'خ'};
 const fold = x => x.replace(/[ثصذظضطقحعغ]/g, c => FOLD[c]);
 function soundAlike(vs, w){ if (w.length < 2) return false; const fw = fold(w); return vs.some(v => { const fv = fold(v); return fv === fw || (fv.length >= 4 && lev(fv, fw) <= 1); }); }
+/* The Quran model writes what it hears quite faithfully. A difference only in long vowels, hamza, or letters that sound alike
+   (ه/ع/ا, ص/س ...) is its spelling or a blur; a different clear consonant ("المصلحون" for "المفلحون") is what the reader said. */
+const SOFTL = 'اويهعءى';
+function clearDiff(vs, w){ return !vs.some(v => {
+  const a = fold(v), b = fold(w), m = a.length, n = b.length; let p = Array.from({length: n + 1}, (_, j) => j ? p0(b, j) : 0);
+  function p0(s, j){ let c = 0; for (let k = 0; k < j; k++) if (!SOFTL.includes(s[k])) c++; return c; }
+  for (let i = 1; i <= m; i++){ const c = [p[0] + (SOFTL.includes(a[i - 1]) ? 0 : 1)];
+    for (let j = 1; j <= n; j++){ const x = a[i - 1], y = b[j - 1];
+      c[j] = Math.min(p[j] + (SOFTL.includes(x) ? 0 : 1), c[j - 1] + (SOFTL.includes(y) ? 0 : 1), p[j - 1] + (x === y || SOFTL.includes(x) || SOFTL.includes(y) ? 0 : 1)); }
+    p = c; }
+  return p[n] === 0; }); }
 function wordCost(i, w){
   const key = i + '|' + w, c0 = sess.cls.get(key); if (c0) return c0;
   const vs = sess.exp[i]; let c;
-  if (same(vs, w)) c = [0, 'ok'];
+  const strict = sess.engine === 'model' && clearDiff(vs, w);
+  if (same(vs, w) && !strict) c = [0, 'ok'];
+  else if (same(vs, w)) c = [0.85, 'miss'];
   else if (extraWF(vs, w)) c = [0.4, 'soft'];
   else if (vs.some(v => prefixSlip(v, w))) c = [0.6, 'miss'];
   else if (nearWord(vs, w) || soundAlike(vs, w)) c = [0.4, 'soft'];
@@ -977,10 +990,10 @@ function waslSound(ws){ return ws.map((w, k) => { if (k){ if (w.startsWith('ال
 function waslMatch(i, j, ke, kh){
   const E = sess.exp, H = sess.spoken; if (i + ke > E.length || j + kh > H.length) return false;
   const hw = H.slice(j, j + kh); if (hw.some(w => !w)) return false;
-  if (ke === kh && hw.every(w => quranWord(w))) return false;
+  if (ke === kh && (hw.every(w => quranWord(w)) || hw.some((w, k) => E[i + k].includes(w)))) return 0;   // same word breaks: judged word by word
   const key = 'w' + i + '|' + ke + '|' + hw.join(' '); if (sess.cls.has(key)) return sess.cls.get(key);
   const h = fold(hw.join('')), e = fold(waslSound(E.slice(i, i + ke).map(vs => vs[0])));
-  const r = e.length >= 6 && lev(e, h) <= Math.max(2, Math.round(e.length * 0.3)); sess.cls.set(key, r); return r;
+  const d = lev(e, h), r = e.length >= 6 && h.length >= e.length * 0.75 && d <= Math.max(2, Math.round(e.length * 0.3)) ? (d === 0 || (d <= 1 && ke !== kh) ? 1 : 2) : 0; sess.cls.set(key, r); return r;
 }
 function muqWords(letters, ws){
   const names = [...letters].map(c => LNAME[c]); let j = 0;
@@ -1001,7 +1014,7 @@ function processSpoken(flush){
     if (j < m) set(i, j + 1, d + insCost(i, H[j]), 3);                                        // extra heard word
     if (i + 1 < n && j < m && joinedMatch(E[i], E[i + 1], H[j])) set(i + 2, j + 1, d + 0.05, 4);   // two words heard as one
     if (i < n && j + 1 < m && same(E[i], H[j] + H[j + 1])) set(i + 1, j + 2, d + 0.05, 5);        // one word heard as two
-    if (j < m) for (let ke = 2; ke <= 3; ke++) for (let kh = 1; kh <= 3; kh++) if (waslMatch(i, j, ke, kh)) set(i + ke, j + kh, d + 0.35 * ke, 7, ke * 4 + kh);   // words blurred together
+    if (j < m) for (let ke = 2; ke <= 3; ke++) for (let kh = 1; kh <= 3; kh++) { const r = waslMatch(i, j, ke, kh); if (r) set(i + ke, j + kh, d + (r === 1 ? 0.05 : 0.45 * ke), 7, ke * 4 + kh + (r === 1 ? 64 : 0)); }   // words blurred together
     if (i < n && sess.muq && sess.muq.has(i)) for (let k = 1; k <= 5 && j + k <= m; k++) if (muqWords(sess.muq.get(i), H.slice(j, j + k))) set(i + 1, j + k, d, 6, k);
   }
   /* how far the reader got: the best line-up of everything heard with the start of the text (prefer going further on a tie) */
@@ -1014,13 +1027,13 @@ function processSpoken(flush){
     else if (o === 3){ j--; }
     else if (o === 4){ ws[i - 1] = ws[i - 2] = 'ok'; i -= 2; j--; }
     else if (o === 5){ ws[i - 1] = 'ok'; i--; j -= 2; }
-    else if (o === 7){ const v = ok[at(i, j)], ke = v >> 2, kh = v & 3; const hw = H.slice(j - kh, j).join(' ');
-      for (let q = 1; q <= ke; q++){ ws[i - q] = 'soft'; hd[i - q] = hw; } i -= ke; j -= kh; }
+    else if (o === 7){ const v = ok[at(i, j)] & 63, good = ok[at(i, j)] & 64, ke = v >> 2, kh = v & 3; const hw = H.slice(j - kh, j).join(' ');
+      for (let q = 1; q <= ke; q++){ ws[i - q] = good ? 'ok' : 'soft'; if (!good) hd[i - q] = hw; } i -= ke; j -= kh; }
     else if (o === 6){ const k = ok[at(i, j)] || 1; ws[i - 1] = 'ok'; i--; j -= k; }
     else break;
   }
   /* Three or more words in a row not heard, with reading after them, is a skipped passage (a real slip), not unclear sound. */
-  for (let q = 0; q < bi; q++) if (skip.has(q)){ let r = q; while (skip.has(r)) r++; if (r - q >= 3) for (let t = q; t < r; t++) ws[t] = 'miss'; q = r; }
+  for (let q = 0; q < bi; q++) if (skip.has(q)){ let r = q; while (skip.has(r)) r++; if (r - q >= (sess.engine === 'model' ? 2 : 3)) for (let t = q; t < r; t++) ws[t] = 'miss'; q = r; }
   sess.ws = ws; sess.heard = hd; sess.p = bi;
   if (sess.p >= n){ sess.reveal = n; stopMic(); }
 }
