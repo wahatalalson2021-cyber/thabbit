@@ -1328,9 +1328,9 @@ function vRevMenu(){
 function vHifzMenu(){
   const ip = inprog(), opts = [];
   if (ip){ const c = S.chunks[ip.idx], n = chunkAyat(c).length;
-    opts.push(`<button class="opt big" data-act="hifzResume"><span class="tic">${TI.hifz}</span><span><b>أكمل من حيث توقفت</b><span class="muted" style="display:block">${cLabel(c)} · الآية ${AR(Math.min((ip.ri || 0) + 1, n))} من ${AR(n)}</span></span></button>`); }
+    opts.push(`<button class="opt big" data-act="hifzResume"><span class="tic">${TI.hifz}</span><span><b>أكمل من حيث توقفت</b><span class="muted" style="display:block">${cLabel(c)} · ${(r => r <= 1 ? 'بقيت آية واحدة' : r === 2 ? 'بقيت آيتان' : 'بقيت ' + countWord(r, '', '', 'آيات', 'آية'))(n - Math.min(ip.ri || 0, n - 1))}</span></span></button>`); }
   if (hasNewLeft()){ const c = S.chunks[S.nextNew], done = newDoneToday();
-    opts.push(`<button class="opt big" data-act="hifzToday"><span class="tic">${done ? '+' : '١'}</span><span><b>${done ? 'احفظ المقطع التالي' : ip && ip.idx === S.nextNew ? 'ابدأ مقطع اليوم من أوله' : 'حفظ اليوم'}</b><span class="muted" style="display:block">${cLabel(c)}${done ? ' · أنهيت ورد اليوم، هذا مقطع إضافي' : ''}</span></span></button>`); }
+    opts.push(`<button class="opt big" data-act="hifzToday"><span class="tic">${done ? '+' : '١'}</span><span><b>${done ? 'احفظ المقطع التالي' : ip && ip.idx === S.nextNew ? 'أعد مقطع اليوم من أوله' : 'حفظ اليوم'}</b><span class="muted" style="display:block">${cLabel(c)}${done ? ' · أنهيت ورد اليوم، هذا مقطع إضافي' : ''}</span></span></button>`); }
   opts.push(`<button class="opt big" data-act="go" data-v="setupHifz"><span class="tic">+</span><span><b>حفظ جديد</b><span class="muted" style="display:block">اختر سورة أو ربعًا أو جزءًا آخر، ومقداره اليومي</span></span></button>`);
   return `<main>${back()}<div><h1>الحفظ</h1>${S.hifz ? `<p class="muted">خطتك الحالية: ${hifzName(S.hifz)} · ${paceName(S.hifz)}</p>` : ''}</div><div class="btns">${opts.join('')}</div></main>`;
 }
