@@ -1022,7 +1022,10 @@ function processSpoken(flush){
     if (i < n && sess.muq && sess.muq.has(i)) for (let k = 1; k <= 5 && j + k <= m; k++) if (muqWords(sess.muq.get(i), H.slice(j, j + k))) set(i + 1, j + k, d, 6, k);
   }
   /* how far the reader got: the best line-up of everything heard with the start of the text (prefer going further on a tie) */
-  let bi = 0; for (let i = 0; i <= n; i++) if (D[at(i, m)] <= D[at(bi, m)] + 1e-9) bi = i;
+  /* a last word that differs from the text could be a mistake or the reader going back; going forward and showing it red
+     at once (the colours are corrected as more words come) is better than waiting silently for the next words */
+  let best = 1e9; for (let i = 0; i <= n; i++) best = Math.min(best, D[at(i, m)]);
+  let bi = 0; for (let i = 0; i <= n; i++) if (D[at(i, m)] <= best + 0.15) bi = i;
   const ws = {}, hd = {}, skip = new Set(), ins = {}; let i = bi, j = m;
   while (i > 0 || j > 0){
     const o = op[at(i, j)];
