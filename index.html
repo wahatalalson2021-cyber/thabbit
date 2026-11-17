@@ -249,6 +249,8 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .namein{width:44%;min-width:120px;border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;font:inherit;background:var(--surface);color:var(--ink)}.namein:focus{outline:none;border-color:var(--accent)}
 .splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background-color:#0b5a51;background-image:radial-gradient(90% 60% at 50% 30%,#13806f 0%,transparent 70%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='-28 -28 56 56'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.07' stroke-width='1.2'%3E%3Crect x='-12' y='-12' width='24' height='24'/%3E%3Crect x='-12' y='-12' width='24' height='24' transform='rotate(45)'/%3E%3C/g%3E%3C/svg%3E");transition:opacity .45s}
 .splash.out{opacity:0;pointer-events:none}
+.splash.pic{display:block;padding:0}.splash.pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:spIn .6s ease-out}
+.sphit{position:absolute;border:0;background:transparent;border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent}.sphit:active{background:rgb(255 255 255 / .15)}
 .spin{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;animation:spIn .7s ease-out}
 .spin .emblem svg{width:84px;height:98px}.spin .emblem .e1{fill:#0d6a60}.spin .emblem .e2{stroke:#e9cf8f}.spin .emblem .e3{color:#e9cf8f}
 .spin h1{font-family:var(--f-quran);font-size:4.2rem;line-height:1.5;color:#fff;margin:8px 0 0}
@@ -2141,7 +2143,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r71';
+const BUILD = 'r72';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2316,12 +2318,20 @@ app.addEventListener('change', e => {
 });
 render();
 /* Opening screen: the app's name, and a supplication the reader taps to enter. */
+/* The picture fills the screen; a real button sits exactly over the button drawn in it (found from the picture's size). */
+const SPL = {w: 854, h: 1842, btn: [108, 1520, 746, 1650]};
 function splash(){
   if (navigator.webdriver) return;   // automated tests
   const el = document.createElement('div'); el.className = 'splash';
-  el.innerHTML = `<div class="spin">${EMBLEM}<h1>ثبّت</h1><p>لحفظ القرآن الكريم</p><span class="gdiv"></span>
-    <button class="spbtn" type="button">اللهم اغفر لصاحب هذا العمل</button></div>`;
-  el.querySelector('.spbtn').addEventListener('click', () => { el.classList.add('out'); setTimeout(() => el.remove(), 450); });
+  const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 450); };
+  const plain = () => { el.classList.remove('pic'); el.innerHTML = `<div class="spin">${EMBLEM}<h1>ثبّت</h1><p>لحفظ القرآن الكريم</p><span class="gdiv"></span>
+    <button class="spbtn" type="button">اللهم اغفر لصاحب هذا العمل</button></div>`; el.querySelector('.spbtn').addEventListener('click', close); };
+  el.classList.add('pic');
+  el.innerHTML = `<img src="splash.jpg" alt=""><button class="sphit" type="button" aria-label="اللهم اغفر لصاحب هذا العمل"></button>`;
+  const img = el.querySelector('img'), hit = el.querySelector('.sphit');
+  const place = () => { const W = innerWidth, H = innerHeight, k = Math.max(W / SPL.w, H / SPL.h), ox = (W - SPL.w * k) / 2, oy = (H - SPL.h * k) / 2, [x1, y1, x2, y2] = SPL.btn;
+    Object.assign(hit.style, {left: ox + x1 * k + 'px', top: oy + y1 * k + 'px', width: (x2 - x1) * k + 'px', height: (y2 - y1) * k + 'px'}); };
+  img.onerror = plain; hit.addEventListener('click', close); place(); addEventListener('resize', place);
   document.body.appendChild(el);
 }
 splash();
