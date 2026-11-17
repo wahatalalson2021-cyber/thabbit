@@ -520,7 +520,7 @@ function engLog(m){ if (!ENGLOG.length) engT0 = performance.now(); ENGLOG.push((
 async function engStart(){
   const s0 = sess, Ctx = window.AudioContext || window.webkitAudioContext;
   const ctx = new Ctx();                                   // created inside the tap, so the iPhone allows it
-  REC = {s0, ctx, q: [], busy: false, stopping: false, seg: [], segN: 0, speech: 0, sil: 0, noise: 0.003, pre: [], blocks: [], cands: []};
+  REC = {s0, ctx, q: [], busy: false, stopping: false, seg: [], segN: 0, speech: 0, sil: 0, noise: 0.003, pre: [], blocks: [], cands: [], pieces: [], base: (sess.finalText || '').trim()};
   sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.interim = ''; sess.hear = 'audio'; sess.micTip = false; sess.engine = 'model';
   liveText = ASR ? '' : 'أجهّز المحرك الدقيق... ابدأ القراءة'; render();
   ENGLOG.length = 0; engLog('بدء · ' + (ASR ? 'المحرك في الذاكرة' : 'تحميل المحرك من الجهاز'));
@@ -551,7 +551,7 @@ function engAudio(x, rate){
   const thr = Math.max(R0.noise * 3, 0.006), loud = rms > thr;
   if (loud){ if (R0.segN && R0.sil >= 0.25) R0.cands.push({k: R0.seg.length, sil: R0.sil, at: R0.segN / rate});   // a pause inside the piece: a possible cut point
     R0.speech += dur; R0.sil = 0; if (sess && sess.hear !== 'speech'){ sess.hear = 'speech'; engLive(); } } else R0.sil += dur;
-  if (!R0.segN && !loud){ R0.pre.push(y); if (R0.pre.length > 4) R0.pre.shift(); return; }   // keep a little sound before speech starts
+  if (!R0.segN && !loud){ R0.pre.push(y); let pn = R0.pre.reduce((a, b) => a + b.length, 0); while (R0.pre.length > 1 && pn - R0.pre[0].length > rate * 0.7){ pn -= R0.pre[0].length; R0.pre.shift(); } return; }   // keep ~0.7 s before speech starts, so a soft first sound is not lost
   if (!R0.segN){ R0.pre.forEach(b => { R0.seg.push(b); R0.blocks.push(0); R0.segN += b.length; }); R0.pre = []; }
   R0.seg.push(y); R0.blocks.push(rms); R0.segN += n;
   /* Cut at each pause of half a second (usually an ayah end or a waqf), so words colour soon after they are read.
@@ -565,11 +565,11 @@ function engAudio(x, rate){
   }
 }
 function engCut(k){
-  const R0 = REC, rate = R0.rate || 48000; const part = R0.seg.slice(0, k), len = part.reduce((a, b) => a + b.length, 0), raw = new Float32Array(len); let o = 0;
+  const R0 = REC, rate = R0.rate || 48000, spoke = R0.speech; const part = R0.seg.slice(0, k), len = part.reduce((a, b) => a + b.length, 0), raw = new Float32Array(len); let o = 0;
   part.forEach(b => { raw.set(b, o); o += b.length; });
   R0.seg = R0.seg.slice(k); R0.blocks = R0.blocks.slice(k); R0.segN = R0.seg.reduce((a, b) => a + b.length, 0); R0.speech = 0; R0.sil = 0;
   R0.cands = R0.cands.filter(x => x.k > k).map(x => ({k: x.k - k, sil: x.sil, at: x.at - len / rate}));
-  if (len < rate * 0.6) return;
+  if (len < rate * 0.6 || spoke < 0.5){ if (len >= rate * 0.6) engLog('تجاهلت قطعة بلا كلام (' + (len / rate).toFixed(1) + 'ث)'); return; }
   /* convert to the model's 16 kHz with the browser's own careful converter, keeping pieces in order */
   const slot = {y: null}; R0.q.push(slot);
   const off = new OfflineAudioContext(1, Math.ceil(len * 16000 / rate), 16000), buf = off.createBuffer(1, len, rate); buf.copyToChannel(raw, 0);
@@ -581,9 +581,10 @@ async function engPump(){
   if (!R0.q.length){ if (R0.stopping) engFinish(); return; }
   if (!R0.q[0].y) return;                       // the next piece is still being converted
   R0.busy = true; liveText = 'أكتب ما قرأته...'; engLive();
-  try { const y = R0.q.shift().y; if (!y.length) throw 0; const t0 = performance.now(), r = await ASR(y, {max_new_tokens: Math.min(220, 30 + Math.round(y.length / 16000 * 9))}); const t = engClean(r.text);
-    engLog('قطعة ' + (y.length / 16000).toFixed(1) + 'ث · كتابة ' + ((performance.now() - t0) / 1000).toFixed(1) + 'ث · ' + t);
-    if (sess === R0.s0 && t){ sess.finalText = (sess.finalText || '') + ' ' + t; sess.interim = ''; recompute(false); } }
+  try { const y = R0.q.shift().y; if (!y.length) throw 0; const sec = y.length / 16000, piece = {y, text: ''}; R0.pieces.push(piece);
+    const t0 = performance.now(), t = await engWrite(y);
+    engLog('قطعة ' + sec.toFixed(1) + 'ث · كتابة ' + ((performance.now() - t0) / 1000).toFixed(1) + 'ث · ' + t);
+    piece.text = t; if (sess === R0.s0){ engText(R0); recompute(false); piece.endP = sess.p; } }
   catch (e) { if (e !== 0){ engLog('خطأ: ' + (e && e.message || e)); if (sess === R0.s0) sess.micErr = 'تعذّرت كتابة جزء من التلاوة. (' + (e && e.message || e) + ')'; } }
   R0.busy = false; liveText = R0.stopping ? 'أكتب آخر ما قرأته...' : '';
   if (REC === R0 && view === 'session') render();
@@ -593,6 +594,35 @@ async function engPump(){
 function engClean(t){
   let ws = String(t || '').replace(/<\|[^|]*\|>/g, '').trim().split(/\s+/).filter(w => w && !/(.{1,3})\1{4,}/.test(w));
   return ws.filter((w, i) => !(i >= 3 && w === ws[i - 1] && w === ws[i - 2] && w === ws[i - 3])).join(' ');
+}
+/* Send a copy to the model (the original is kept for the final check). */
+async function engWrite(y){ const r = await ASR(y.slice(), {max_new_tokens: Math.min(220, 30 + Math.round(y.length / 16000 * 9))}); return engClean(r.text); }
+function engText(R0){ sess.finalText = [R0.base, ...R0.pieces.map(p => p.text)].filter(Boolean).join(' '); sess.interim = ''; }
+/* Final check: pieces whose words came out red or orange are written again together with the piece before and after,
+   so the model hears more context. Only doubtful parts are redone, so a clean recitation finishes at once. */
+async function engReview(R0){
+  const P = R0.pieces; if (!P.length || !ASR) return;
+  const doubt = []; let from = 0;
+  P.forEach((p, i) => { const to = p.endP == null ? from : p.endP; for (let j = from; j < Math.max(to, from + 1) && j < sess.exp.length; j++) if (sess.ws[j] === 'miss' || sess.ws[j] === 'soft'){ doubt.push(i); break; } from = Math.max(from, to); });
+  if (!doubt.length) return;
+  const groups = []; doubt.forEach(i => { let a = Math.max(0, i - 1), b = Math.min(P.length - 1, i + 1);
+    const len = k => P.slice(a, k + 1).reduce((x, p) => x + p.y.length, 0) / 16000;
+    while (b > i && len(b) > 25) b--; while (a < i && len(b) > 25) a++;
+    const g = groups[groups.length - 1];
+    if (g && a <= g[1] + 1 && P.slice(g[0], b + 1).reduce((x, p) => x + p.y.length, 0) / 16000 <= 25) g[1] = Math.max(g[1], b);
+    else { if (g) a = Math.max(a, g[1] + 1); if (a <= b) groups.push([a, b]); } });   // groups never overlap
+  liveText = 'أراجع المواضع المشكوك فيها...'; engLive();
+  for (const [a, b] of groups){
+    const parts = P.slice(a, b + 1), n = parts.reduce((x, p) => x + p.y.length, 0), y = new Float32Array(n); let o = 0; parts.forEach(p => { y.set(p.y, o); o += p.y.length; });
+    try { const t0 = performance.now(), t = await engWrite(y); engLog('مراجعة ' + (n / 16000).toFixed(1) + 'ث · ' + ((performance.now() - t0) / 1000).toFixed(1) + 'ث · ' + t);
+      if (t){ /* keep the new text only if it matches the mushaf better than before */
+        const okN = () => { engText(R0); recompute(true); return Object.values(sess.ws).filter(v => v === 'ok').length; };
+        const before = okN(), old = parts.map(p => p.text);
+        parts.forEach((p, k) => { p.text = k ? '' : t; });
+        const after = okN(); if (after < before){ parts.forEach((p, k) => { p.text = old[k]; }); engLog('مراجعة: أبقيت النص الأول (' + after + ' < ' + before + ')'); } } }
+    catch (e) { engLog('مراجعة: خطأ ' + (e && e.message || e)); }
+  }
+  engText(R0);
 }
 function engLive(){ const el = document.getElementById('live'); if (el) el.textContent = liveText || hearMsg(); }
 /* The reader pressed "finished" (or reached the end): cut what is left, write it, then show the result. */
@@ -605,7 +635,9 @@ function engStop(){
 }
 function engRelease(R0){ try { if (R0.proc){ R0.proc.onaudioprocess = null; if (R0.proc.port) R0.proc.port.onmessage = null; } R0.src && R0.src.disconnect(); R0.proc && R0.proc.disconnect(); } catch (e) {}
   try { R0.stream && R0.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { R0.ctx.close(); } catch (e) {} }
-function engFinish(){ const R0 = REC; REC = null; if (!R0) return; if (sess === R0.s0){ sess.listening = false; sess.draining = false; liveText = ''; recompute(true); if (view === 'session') render(); } }
+async function engFinish(){ const R0 = REC; if (!R0 || R0.finishing) return; R0.finishing = true;
+  if (sess === R0.s0){ sess.listening = false; recompute(true); try { await engReview(R0); } catch (e) {} }
+  REC = null; if (sess === R0.s0){ sess.listening = false; sess.draining = false; liveText = ''; recompute(true); if (view === 'session') render(); } }
 function engClose(){ const R0 = REC; REC = null; if (R0) engRelease(R0); }
 
 /* ---------- recitation matching ---------- */
