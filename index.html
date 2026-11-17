@@ -581,9 +581,13 @@ function engAudio(x, rate, R1){
   if (!R0.segN){ R0.pre.forEach(b => { R0.seg.push(b); R0.blocks.push(0); R0.segN += b.length; }); R0.pre = []; }
   R0.seg.push(y); R0.blocks.push(rms); R0.segN += n;
   /* Cut at each pause of half a second (usually an ayah end or a waqf), so words colour soon after they are read.
-     A piece that grows past 12 s is cut at its longest pause. */
+     A piece that grows past 6 s is cut at its longest pause. */
   const segSec = R0.segN / rate;
   if (segSec >= 1.5 && R0.speech >= 0.8 && R0.sil >= 0.5) engCut(R0.seg.length);
+  else if (segSec >= 6 && segSec < 12){   // a long ayah: cut at a clear breath pause (between words), so words appear sooner
+    const c = R0.cands.filter(x => x.at >= 2.5 && x.sil >= 0.35).sort((a, b) => b.sil - a.sil)[0];
+    if (c){ engCut(c.k); R0.cands = []; }
+  }
   else if (segSec >= 12){
     const c = R0.cands.filter(x => x.at >= 3).sort((a, b) => b.sil - a.sil)[0];
     if (c) engCut(c.k);
