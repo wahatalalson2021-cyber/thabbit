@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.learnoschools.thabbit",
+    "sha256_cert_fingerprints": ["80:6B:02:CA:36:54:D7:72:FE:E7:3D:71:F3:DA:68:67:74:70:F8:F4:A7:AE:45:2B:8D:E8:18:77:A5:6D:09:D8"]
+  }
+}]
