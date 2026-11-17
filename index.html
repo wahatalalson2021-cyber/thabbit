@@ -815,7 +815,7 @@ function feed(text){
 }
 /* Re-align everything heard so far (final + live text) against the ayat, so live text and corrections both count. */
 function recompute(flush){
-  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.heard = {}; sess.bad = [];
+  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.heard = {}; sess.bad = []; sess.lastHeard = '';
   sess.spoken = ((sess.finalText || '') + ' ' + (sess.interim || '')).split(/\s+/).map(normSpoken).filter(Boolean);
   processSpoken(flush);
   if (sess.listening) alertMiss();
@@ -833,7 +833,7 @@ function beep(){
 }
 function alertMiss(){
   sess.beeped = sess.beeped || new Set(); let fresh = false;
-  for (const k in sess.ws) if (sess.ws[k] === 'miss' && !sess.beeped.has(+k)){ sess.beeped.add(+k); fresh = true; }
+  for (const k in sess.ws) if (sess.ws[k] === 'miss' && +k < sess.p - 2 && !sess.beeped.has(+k)){ sess.beeped.add(+k); fresh = true; }
   if (fresh && S.beep !== false) beep();
 }
 const PRE = new Set(['بسم','الله','الرحمن','الرحيم','اعوذ','بالله','من','الشيطان','الرجيم'].map(w => normSpoken(w)));
@@ -899,51 +899,80 @@ function isRepeat(w, nxt){ const E = sess.exp;
       if (nxt && E[q + 1] && (same(E[q + 1], nxt) || E[q + 1].some(v => v === nxt))) return true;
     }
   return false; }
-function processSpoken(flush){
+/* Connected recitation (wasl) blends words: "إيّاك نعبد" is heard as "يا كان عبد", "اهدنا الصراط" as "اهدنصراط".
+   Compare the sound of several words together (letters only, no spaces). Close enough: "heard approximately" (orange), not red. */
+/* Spoken form: the connecting alif is not heard, and "ال" before a sun letter is not heard (الصراط -> صراط). */
+const SUN = 'تثدذرزسشصضطظلن';
+function phon(w){ return w; }
+function spanNear(k, heard, back){
+  const E = sess.exp, start = sess.p - (back || 0); if (start < 0) return false;
+  const h = heard.map(phon).join(''); if (h.length < 4) return false;
+  const e = E.slice(start, sess.p + k).map(vs => phon(vs[vs.length - 1])).join(''); if (!e) return false;
+  return lev(e, h) <= Math.max(2, Math.round(e.length * 0.3));
+}
+/* ---------- Alignment of what was heard against the mushaf ----------
+   Instead of deciding word by word, the whole heard text is lined up against the ayat at once, choosing the line-up with the
+   lowest total "cost" (the same idea as a spell checker). Costs:
+     same word (incl. tajweed / spelling variants) 0 · close or unclear 0.4 (orange) · و/ف slip 0.6 (red)
+     another Quranic word 1 (red) · garbled non-word 0.9 (orange) · word not heard 1 (orange)
+     extra heard word 0.9 · repeated earlier words 0.15 · isti'adha/basmala before a surah 0.05
+     two written words heard as one (idgham, wasl) 0.05 · one word heard as two 0.05 · disjointed letters by name 0 */
+/* Letters that sound alike and that speech services confuse (صم/ثم، ذ/ز، ق/ك ...): close in sound means "unclear", not wrong. */
+const FOLD = {'ث':'س','ص':'س','ذ':'ز','ظ':'ز','ض':'د','ط':'ت','ق':'ك','ح':'ه','ع':'ا','غ':'خ'};
+const fold = x => x.replace(/[ثصذظضطقحعغ]/g, c => FOLD[c]);
+function soundAlike(vs, w){ if (w.length < 2) return false; const fw = fold(w); return vs.some(v => { const fv = fold(v); return fv === fw || (fv.length >= 4 && lev(fv, fw) <= 1); }); }
+function wordCost(i, w){
+  const key = i + '|' + w, c0 = sess.cls.get(key); if (c0) return c0;
+  const vs = sess.exp[i]; let c;
+  if (same(vs, w)) c = [0, 'ok'];
+  else if (extraWF(vs, w)) c = [0.4, 'soft'];
+  else if (vs.some(v => prefixSlip(v, w))) c = [0.6, 'miss'];
+  else if (nearWord(vs, w) || soundAlike(vs, w)) c = [0.4, 'soft'];
+  else c = quranWord(w) ? [1, 'miss'] : [0.9, 'soft'];
+  sess.cls.set(key, c); return c;
+}
+function insCost(i, w){
+  if (PRE.has(w) && (i === 0 || (sess.bounds && sess.bounds.has(i)))) return 0.05;
   const E = sess.exp;
-  while (sess.spoken.length && sess.p < E.length){
-    const w = sess.spoken[0], w2 = sess.spoken.length > 1 ? w + sess.spoken[1] : null;
-    if (sess.p === 0 || (sess.bounds && sess.bounds.has(sess.p))){
-      const n = preLen(); if (n){ sess.spoken.splice(0, n); continue; }
-      if (PRE.has(w) && !same(E[sess.p], w) && !(w2 && same(E[sess.p], w2)) && !E[sess.p].some(v => prefixSlip(v, w))){ sess.spoken.shift(); continue; }
-    }
-    if (sess.muq && sess.muq.has(sess.p)){ const n = muqLen(sess.muq.get(sess.p)); if (n > 1 || (n === 1 && !same(E[sess.p], w))){ sess.spoken.splice(0, n); if (!sess.ws[sess.p]) sess.ws[sess.p] = 'ok'; sess.p++; sess.m2 = 0; sess.bad = []; continue; } }
-    { let fixed = false;
-      for (let q = sess.p - 1; q >= 0 && q >= sess.p - 6; q--){
-        if ((sess.ws[q] === 'miss' || sess.ws[q] === 'soft') && same(E[q], w) && (q === sess.p - 1 || (sess.spoken[1] && E[q + 1] && same(E[q + 1], sess.spoken[1])))){
-          sess.ws[q] = 'ok'; delete sess.heard[q]; sess.spoken.shift(); sess.m2 = 0; sess.bad = []; fixed = true; break; }
-      }
-      if (fixed) continue; }
-    let hit = -1, used = 1, span = 1;
-    for (let j = 0; j < 4 && sess.p + j < E.length; j++){
-      if (same(E[sess.p + j], w)){ hit = j; used = 1; break; }
-      if (w2 && same(E[sess.p + j], w2)){ hit = j; used = 2; break; }
-      const nx = E[sess.p + j + 1];
-      if (nx && joinedMatch(E[sess.p + j], nx, w)){ hit = j; used = 1; span = 2; break; }
-    }
-    if (hit !== 0 && !sess.spoken[1] && !flush && sess.p > 0) break;
-    if (hit !== 0 && isRepeat(w, sess.spoken[1])){
-      /* ambiguous: the word is both earlier and a bit ahead. Going forward only if the next heard word also follows. */
-      const nxt = sess.spoken[used], ahead = hit > 0 ? E[sess.p + hit + span] : null;
-      if (hit > 0 && !nxt && !flush) break;
-      if (!(hit > 0 && nxt && ahead && (same(ahead, nxt) || (sess.spoken[used + 1] && same(ahead, nxt + sess.spoken[used + 1]))))){ sess.spoken.shift(); sess.m2 = 0; sess.bad = []; continue; }
-    }
-    if (hit < 0 && !flush && sess.spoken.length === 1) break;
-    if (hit < 0 && sess.m2 === 0 && (nearWord(E[sess.p], w) || extraWF(E[sess.p], w))){
-      /* close but not exact: probably the recognizer, so mark it "unclear" (orange), not a mistake */
-      sess.spoken.shift(); if (!sess.ws[sess.p]){ sess.ws[sess.p] = 'soft'; sess.heard[sess.p] = w; } sess.p++; sess.bad = []; continue;
-    }
-    sess.spoken.splice(0, hit < 0 ? 1 : used);
-    if (hit < 0){ sess.bad.push(w); if (++sess.m2 >= 2){ if (!sess.ws[sess.p]){ sess.ws[sess.p] = sess.bad.some(quranWord) ? 'miss' : 'soft'; sess.heard[sess.p] = sess.bad.join(' '); } sess.p++; sess.m2 = 0; sess.bad = []; } continue; }
-    /* words jumped over: short particles (من، في، ما، لا) are often dropped by the recognizer in tarteel, so they are "unclear", not wrong */
-    for (let j = 0; j < hit; j++) if (!sess.ws[sess.p + j]){ const slip = sess.bad.some(b => E[sess.p + j].some(v => prefixSlip(v, b)));
-      /* red only when a different Quranic word was heard in its place; nothing heard, or garbled sound, is "unclear" */
-      const short = !slip && (Math.max(...E[sess.p + j].map(v => v.length)) <= 3 || !sess.bad.some(quranWord)); sess.ws[sess.p + j] = short ? 'soft' : 'miss'; sess.heard[sess.p + j] = sess.bad.join(' '); }
-    sess.bad = [];
-    for (let j = hit; j < hit + span; j++) if (!sess.ws[sess.p + j]) sess.ws[sess.p + j] = 'ok';
-    sess.p += hit + span; sess.m2 = 0;
+  for (let q = i - 1; q >= 0 && q >= i - 20; q--) if (E[q].some(v => v === w || (w.length >= 6 && v.length >= 6 && !prefixSlip(v, w) && lev(v, w) <= 1))) return 0.15;
+  return 0.9;
+}
+function muqWords(letters, ws){
+  const names = [...letters].map(c => LNAME[c]); let j = 0;
+  for (const w of ws){ if (j < names.length && lev(names[j], w) <= 1) j++; else if (j + 1 < names.length && lev(names[j + 1], w) <= 1) j += 2; else return false; }
+  return j >= Math.max(1, Math.ceil(names.length * 0.6));
+}
+function processSpoken(flush){
+  const E = sess.exp, H = sess.spoken, n = E.length, m = H.length;
+  if (!sess.cls) sess.cls = new Map();
+  if (!m) return;
+  const W = m + 1, D = new Float64Array((n + 1) * W).fill(1e9), op = new Uint8Array((n + 1) * W), ok = new Uint8Array((n + 1) * W);
+  const at = (i, j) => i * W + j, set = (i, j, c, o, k) => { if (c < D[at(i, j)] - 1e-9){ D[at(i, j)] = c; op[at(i, j)] = o; ok[at(i, j)] = k || 0; } };
+  D[0] = 0;
+  for (let i = 0; i <= n; i++) for (let j = 0; j <= m; j++){
+    const d = D[at(i, j)]; if (d >= 1e9) continue;
+    if (i < n && j < m) set(i + 1, j + 1, d + wordCost(i, H[j])[0], 1);                       // word against word
+    if (i < n) set(i + 1, j, d + 1, 2);                                                       // written word not heard
+    if (j < m) set(i, j + 1, d + insCost(i, H[j]), 3);                                        // extra heard word
+    if (i + 1 < n && j < m && joinedMatch(E[i], E[i + 1], H[j])) set(i + 2, j + 1, d + 0.05, 4);   // two words heard as one
+    if (i < n && j + 1 < m && same(E[i], H[j] + H[j + 1])) set(i + 1, j + 2, d + 0.05, 5);        // one word heard as two
+    if (i < n && sess.muq && sess.muq.has(i)) for (let k = 1; k <= 5 && j + k <= m; k++) if (muqWords(sess.muq.get(i), H.slice(j, j + k))) set(i + 1, j + k, d, 6, k);
   }
-  if (sess.p >= E.length){ sess.reveal = E.length; stopMic(); }
+  /* how far the reader got: the best line-up of everything heard with the start of the text (prefer going further on a tie) */
+  let bi = 0; for (let i = 0; i <= n; i++) if (D[at(i, m)] <= D[at(bi, m)] + 1e-9) bi = i;
+  const ws = {}, hd = {}; let i = bi, j = m;
+  while (i > 0 || j > 0){
+    const o = op[at(i, j)];
+    if (o === 1){ const [, st] = wordCost(i - 1, H[j - 1]); ws[i - 1] = st; if (st !== 'ok') hd[i - 1] = H[j - 1]; i--; j--; }
+    else if (o === 2){ ws[i - 1] = 'soft'; i--; }
+    else if (o === 3){ j--; }
+    else if (o === 4){ ws[i - 1] = ws[i - 2] = 'ok'; i -= 2; j--; }
+    else if (o === 5){ ws[i - 1] = 'ok'; i--; j -= 2; }
+    else if (o === 6){ const k = ok[at(i, j)] || 1; ws[i - 1] = 'ok'; i--; j -= k; }
+    else break;
+  }
+  sess.ws = ws; sess.heard = hd; sess.p = bi;
+  if (sess.p >= n){ sess.reveal = n; stopMic(); }
 }
 function hearMsg(){
   const h = sess && sess.hear;
@@ -1394,7 +1423,7 @@ function initStep(){
       const first = baseNorm(x.txt.split(' ')[0].replace(HAR, ''));
       if ((x.a === 1 || (x.s === 42 && x.a === 2)) && MUQ.has(first)) sess.muq.set(sess.exp.length, first);
       x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
-    tajweedVariants(sess.exp); }
+    tajweedVariants(sess.exp); sess.cls = new Map(); }
   sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false; SRLOG.length = 0; sess.engine = null; sess.draining = false; sess.engWait = false; sess.engAsk = false;
 }
 function chunkAyat(c){ const out = []; segs(c).forEach((sg, si) => { for (let a = sg.a; a <= sg.b; a++) out.push({s:sg.s, a, txt:Q[sg.s - 1][1][a - 1], head: a === sg.a && (si > 0 || a === 1)}); }); return out; }
