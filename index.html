@@ -222,7 +222,8 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .jgrid button{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 0;font-weight:600;font-variant-numeric:tabular-nums}
 .jgrid button[aria-pressed="true"],.jgrid button[data-st="known"],.sgrid button[data-st="known"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .jgrid button[data-st="weak"],.sgrid button[data-st="weak"]{background:var(--warn);border-color:var(--warn);color:#fff}
-.mlist{gap:0;padding:4px 14px}.mrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}.mrow:last-child{border-bottom:0}
+.wlist{display:flex;flex-direction:column}.mrow{padding:12px 0;border-bottom:1px solid var(--line)}.mrow:last-child{border-bottom:0}.mhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mrow .stx{margin:6px 0 2px}.mred{color:var(--bad);text-decoration:underline wavy var(--bad);text-underline-offset:8px}
 .mrow small{display:block;color:var(--muted);margin-top:2px}.mbtns{display:flex;gap:6px;align-items:center}.mbtns .btn{padding:8px 14px;min-height:0;width:auto}
 .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:340px;overflow:auto;padding:2px}
 .sgrid button{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 2px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1338,20 +1339,33 @@ function noteMistakes(t){
   const ay = chunkAyat(itemChunk(t)); let k = 0;
   ay.forEach(x => { const ws = x.txt.split(' '), idx = ws.map((_, j) => k + j); k += ws.length;
     if (idx.some(i => i >= sess.p)) return;                       // not reached: no judgement
-    const g = saToG(x.s, x.a), bad = idx.filter(i => sess.ws[i] === 'miss').map(i => ws[i - idx[0]]), m = S.mist[g];
-    if (bad.length) S.mist[g] = {w: bad, n: ((m && m.n) || 0) + 1, ok: 0, t: today()};
+    const g = saToG(x.s, x.a), bi = idx.filter(i => sess.ws[i] === 'miss').map(i => i - idx[0]), m = S.mist[g];
+    if (bi.length) S.mist[g] = {w: bi.map(j => ws[j]), wi: bi, n: ((m && m.n) || 0) + 1, ok: 0, t: today()};
     else if (m && idx.every(i => sess.ws[i] === 'ok')){ m.ok = (m.ok || 0) + 1; if (m.ok >= 2) delete S.mist[g]; }
   });
 }
 const mistKeys = () => Object.keys(S.mist || {}).map(Number).sort((a, b) => a - b);
+/* Weak memorization the reader marked himself, grouped by juz / surah, with the pages not yet firm. */
+function weakUnits(){
+  const r = S.rev, firm = p => r.pg && r.pg[p] && r.pg[p].firm, out = [];
+  (r.weak || []).forEach(j => { const ps = juzPages(j).filter(p => !firm(p)); if (ps.length) out.push({name: 'الجزء ' + AR(j), ps}); });
+  (r.wsur || []).forEach(n => { const ps = surPages(n).filter(p => !firm(p)); if (ps.length) out.push({name: 'سورة ' + Q[n - 1][0], ps}); });
+  return out;
+}
 function vMist(){
-  const ks = mistKeys();
+  const ks = mistKeys(), wu = weakUnits();
+  const ayah = g => { const [su, a] = gidToSA(g), m = S.mist[g], ws = Q[su - 1][1][a - 1].split(' ');
+    const bad = new Set(m.wi || ws.map((w, j) => m.w.includes(w) ? j : -1).filter(j => j >= 0));
+    return ws.map((w, j) => bad.has(j) ? `<span class="mred">${w}</span>` : w).join(' '); };
   const rows = ks.map(g => { const [su, a] = gidToSA(g), m = S.mist[g];
-    return `<div class="mrow"><div><b>سورة ${Q[su - 1][0]} · الآية ${AR(a)}</b><small>أخطأت في: ${m.w.map(esc).join('، ')}${m.n > 1 ? ' · تكرر ' + AR(m.n) + ' مرات' : ''}${m.ok ? ' · سمّعتها صحيحة مرة، بقيت مرة' : ''}</small></div>
-      <div class="mbtns"><button class="btn soft" data-act="mistGo" data-v="${g}">سمّع</button><button class="x" data-act="mistDel" data-v="${g}" aria-label="احذف">✕</button></div></div>`; }).join('');
+    return `<div class="mrow"><div class="mhead"><b>سورة ${Q[su - 1][0]} · الآية ${AR(a)}</b><div class="mbtns"><button class="btn soft" data-act="mistGo" data-v="${g}">سمّع</button><button class="x" data-act="mistDel" data-v="${g}" aria-label="احذف">✕</button></div></div>
+      <p class="stx">${ayah(g)}</p><small>${m.n > 1 ? 'أخطأت فيها ' + AR(m.n) + ' مرات' : 'أخطأت فيها مرة'}${m.ok ? ' · سمّعتها صحيحة مرة، بقيت مرة' : ''}</small></div>`; }).join('');
+  const wrows = wu.map((u, i) => `<div class="mrow"><div class="mhead"><b>${u.name}</b><div class="mbtns"><button class="btn soft" data-act="weakGo" data-v="${i}">سمّع</button></div></div>
+      <small>بقيت ${countWord(u.ps.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')} حتى يثبت · الصفحة التي تسمّعها مرتين بلا خطأ تثبت</small></div>`).join('');
   return `<main>${back('revMenu')}
-    <div><h1>مواضع أخطائي</h1><p class="muted">كل آية أخطأت فيها بالأحمر أثناء التسميع بصوتك تُحفظ هنا. إذا سمّعتها مرتين بلا خطأ تخرج من القائمة وحدها.</p></div>
-    ${ks.length ? `<button class="btn" data-act="mistGo" data-v="all">سمّع كل المواضع (${AR(ks.length)})</button><div class="card mlist">${rows}</div>` : '<div class="card"><p class="muted">لا توجد مواضع أخطاء الآن. ما شاء الله.</p></div>'}</main>`;
+    <div><h1>مواضع الضعف</h1><p class="muted">الآيات التي أخطأت فيها بالأحمر أثناء التسميع، وما حدّدته بنفسك أن حفظك فيه ضعيف.</p></div>
+    <div class="card"><h3>آيات أخطأت فيها</h3>${ks.length ? `<button class="btn" data-act="mistGo" data-v="all">سمّع كل الآيات (${AR(ks.length)})</button><div class="wlist">${rows}</div>` : '<p class="muted">لا توجد الآن. كل آية تخطئ فيها بالأحمر أثناء التسميع بصوتك تظهر هنا، وتخرج وحدها إذا سمّعتها مرتين بلا خطأ.</p>'}</div>
+    <div class="card"><h3>حفظ ضعيف حدّدته</h3>${wu.length ? `<div class="wlist">${wrows}</div>` : '<p class="muted">لم تحدّد شيئًا. من «مراجعة جديدة» اضغط الجزء أو السورة مرتين ليصير برتقاليًا.</p><button class="btn ghost" data-act="go" data-v="setupReview">حدّد الحفظ الضعيف</button>'}</div></main>`;
 }
 function vRevMenu(){
   const todo = reviewTodo(), tot = Math.max(S.rev.tot || 0, todo.length), done = tot - todo.length, opts = [];
@@ -1361,8 +1375,8 @@ function vRevMenu(){
   else if (tot) opts.push(`<div class="opt big done"><span class="tic">✓</span><span><b>أنهيت مراجعة اليوم</b><span class="muted" style="display:block">تقبّل الله منك</span></span></div>`);
   const ex = !todo.length && knownPages().length ? pickPages(true) : [];
   if (ex.length) opts.push(`<button class="opt big" data-act="revExtra"><span class="tic">+</span><span><b>راجع مقدارًا إضافيًا</b><span class="muted" style="display:block">${countWord(ex.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')} تبدأ من صفحة ${AR(ex[0])}</span></span></button>`);
-  const mk = mistKeys().length;
-  if (mk) opts.push(`<button class="opt big" data-act="go" data-v="mist"><span class="tic" style="color:var(--bad)">!</span><span><b>مواضع أخطائي</b><span class="muted" style="display:block">${countWord(mk, 'آية واحدة', 'آيتان', 'آيات', 'آية')} أخطأت فيها في التسميع، سمّعها حتى تثبت</span></span></button>`);
+  const mk = mistKeys().length, wk = weakUnits().length;
+  opts.push(`<button class="opt big" data-act="go" data-v="mist"><span class="tic" style="color:var(--bad)">!</span><span><b>مواضع الضعف</b><span class="muted" style="display:block">${mk || wk ? [mk ? countWord(mk, 'آية واحدة', 'آيتان', 'آيات', 'آية') + ' أخطأت فيها' : '', wk ? 'حفظ ضعيف في ' + countWord(wk, 'موضع واحد', 'موضعين', 'مواضع', 'موضعًا') : ''].filter(Boolean).join(' · ') : 'الآيات التي تخطئ فيها، وما حفظك فيه ضعيف'}</span></span></button>`);
   opts.push(`<button class="opt big" data-act="go" data-v="recite"><span class="tic">${MIC_SVG}</span><span><b>سمّع ما تختاره</b><span class="muted" style="display:block">سورة أو جزء أو صفحات تحفظها، تسمّعها بصوتك</span></span></button>`);
   opts.push(`<button class="opt big" data-act="go" data-v="setupReview"><span class="tic">+</span><span><b>مراجعة جديدة</b><span class="muted" style="display:block">غيّر ما تراجعه ومقدار مراجعتك اليومية</span></span></button>`);
   const r = S.rev, kn = (r.known || []).length, ksn = (r.ksur || []).length, wn = weakPages().length;
@@ -2030,7 +2044,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r60';
+const BUILD = 'r61';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2101,6 +2115,8 @@ app.addEventListener('click', e => {
   if (a === 'mistGo'){ const ks = v === 'all' ? mistKeys() : [+v]; if (ks.length){ retMist = true;
       startSession(ks.map(g => ({type:'recite', mist:true, page:gPage(g), chunk:{r:[[g, g]]}})));
       sess.banner = 'تسميع مواضع أخطائك: ' + countWord(ks.length, 'آية واحدة', 'آيتان', 'آيات', 'آية') + '. الآية التي تسمّعها مرتين بلا خطأ تخرج من القائمة.'; render(); } return; }
+  if (a === 'weakGo'){ const u = weakUnits()[+v]; if (u){ retMist = true; startSession(u.ps.map(p => ({type:'review', page:p, weak:true})));
+      sess.banner = 'تثبيت ' + u.name + ': ' + countWord(u.ps.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') + '. تستطيع التوقف في أي وقت.'; render(); } return; }
   if (a === 'mistDel'){ delete S.mist[+v]; save(); render(); return; }
   if (a === 'rdReciteSura'){ const s = gidToSA(RD.sel)[0]; retReader = true; startRecite({kind:'surah', s}); return; }
   if (a === 'revExtra'){ const ex = pickPages(true); if (ex.length){ startSession(ex.map(p => ({type:'review', page:p, extra:true}))); sess.banner = 'مراجعة إضافية: ' + countWord(ex.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') + '.'; render(); } return; }
