@@ -1386,8 +1386,6 @@ function vRevMenu(){
   if (todo.length){ const f = todo[0], c = itemChunk(f);
     opts.push(`<button class="opt big" data-act="revGo"><span class="tic">${TI.rev}</span><span><b>${done ? 'أكمل مراجعة اليوم' : 'مراجعة اليوم'}</b><span class="muted" style="display:block">${done ? 'راجعت ' + AR(done) + ' من ' + AR(tot) + ' · بقي ' + desc(todo) : desc(todo)} · تبدأ من ${f.page ? 'صفحة ' + AR(f.page) : cShort(c)}</span></span></button>`); }
   else if (tot) opts.push(`<div class="opt big done"><span class="tic">✓</span><span><b>أنهيت مراجعة اليوم</b><span class="muted" style="display:block">تقبّل الله منك</span></span></div>`);
-  const ex = !todo.length && knownPages().length ? pickPages(true) : [];
-  if (ex.length) opts.push(`<button class="opt big" data-act="revExtra"><span class="tic">+</span><span><b>راجع مقدارًا إضافيًا</b><span class="muted" style="display:block">${countWord(ex.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')} تبدأ من صفحة ${AR(ex[0])}</span></span></button>`);
   const mk = mistKeys().length, wk = weakUnits().length;
   opts.push(`<button class="opt big" data-act="go" data-v="mist"><span class="tic" style="color:var(--bad)">!</span><span><b>مواضع الضعف</b><span class="muted" style="display:block">${mk || wk ? [mk ? countWord(mk, 'آية واحدة', 'آيتان', 'آيات', 'آية') + ' أخطأت فيها' : '', wk ? 'حفظ ضعيف في ' + countWord(wk, 'موضع واحد', 'موضعين', 'مواضع', 'موضعًا') : ''].filter(Boolean).join(' · ') : 'الآيات التي تخطئ فيها، وما حفظك فيه ضعيف'}</span></span></button>`);
   opts.push(`<button class="opt big" data-act="go" data-v="recite"><span class="tic">${MIC_SVG}</span><span><b>سمّع ما تختاره</b><span class="muted" style="display:block">سورة أو جزء أو صفحات تحفظها، تسمّعها بصوتك</span></span></button>`);
@@ -2076,7 +2074,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r66';
+const BUILD = 'r67';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
