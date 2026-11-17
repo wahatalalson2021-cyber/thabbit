@@ -1686,6 +1686,8 @@ function vSessionDone(kinds){
   else if (k.has('new') && S.hifz) more = `<div class="card askmore"><h3>أتممت حفظ ${hifzName(S.hifz)}</h3><p class="muted">ما شاء الله. تستطيع اختيار هدف جديد من قائمة الحفظ.</p><button class="btn" data-act="go" data-v="hifzMenu">اختر هدفًا جديدًا</button></div>`;
   else if (k.has('review') && reviewTodo().length) more = `<div class="card askmore"><h3>هل تريد إكمال مراجعة اليوم؟</h3><p class="muted">بقي ${(l => { const pg = l.filter(x => x.page).length, ch = l.length - pg; return [ch ? countWord(ch, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') : '', pg ? countWord(pg, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') : ''].filter(Boolean).join(' و'); })(reviewTodo())} في مراجعة اليوم.</p>
     <button class="btn" data-act="revGo">نعم، أكمل المراجعة</button><button class="btn ghost" data-act="tab" data-v="home">لاحقًا</button></div>`;
+  else if (k.has('review') && !reviewTodo().length){ const ex = pickPages(true); if (ex.length) more = `<div class="card askmore"><h3>أنهيت مراجعة اليوم. هل تريد مقدارًا إضافيًا؟</h3><p class="muted">${countWord(ex.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')} تبدأ من صفحة ${AR(ex[0])}، بعد آخر صفحة راجعتها.</p>
+    <button class="btn" data-act="revExtra">نعم، راجع مقدارًا إضافيًا</button><button class="btn ghost" data-act="tab" data-v="home">يكفي اليوم</button></div>`; }
   return `<main><div class="card" style="text-align:center;gap:14px;margin-top:24px"><div class="done-mark">بارك الله فيك</div>
     <p>انتهت الجلسة.</p>${next != null ? `<p class="muted">أقرب مراجعة ${next - t === 1 ? 'غدًا' : 'بعد ' + AR(next - t) + ' أيام'}.</p>` : ''}
     ${more ? '' : '<button class="btn" data-act="tab" data-v="home">عودة إلى اليوم</button>'}</div>${more}</main>`;
@@ -2044,7 +2046,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r61';
+const BUILD = 'r62';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
