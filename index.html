@@ -970,6 +970,18 @@ function insCost(i, w){
   for (let q = i - 1; q >= 0 && q >= i - 20; q--) if (E[q].some(v => v === w || (w.length >= 6 && v.length >= 6 && !prefixSlip(v, w) && lev(v, w) <= 1))) return 0.15;
   return 0.9;
 }
+/* Connected recitation (wasl) can blur a few words into different word breaks: "اهدنا الصراط" heard as "إذ نصرات",
+   "إياك نعبد" as "يا كان عبد". If the sound of 2-3 written words together is close to the heard words together, and the
+   breaks differ (or a heard word is not a Quranic word), it is the recognizer blurring, not a slip: orange, not red. */
+function waslSound(ws){ return ws.map((w, k) => { if (k){ if (w.startsWith('ال') && SUN.includes(w[2])) w = w.slice(2); else if (w[0] === 'ا' && w.length > 2) w = w.slice(1); } return w; }).join(''); }
+function waslMatch(i, j, ke, kh){
+  const E = sess.exp, H = sess.spoken; if (i + ke > E.length || j + kh > H.length) return false;
+  const hw = H.slice(j, j + kh); if (hw.some(w => !w)) return false;
+  if (ke === kh && hw.every(w => quranWord(w))) return false;
+  const key = 'w' + i + '|' + ke + '|' + hw.join(' '); if (sess.cls.has(key)) return sess.cls.get(key);
+  const h = fold(hw.join('')), e = fold(waslSound(E.slice(i, i + ke).map(vs => vs[0])));
+  const r = e.length >= 6 && lev(e, h) <= Math.max(2, Math.round(e.length * 0.3)); sess.cls.set(key, r); return r;
+}
 function muqWords(letters, ws){
   const names = [...letters].map(c => LNAME[c]); let j = 0;
   for (const w of ws){ if (j < names.length && lev(names[j], w) <= 1) j++; else if (j + 1 < names.length && lev(names[j + 1], w) <= 1) j += 2; else return false; }
@@ -989,6 +1001,7 @@ function processSpoken(flush){
     if (j < m) set(i, j + 1, d + insCost(i, H[j]), 3);                                        // extra heard word
     if (i + 1 < n && j < m && joinedMatch(E[i], E[i + 1], H[j])) set(i + 2, j + 1, d + 0.05, 4);   // two words heard as one
     if (i < n && j + 1 < m && same(E[i], H[j] + H[j + 1])) set(i + 1, j + 2, d + 0.05, 5);        // one word heard as two
+    if (j < m) for (let ke = 2; ke <= 3; ke++) for (let kh = 1; kh <= 3; kh++) if (waslMatch(i, j, ke, kh)) set(i + ke, j + kh, d + 0.35 * ke, 7, ke * 4 + kh);   // words blurred together
     if (i < n && sess.muq && sess.muq.has(i)) for (let k = 1; k <= 5 && j + k <= m; k++) if (muqWords(sess.muq.get(i), H.slice(j, j + k))) set(i + 1, j + k, d, 6, k);
   }
   /* how far the reader got: the best line-up of everything heard with the start of the text (prefer going further on a tie) */
@@ -1001,6 +1014,8 @@ function processSpoken(flush){
     else if (o === 3){ j--; }
     else if (o === 4){ ws[i - 1] = ws[i - 2] = 'ok'; i -= 2; j--; }
     else if (o === 5){ ws[i - 1] = 'ok'; i--; j -= 2; }
+    else if (o === 7){ const v = ok[at(i, j)], ke = v >> 2, kh = v & 3; const hw = H.slice(j - kh, j).join(' ');
+      for (let q = 1; q <= ke; q++){ ws[i - q] = 'soft'; hd[i - q] = hw; } i -= ke; j -= kh; }
     else if (o === 6){ const k = ok[at(i, j)] || 1; ws[i - 1] = 'ok'; i--; j -= k; }
     else break;
   }
