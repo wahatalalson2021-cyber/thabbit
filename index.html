@@ -962,17 +962,18 @@ function clearDiff(vs, w){ return !vs.some(v => {
   function p0(s, j){ let c = 0; for (let k = 0; k < j; k++) if (!SOFTL.includes(s[k])) c++; return c; }
   for (let i = 1; i <= m; i++){ const c = [p[0] + (SOFTL.includes(a[i - 1]) ? 0 : 1)];
     for (let j = 1; j <= n; j++){ const x = a[i - 1], y = b[j - 1];
-      c[j] = Math.min(p[j] + (SOFTL.includes(x) ? 0 : 1), c[j - 1] + (SOFTL.includes(y) ? 0 : 1), p[j - 1] + (x === y || SOFTL.includes(x) || SOFTL.includes(y) ? 0 : 1)); }
+      c[j] = Math.min(p[j] + (SOFTL.includes(x) ? 0 : 1), c[j - 1] + (SOFTL.includes(y) ? 0 : 1), p[j - 1] + (x === y || (SOFTL.includes(x) && SOFTL.includes(y)) ? 0 : SOFTL.includes(x) || SOFTL.includes(y) ? 0.5 : 1)); }
     p = c; }
-  return p[n] === 0; }); }
+  return p[n] < 1; }); }   // one consonant blurred into a vowel ("الموضوب") is still the same word
 function wordCost(i, w){
-  const key = i + '|' + w, c0 = sess.cls.get(key); if (c0) return c0;
+  const key = i + '|' + w + '|' + (sess.engine || ''), c0 = sess.cls.get(key); if (c0) return c0;
   const vs = sess.exp[i]; let c;
   const strict = sess.engine === 'model' && clearDiff(vs, w);
   if (same(vs, w) && !strict) c = [0, 'ok'];
   else if (same(vs, w)) c = [0.85, 'miss'];
   else if (extraWF(vs, w)) c = [0.4, 'soft'];
   else if (vs.some(v => prefixSlip(v, w))) c = [0.6, 'miss'];
+  else if (sess.engine === 'model' && quranWord(w) && clearDiff(vs, w) && (nearWord(vs, w) || soundAlike(vs, w))) c = [0.85, 'miss'];
   else if (nearWord(vs, w) || soundAlike(vs, w)) c = [0.4, 'soft'];
   else c = quranWord(w) ? [1, 'miss'] : [0.9, 'soft'];
   sess.cls.set(key, c); return c;
@@ -1000,6 +1001,9 @@ function muqWords(letters, ws){
   for (const w of ws){ if (j < names.length && lev(names[j], w) <= 1) j++; else if (j + 1 < names.length && lev(names[j + 1], w) <= 1) j += 2; else return false; }
   return j >= Math.max(1, Math.ceil(names.length * 0.6));
 }
+function reRead(run, i){ const E = sess.exp;
+  for (let q = Math.max(0, i - 25); q < i; q++){ let t = 0; while (t < run.length && q + t <= i && E[q + t] && same(E[q + t], run[t])) t++; if (t === run.length) return true; }
+  return false; }
 function processSpoken(flush){
   const E = sess.exp, H = sess.spoken, n = E.length, m = H.length;
   if (!sess.cls) sess.cls = new Map();
@@ -1019,12 +1023,12 @@ function processSpoken(flush){
   }
   /* how far the reader got: the best line-up of everything heard with the start of the text (prefer going further on a tie) */
   let bi = 0; for (let i = 0; i <= n; i++) if (D[at(i, m)] <= D[at(bi, m)] + 1e-9) bi = i;
-  const ws = {}, hd = {}, skip = new Set(); let i = bi, j = m;
+  const ws = {}, hd = {}, skip = new Set(), ins = {}; let i = bi, j = m;
   while (i > 0 || j > 0){
     const o = op[at(i, j)];
     if (o === 1){ const [, st] = wordCost(i - 1, H[j - 1]); ws[i - 1] = st; if (st !== 'ok') hd[i - 1] = H[j - 1]; i--; j--; }
     else if (o === 2){ ws[i - 1] = 'soft'; skip.add(i - 1); i--; }
-    else if (o === 3){ j--; }
+    else if (o === 3){ (ins[i] = ins[i] || []).unshift(H[j - 1]); j--; }
     else if (o === 4){ ws[i - 1] = ws[i - 2] = 'ok'; i -= 2; j--; }
     else if (o === 5){ ws[i - 1] = 'ok'; i--; j -= 2; }
     else if (o === 7){ const v = ok[at(i, j)] & 63, good = ok[at(i, j)] & 64, ke = v >> 2, kh = v & 3; const hw = H.slice(j - kh, j).join(' ');
@@ -1034,6 +1038,12 @@ function processSpoken(flush){
   }
   /* Three or more words in a row not heard, with reading after them, is a skipped passage (a real slip), not unclear sound. */
   for (let q = 0; q < bi; q++) if (skip.has(q)){ let r = q; while (skip.has(r)) r++; if (r - q >= (sess.engine === 'model' ? 2 : 3)) for (let t = q; t < r; t++) ws[t] = 'miss'; q = r; }
+  /* With the Quran model: the reader said something else, then corrected himself (e.g. "يقولون ... يكذبون").
+     The corrected word is shown orange so he sees it. Re-reading the text just before (a normal restart) is not marked. */
+  if (sess.engine === 'model') for (const k in ins){ const q = +k; if (q >= bi || ws[q] !== 'ok' || q === 0 || (sess.bounds && sess.bounds.has(q))) continue;   // before a surah: isti'adha/basmala, however written
+    const run = ins[k].filter(w => !(PRE.has(w) && (q === 0 || (sess.bounds && sess.bounds.has(q)))));
+    if (run.length && !reRead(run, q)){ let t = 0; while (t < run.length && E[q + t] && q + t < bi && same(E[q + t], run[t])) t++;   // "وما يعلمون" before "وما يشعرون": the changed word is يشعرون
+      const r = q + t < bi && ws[q + t] === 'ok' ? q + t : q; ws[r] = 'soft'; hd[r] = 'قلتَ قبلها: ' + run.join(' '); } }
   sess.ws = ws; sess.heard = hd; sess.p = bi;
   if (sess.p >= n){ sess.reveal = n; stopMic(); }
 }
@@ -1591,6 +1601,7 @@ function engNote(){
 function whyBox(){
   const i = sess.why; if (i == null || !sess.ws[i]) return '';
   const word = chunkAyat(itemChunk(sess.queue[sess.pos])).flatMap(x => x.txt.split(' '))[i], h = sess.heard[i];
+  if (h && h.startsWith('قلتَ قبلها: ')) return `<div class="whybox"><b>${esc(word)}</b><span>قلتَ قبلها «${esc(h.slice(12))}» ثم صحّحت.</span><small>برتقالي: صحّحت نفسك، فهذا تنبيه للمراجعة ولا يُحسب خطأ.</small></div>`;
   return `<div class="whybox"><b>${esc(word)}</b><span>${h ? 'سمع التطبيق: «' + esc(h) + '»' : 'لم يسمع التطبيق شيئًا مكانها'}</span><small>${sess.ws[i] === 'soft' ? 'برتقالي: غالبًا من خدمة التعرّف على الكلام، لا يُحسب خطأ.' : 'أحمر: يُحسب خطأ. إن كنت قرأتها صحيحة فأرسل اسم السورة ورقم الآية مع هذه الجملة.'}</small></div>`;
 }
 function vSessionDone(kinds){
