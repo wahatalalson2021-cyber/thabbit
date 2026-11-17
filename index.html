@@ -230,6 +230,8 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .motiv small{color:var(--muted)}.motiv .mfacts{margin:4px 0 0;font-weight:600;color:var(--accent)}
 .ring .rbg{fill:none;stroke:color-mix(in srgb,currentColor 16%,transparent);stroke-width:7}.ring .rfg{fill:none;stroke:currentColor;stroke-width:7;stroke-linecap:round}
 .ring text{fill:var(--ink);font-weight:700;font-size:15px;font-family:var(--f-ui)}
+.tring{position:absolute;left:8px;bottom:8px;line-height:0}.tring .ring .rbg,.tring .ring .rfg{stroke-width:5}.tring .ring text{font-size:11px}
+.tile .tmain .tline{padding-left:52px}
 .progc{gap:12px}.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center}.pcell{display:flex;flex-direction:column;align-items:center;gap:2px}.pcell small{color:var(--muted);font-size:.78rem}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;border-top:1px solid var(--line);padding-top:12px}
 .wday{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.72rem;color:var(--muted)}
@@ -1278,11 +1280,23 @@ const STAR8 = '<svg viewBox="-20 -20 40 40" aria-hidden="true"><g fill="none" st
 const FOOT_SVG = `<div class="homefoot" aria-hidden="true"><span class="fl"></span><span class="fstar">${STAR8}</span><span class="fl"></span></div>`;
 const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>';
 const EMBLEM = `<span class="emblem" aria-hidden="true"><svg viewBox="0 0 48 56"><path d="M4 56V22Q4 6 24 2Q44 6 44 22v34z" class="e1"/><path d="M9 52V24Q9 11 24 7Q39 11 39 24v28z" class="e2"/><g transform="translate(24 30)" class="e3">${STAR8.replace('<svg viewBox="-20 -20 40 40" aria-hidden="true">', '').replace('</svg>', '')}</g></svg></span>`;
-function tile(key, title, line, act, v, done, edit){
-  return `<div class="tile ${done ? 'done' : ''}">${TILE_BG}<button class="tmain" data-act="${act}" data-v="${v || ''}"><span class="tic">${done ? '✓' : TI[key]}</span><b>${title}</b><span class="tline">${line}</span><span class="tgo">${CHEV}</span></button>${edit ? `<button class="tedit" data-act="${edit}" aria-label="تعديل ${title}">تعديل</button>` : ''}</div>`;
+/* each tile shows the reader's level in it as a small ring (reading, memorization plan, review cycle, today's wird) */
+let TPCT = {};
+function tilePct(){
+  const o = {}, w = S.wird, rp = R().page || 0;
+  if (w && w.pos) o.read = Math.round(Math.min(604, w.pos - 1) / 604 * 100); else if (rp) o.read = Math.round(rp / 604 * 100);
+  if (S.hifz && S.chunks.length){ const la = Object.keys(S.learned).reduce((n, i) => n + (S.chunks[i] ? nAyat(S.chunks[i]) : 0), 0), tot = S.chunks.reduce((n, c) => n + nAyat(c), 0); o.hifz = Math.round(la / tot * 100); }
+  const kp = knownPages(); if (kp.length) o.rev = Math.round(((S.rev.ptr || 0) % kp.length) / kp.length * 100);
+  const wt = wirdToday(); if (wt && wt.per && !wt.finished) o.wird = Math.round(Math.min(wt.per, wt.done) / wt.per * 100);
+  return o;
 }
-const ring = (pct, color, big) => { const r = big ? 34 : 26, c = 2 * Math.PI * r, sz = (r + 6) * 2;
-  return `<svg class="ring" viewBox="0 0 ${sz} ${sz}" width="${sz}" height="${sz}" style="color:${color}"><circle cx="${sz / 2}" cy="${sz / 2}" r="${r}" class="rbg"/><circle cx="${sz / 2}" cy="${sz / 2}" r="${r}" class="rfg" stroke-dasharray="${(c * pct / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${sz / 2} ${sz / 2})"/><text x="50%" y="50%" dominant-baseline="central" text-anchor="middle">${AR(pct)}٪</text></svg>`; };
+const TCOL = {read: 'var(--accent)', hifz: 'var(--good)', rev: 'var(--warn)', wird: 'var(--gold)'};
+function tile(key, title, line, act, v, done, edit){
+  const pc = TPCT[key];
+  return `<div class="tile ${done ? 'done' : ''}">${TILE_BG}<button class="tmain" data-act="${act}" data-v="${v || ''}"><span class="tic">${done ? '✓' : TI[key]}</span><b>${title}</b><span class="tline">${line}</span>${pc != null ? `<span class="tring">${ring(pc, TCOL[key], 's')}</span>` : `<span class="tgo">${CHEV}</span>`}</button>${edit ? `<button class="tedit" data-act="${edit}" aria-label="تعديل ${title}">تعديل</button>` : ''}</div>`;
+}
+const ring = (pct, color, big) => { const r = big === 's' ? 18 : big ? 34 : 26, c = 2 * Math.PI * r, sz = (r + 6) * 2;
+  return `<svg class="ring" viewBox="0 0 ${sz} ${sz}" width="${sz}" height="${sz}" style="color:${color}"><circle cx="${sz / 2}" cy="${sz / 2}" r="${r}" class="rbg"/>${pct > 0 ? '' : '<!--'}<circle cx="${sz / 2}" cy="${sz / 2}" r="${r}" class="rfg" stroke-dasharray="${(c * pct / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${sz / 2} ${sz / 2})"/>${pct > 0 ? '' : '-->'}<text x="50%" y="50%" dominant-baseline="central" text-anchor="middle">${AR(pct)}٪</text></svg>`; };
 /* "Continue reading" card: last page read, with how far that is in the mushaf. */
 function contCard(){
   const w = S.wird, p = (w && w.pos && w.pos <= 604) ? w.pos : (R().page || 0); if (!p) return '';
@@ -1311,7 +1325,7 @@ function progCard(){
     <div class="pgrid">${cells.join('')}</div><div class="week">${week}</div></div>`;
 }
 function vHome(){
-  const st = streak();
+  const st = streak(); TPCT = tilePct();
   let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}</div><div class="herotxt"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><h1>ماذا تريد اليوم؟</h1><span class="swoosh"></span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button><div class="tiles">`;
   const rp = R().page;
   h += tile('read', 'قراءة', rp ? 'أكمل من صفحة ' + AR(rp) : 'افتح المصحف', 'rdOpen', rp || 1);
@@ -1331,7 +1345,7 @@ function vHome(){
   else if (!wt.left) h += tile('wird', 'ورد يومي', 'أتممت ورد اليوم', 'rdOpen', S.wird.pos > 604 ? 1 : S.wird.pos, true, 'goWird');
   else h += tile('wird', 'ورد يومي', `صفحة ${AR(wt.from)} إلى ${AR(wt.to)} · بقي ${AR(wt.left)}`, 'rdOpen', S.wird.pos, false, 'goWird');
   h += '</div>';
-  h += contCard() + progCard();
+  h += contCard();
   h += dlCard(true);
   if (ENG.st === 'none' || ENG.st === 'dl') h += `<div class="card dlcard"><div class="dltxt"><h3 class="enghead">${MIC_SVG}التسميع الدقيق بصوتك</h3><p class="muted">${ENG.st === 'dl' ? '' : 'محرك مدرّب على تلاوة القرآن يكتشف أخطاء الحفظ بدقة. يُحمَّل مرة واحدة (حوالي ' + AR(ENG_MB) + ' ميجابايت) ويعمل بدون إنترنت.'}</p>${ENG.st === 'dl' ? `<p class="live" id="engmsg">${engProgText()}</p>` : `${ENG.err ? `<p class="err">${ENG.err}</p>` : ''}<button class="btn dlbtn" data-act="engDl">${CLOUD}حمّل محرك التسميع</button>`}</div></div>`;
   h += installCard();
@@ -2117,7 +2131,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r69';
+const BUILD = 'r70';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
