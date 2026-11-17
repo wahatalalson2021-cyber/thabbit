@@ -2027,6 +2027,16 @@ function installCard(){
 }
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE){
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+/* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
+   When the app comes back to the screen, check a tiny version file and reload if there is a newer version
+   (only when nothing is in progress, so no recitation or session is interrupted). */
+const BUILD = 'r60';
+function checkUpdate(){
+  if (sess || REC || !navigator.onLine) return;
+  fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+window.addEventListener('pageshow', e => { if (e.persisted) checkUpdate(); });
 }
 
 /* ---------- events ---------- */
