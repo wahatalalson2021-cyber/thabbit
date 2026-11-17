@@ -225,6 +225,9 @@ input.search{width:100%;padding:11px;border-radius:10px;border:1px solid var(--l
 .wlist{display:flex;flex-direction:column}.mrow{padding:12px 0;border-bottom:1px solid var(--line)}.mrow:last-child{border-bottom:0}.mhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .mrow .stx{margin:6px 0 2px}.mred{color:var(--bad);text-decoration:underline wavy var(--bad);text-underline-offset:8px}
 .mrow small{display:block;color:var(--muted);margin-top:2px}.mbtns{display:flex;gap:6px;align-items:center}.mbtns .btn{padding:8px 14px;min-height:0;width:auto}
+.motiv{text-align:center;gap:8px;background:color-mix(in srgb,var(--accent) 7%,var(--surface));border-color:color-mix(in srgb,var(--accent) 25%,var(--line))}
+.motiv .mq{margin:0;font-size:1.15rem;line-height:1.9;color:var(--ink)}.motiv .mq.ayah{font-family:var(--f-quran);font-size:1.5rem;line-height:2.2;color:var(--accent)}
+.motiv small{color:var(--muted)}.motiv .mfacts{margin:4px 0 0;font-weight:600;color:var(--accent)}
 .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:340px;overflow:auto;padding:2px}
 .sgrid button{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 2px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .setrows .row{padding:6px 0;border-bottom:1px solid var(--line)}
@@ -1676,6 +1679,22 @@ function whyBox(){
   if (h && h.startsWith('قلتَ قبلها: ')) return `<div class="whybox"><b>${esc(word)}</b><span>قلتَ قبلها «${esc(h.slice(12))}» ثم صحّحت.</span><small>برتقالي: صحّحت نفسك، فهذا تنبيه للمراجعة ولا يُحسب خطأ.</small></div>`;
   return `<div class="whybox"><b>${esc(word)}</b><span>${h ? 'سمع التطبيق: «' + esc(h) + '»' : 'لم يسمع التطبيق شيئًا مكانها'}</span><small>${sess.ws[i] === 'soft' ? 'برتقالي: غالبًا من خدمة التعرّف على الكلام، لا يُحسب خطأ.' : 'أحمر: يُحسب خطأ. إن كنت قرأتها صحيحة فأرسل اسم السورة ورقم الآية مع هذه الجملة.'}</small></div>`;
 }
+/* Encouragement after finishing the day's review: a verse or an authentic hadith about keeping the Quran, chosen at random. */
+const MOTIV = [
+  ['﴿وَلَقَدۡ يَسَّرۡنَا ٱلۡقُرۡءَانَ لِلذِّكۡرِ فَهَلۡ مِن مُّدَّكِرٖ﴾', 'سورة القمر، الآية ١٧'],
+  ['«تعاهدوا هذا القرآن، فوالذي نفس محمد بيده لهو أشدّ تفلّتًا من الإبل في عُقُلها»', 'رواه مسلم'],
+  ['«الماهر بالقرآن مع السفرة الكرام البررة، والذي يقرأ القرآن ويتتعتع فيه وهو عليه شاقّ له أجران»', 'رواه مسلم'],
+  ['«أحبّ الأعمال إلى الله أدومها وإن قلّ»', 'رواه البخاري ومسلم'],
+  ['«خيركم من تعلّم القرآن وعلّمه»', 'رواه البخاري'],
+  ['«اقرؤوا القرآن فإنه يأتي يوم القيامة شفيعًا لأصحابه»', 'رواه مسلم'],
+  ['«يُقال لصاحب القرآن: اقرأ وارتقِ ورتّل كما كنت ترتّل في الدنيا، فإن منزلتك عند آخر آية تقرؤها»', 'رواه أبو داود والترمذي'],
+];
+function motivCard(){
+  const [txt, src] = MOTIV[Math.floor(Math.random() * MOTIV.length)], t = today();
+  const pages = Object.values(S.rev.pg || {}).filter(x => x.last === t).length, st = streak();
+  const facts = [pages ? 'راجعت اليوم ' + countWord(pages, 'صفحة واحدة', 'صفحتين', 'صفحات', 'صفحة') : '', st > 1 ? AR(st) + ' أيام متتالية من المحافظة' : ''].filter(Boolean).join(' · ');
+  return `<div class="card motiv"><p class="mq${txt[0] === '﴿' ? ' ayah' : ''}">${txt}</p><small>${src}</small>${facts ? `<p class="mfacts">${facts}. ثبّتك الله.</p>` : '<p class="mfacts">ثبّتك الله.</p>'}</div>`;
+}
 function vSessionDone(kinds){
   const t = today(), k = kinds || new Set();
   const next = [...Object.values(S.learned), ...S.arch].map(c => c.due).filter(d => d > t).sort((a, b) => a - b)[0];
@@ -1688,9 +1707,10 @@ function vSessionDone(kinds){
     <button class="btn" data-act="revGo">نعم، أكمل المراجعة</button><button class="btn ghost" data-act="tab" data-v="home">لاحقًا</button></div>`;
   else if (k.has('review') && !reviewTodo().length){ const ex = pickPages(true); if (ex.length) more = `<div class="card askmore"><h3>أنهيت مراجعة اليوم. هل تريد استكمال المراجعة؟</h3><p class="muted">${countWord(ex.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')} تبدأ من صفحة ${AR(ex[0])}، بعد آخر صفحة راجعتها.</p>
     <button class="btn" data-act="revExtra">نعم، أكمل</button><button class="btn ghost" data-act="tab" data-v="home">يكفي اليوم</button></div>`; }
+  const motiv = k.has('review') && !reviewTodo().length ? motivCard() : '';
   return `<main><div class="card" style="text-align:center;gap:14px;margin-top:24px"><div class="done-mark">بارك الله فيك</div>
     <p>انتهت الجلسة.</p>${next != null ? `<p class="muted">أقرب مراجعة ${next - t === 1 ? 'غدًا' : 'بعد ' + AR(next - t) + ' أيام'}.</p>` : ''}
-    ${more ? '' : '<button class="btn" data-act="tab" data-v="home">عودة إلى اليوم</button>'}</div>${more}</main>`;
+    ${more ? '' : '<button class="btn" data-act="tab" data-v="home">عودة إلى اليوم</button>'}</div>${motiv}${more}</main>`;
 }
 function advance(){
   stopMic(); liveText = '';
@@ -2046,7 +2066,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r63';
+const BUILD = 'r64';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
