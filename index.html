@@ -518,8 +518,8 @@ const useEngine = () => ENG.st === 'ready';
 let REC = null; const ENGLOG = []; let engT0 = 0;
 function engLog(m){ if (!ENGLOG.length) engT0 = performance.now(); ENGLOG.push(((performance.now() - engT0) / 1000).toFixed(1) + 's ' + m); if (ENGLOG.length > 60) ENGLOG.shift(); }
 async function engStart(){
-  const s0 = sess, Ctx = window.AudioContext || window.webkitAudioContext;
-  const ctx = new Ctx();                                   // created inside the tap, so the iPhone allows it
+  const s0 = sess, Ctx = window.AudioContext || window.webkitAudioContext, MR = !!window.MediaRecorder;
+  const ctx = MR ? null : new Ctx();                       // created inside the tap, so the iPhone allows it
   REC = {s0, ctx, q: [], busy: false, stopping: false, seg: [], segN: 0, speech: 0, sil: 0, noise: 0.003, pre: [], blocks: [], cands: [], pieces: [], base: (sess.finalText || '').trim()};
   sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.interim = ''; sess.hear = 'audio'; sess.micTip = false; sess.engine = 'model';
   liveText = ASR ? '' : 'أجهّز المحرك الدقيق... ابدأ القراءة'; render();
@@ -527,6 +527,16 @@ async function engStart(){
   try { REC.stream = await navigator.mediaDevices.getUserMedia({audio: true}); }
   catch (e) { engClose(); if (sess === s0){ sess.listening = false; sess.micErr = 'لم يُسمح باستخدام الميكروفون. اسمح لـ Safari باستخدامه ثم حاول مرة أخرى.'; render(); } return; }
   if (!REC || REC.s0 !== sess){ engClose(); return; }
+  if (MR){
+    /* Record the voice like a normal voice memo (full quality; a live audio line makes the iPhone switch to call mode and
+       degrade the sound), and read the recording every second to find pauses and pieces. */
+    try { if (AC){ AC.close(); AC = null; } } catch (e) {}   // no other sound line open while recording, exactly like the voice-memo test that worked
+    const R0 = REC, mr = new MediaRecorder(R0.stream); R0.mr = mr; R0.chunks = []; R0.done = 0;
+    mr.ondataavailable = e => { if (e.data && e.data.size && R0.mr === mr){ R0.chunks.push(e.data); engDecode(R0); } };
+    mr.start(1000); engLog('التقاط: تسجيل ' + (mr.mimeType || ''));
+    loadASR().then(() => { if (REC && liveText.startsWith('أجهّز')){ liveText = ''; engLive(); } engPump(); }, err => { if (REC){ engFlag('bad', '1'); ENG.st = 'bad'; engClose(); if (sess === s0){ sess.listening = false; sess.micErr = 'تعذّر تشغيل المحرك الدقيق على هذا الجهاز. اضغط «سمّع بصوتك» مرة أخرى للتسميع بخدمة الجوال.'; render(); } } });
+    return;
+  }
   const src = ctx.createMediaStreamSource(REC.stream); REC.src = src;
   try {   /* sound is collected on the audio thread, so none is lost while the phone is busy */
     await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([CAPTURE_SRC], {type: 'text/javascript'})));
@@ -543,8 +553,24 @@ const CAPTURE_SRC = `class C extends AudioWorkletProcessor { constructor(){ supe
   process(i){ const ch = i[0] && i[0][0]; if (ch){ this.b.push(ch.slice(0)); this.n += ch.length;
     if (this.n >= 4096){ const o = new Float32Array(this.n); let k = 0; for (const x of this.b){ o.set(x, k); k += x.length; } this.port.postMessage(o, [o.buffer]); this.b = []; this.n = 0; } } return true; } }
 registerProcessor('thabbit-capture', C);`;
-function engAudio(x, rate){
-  const R0 = REC; if (!R0 || R0.stopping) return;
+/* Decode the recording so far at 16 kHz and pass only the new part on. Decoding runs one at a time. */
+function engDecode(R0){
+  if (R0.decoding){ R0.again = true; return R0.decoding; }
+  R0.decoding = (async () => {
+    do { R0.again = false;
+      try { const buf = await new Blob(R0.chunks, {type: R0.mr.mimeType || 'audio/mp4'}).arrayBuffer();
+        const oc = new OfflineAudioContext(1, 16000, 16000), au = await oc.decodeAudioData(buf), pcm = au.getChannelData(0);
+        const end = R0.final ? pcm.length : pcm.length - 3200;
+        for (let o = R0.done; o + 1600 <= end; o += 1600){ engAudio(pcm.slice(o, o + 1600), 16000, R0); R0.done = o + 1600; }
+        if (R0.final && R0.done < pcm.length){ engAudio(pcm.slice(R0.done), 16000, R0); R0.done = pcm.length; }
+      } catch (e) { if (!R0.decErr){ R0.decErr = 1; engLog('قراءة التسجيل: ' + (e && e.message || e)); } }
+    } while (R0.again);
+    R0.decoding = null;
+  })();
+  return R0.decoding;
+}
+function engAudio(x, rate, R1){
+  const R0 = R1 || REC; if (!R0 || R0.stopping) return;
   R0.rate = rate; const y = x, n = x.length;
   let e = 0; for (let i = 0; i < n; i++) e += y[i] * y[i]; const rms = Math.sqrt(e / Math.max(1, n)), dur = n / rate;
   if (rms < R0.noise * 2) R0.noise = R0.noise * 0.95 + rms * 0.05;
@@ -564,8 +590,8 @@ function engAudio(x, rate){
     else { let best = R0.blocks.length - 1, bv = Infinity; for (let i = Math.round(R0.blocks.length / 2); i < R0.blocks.length - 1; i++) if (R0.blocks[i] < bv){ bv = R0.blocks[i]; best = i + 1; } engCut(best); }
   }
 }
-function engCut(k){
-  const R0 = REC, rate = R0.rate || 48000, spoke = R0.speech; const part = R0.seg.slice(0, k), len = part.reduce((a, b) => a + b.length, 0), raw = new Float32Array(len); let o = 0;
+function engCut(k, R1){
+  const R0 = R1 || REC, rate = R0.rate || 48000, spoke = R0.speech; const part = R0.seg.slice(0, k), len = part.reduce((a, b) => a + b.length, 0), raw = new Float32Array(len); let o = 0;
   part.forEach(b => { raw.set(b, o); o += b.length; });
   R0.seg = R0.seg.slice(k); R0.blocks = R0.blocks.slice(k); R0.segN = R0.seg.reduce((a, b) => a + b.length, 0); R0.speech = 0; R0.sil = 0;
   R0.cands = R0.cands.filter(x => x.k > k).map(x => ({k: x.k - k, sil: x.sil, at: x.at - len / rate}));
@@ -627,13 +653,20 @@ async function engReview(R0){
 function engLive(){ const el = document.getElementById('live'); if (el) el.textContent = liveText || hearMsg(); }
 /* The reader pressed "finished" (or reached the end): cut what is left, write it, then show the result. */
 function engStop(){
-  const R0 = REC; if (!R0 || R0.stopping) return;
+  const R0 = REC; if (!R0 || R0.stopping || R0.ending) return;
+  if (R0.mr && R0.mr.state !== 'inactive'){
+    R0.ending = true; audioUnlock(); if (sess === R0.s0){ sess.draining = true; liveText = 'أكتب آخر ما قرأته...'; render(); }
+    const go = async () => { if (R0.went) return; R0.went = true; try { R0.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+      R0.final = true; try { await engDecode(R0); } catch (e) {} R0.ending = false; if (REC === R0) engStop(); };
+    R0.mr.onstop = go; try { R0.mr.stop(); } catch (e) { go(); } setTimeout(go, 4000); return;
+  }
   if (R0.segN > (R0.rate || 48000) * 0.4 && R0.speech > 0.3) engCut(R0.seg.length);
   R0.stopping = true; engRelease(R0);
   if (sess === R0.s0){ sess.draining = true; liveText = R0.q.length || R0.busy ? 'أكتب آخر ما قرأته...' : ''; render(); }
   if (!ASR && !asrLoad) engFinish(); else engPump();
 }
-function engRelease(R0){ try { if (R0.proc){ R0.proc.onaudioprocess = null; if (R0.proc.port) R0.proc.port.onmessage = null; } R0.src && R0.src.disconnect(); R0.proc && R0.proc.disconnect(); } catch (e) {}
+function engRelease(R0){ try { if (R0.mr){ R0.mr.ondataavailable = null; if (R0.mr.state !== 'inactive') R0.mr.stop(); } } catch (e) {}
+  try { if (R0.proc){ R0.proc.onaudioprocess = null; if (R0.proc.port) R0.proc.port.onmessage = null; } R0.src && R0.src.disconnect(); R0.proc && R0.proc.disconnect(); } catch (e) {}
   try { R0.stream && R0.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { R0.ctx.close(); } catch (e) {} }
 async function engFinish(){ const R0 = REC; if (!R0 || R0.finishing) return; R0.finishing = true;
   if (sess === R0.s0){ sess.listening = false; recompute(true); try { await engReview(R0); } catch (e) {} }
@@ -1986,7 +2019,7 @@ app.addEventListener('click', e => {
       /* First recitation without the accurate engine: offer it once (it is what makes recitation reliable). */
       if (ENG.st === 'none' && engFlag('later') !== '1'){ sess.engAsk = true; render(); return; }
       if (ENG.st === 'dl'){ sess.engWait = true; render(); return; }
-      if (useEngine()){ audioUnlock(); engStart(); return; }
+      if (useEngine()){ if (!window.MediaRecorder) audioUnlock(); engStart(); return; }
     }
     if (!DICT) return;
     if (sess.listening || dictState !== 'idle'){ DICT.stop().catch(() => {}); return; }
