@@ -1006,11 +1006,11 @@ function processSpoken(flush){
   }
   /* how far the reader got: the best line-up of everything heard with the start of the text (prefer going further on a tie) */
   let bi = 0; for (let i = 0; i <= n; i++) if (D[at(i, m)] <= D[at(bi, m)] + 1e-9) bi = i;
-  const ws = {}, hd = {}; let i = bi, j = m;
+  const ws = {}, hd = {}, skip = new Set(); let i = bi, j = m;
   while (i > 0 || j > 0){
     const o = op[at(i, j)];
     if (o === 1){ const [, st] = wordCost(i - 1, H[j - 1]); ws[i - 1] = st; if (st !== 'ok') hd[i - 1] = H[j - 1]; i--; j--; }
-    else if (o === 2){ ws[i - 1] = 'soft'; i--; }
+    else if (o === 2){ ws[i - 1] = 'soft'; skip.add(i - 1); i--; }
     else if (o === 3){ j--; }
     else if (o === 4){ ws[i - 1] = ws[i - 2] = 'ok'; i -= 2; j--; }
     else if (o === 5){ ws[i - 1] = 'ok'; i--; j -= 2; }
@@ -1019,6 +1019,8 @@ function processSpoken(flush){
     else if (o === 6){ const k = ok[at(i, j)] || 1; ws[i - 1] = 'ok'; i--; j -= k; }
     else break;
   }
+  /* Three or more words in a row not heard, with reading after them, is a skipped passage (a real slip), not unclear sound. */
+  for (let q = 0; q < bi; q++) if (skip.has(q)){ let r = q; while (skip.has(r)) r++; if (r - q >= 3) for (let t = q; t < r; t++) ws[t] = 'miss'; q = r; }
   sess.ws = ws; sess.heard = hd; sess.p = bi;
   if (sess.p >= n){ sess.reveal = n; stopMic(); }
 }
