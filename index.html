@@ -565,7 +565,10 @@ async function engStart(){
   sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.interim = ''; sess.hear = 'audio'; sess.micTip = false; sess.engine = 'model';
   liveText = ASR ? '' : 'أجهّز المحرك الدقيق... ابدأ القراءة'; render();
   ENGLOG.length = 0; engLog('بدء · ' + (ASR ? 'المحرك في الذاكرة' : 'تحميل المحرك من الجهاز'));
-  try { REC.stream = await navigator.mediaDevices.getUserMedia({audio: true}); }
+  /* On computers and Android the browser "cleans" the voice for calls (noise suppression, automatic volume), which blurs
+     recitation for the model; ask for the plain sound there. The iPhone already gives clean sound and is left as it is. */
+  const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  try { REC.stream = await navigator.mediaDevices.getUserMedia({audio: IOS ? true : {echoCancellation: false, noiseSuppression: false, autoGainControl: false}}); }
   catch (e) { engClose(); if (sess === s0){ sess.listening = false; sess.micErr = 'لم يُسمح باستخدام الميكروفون. اسمح لـ Safari باستخدامه ثم حاول مرة أخرى.'; render(); } return; }
   if (!REC || REC.s0 !== sess){ engClose(); return; }
   if (MR){
@@ -618,7 +621,8 @@ function engAudio(x, rate, R1){
   const thr = Math.max(R0.noise * 3, 0.006), loud = rms > thr;
   if (loud){ if (R0.segN && R0.sil >= 0.25) R0.cands.push({k: R0.seg.length, sil: R0.sil, at: R0.segN / rate});   // a pause inside the piece: a possible cut point
     R0.speech += dur; R0.sil = 0; if (sess && sess.hear !== 'speech'){ sess.hear = 'speech'; engLive(); } } else R0.sil += dur;
-  if (!R0.segN && !loud){ R0.pre.push(y); let pn = R0.pre.reduce((a, b) => a + b.length, 0); while (R0.pre.length > 1 && pn - R0.pre[0].length > rate * 0.7){ pn -= R0.pre[0].length; R0.pre.shift(); } return; }   // keep ~0.7 s before speech starts, so a soft first sound is not lost
+  if (!R0.segN && !loud){ R0.pre.push(y); let pn = R0.pre.reduce((a, b) => a + b.length, 0); const keep = R0.pieces.length || R0.q.length ? 0.7 : 3;   // at the very start keep 3 s: a computer microphone often starts quiet and grows louder
+  while (R0.pre.length > 1 && pn - R0.pre[0].length > rate * keep){ pn -= R0.pre[0].length; R0.pre.shift(); } return; }   // keep ~0.7 s before speech starts, so a soft first sound is not lost
   if (!R0.segN){ R0.pre.forEach(b => { R0.seg.push(b); R0.blocks.push(0); R0.segN += b.length; }); R0.pre = []; }
   R0.seg.push(y); R0.blocks.push(rms); R0.segN += n;
   /* Cut at each pause of half a second (usually an ayah end or a waqf), so words colour soon after they are read.
@@ -2144,7 +2148,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r73';
+const BUILD = 'r74';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
