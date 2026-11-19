@@ -212,6 +212,27 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .hintbtn.glow{animation:hglow 1.2s ease-in-out infinite;background:color-mix(in srgb,var(--warn) 22%,var(--surface));color:var(--ink)}
 @keyframes hglow{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--warn) 55%,transparent)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--warn) 0%,transparent)}}
 @media (prefers-reduced-motion: reduce){.hintbtn.glow{animation:none;outline:3px solid var(--warn)}}
+.libcard{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:12px;width:100%;text-align:start;cursor:pointer;font:inherit;color:inherit;border:1px solid var(--line)}
+.libic{width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+.libic svg{width:24px;height:24px}
+.libt{flex:1;display:flex;flex-direction:column;line-height:1.5}
+.libt small{color:var(--muted)}
+.libh{display:flex;align-items:center;gap:8px;color:var(--accent)}
+.libh svg{width:22px;height:22px}
+.bookrow{text-decoration:none;color:inherit}
+.bookrow .sn{color:var(--accent)}
+.bookrow .sn svg{width:20px;height:20px}
+.bookwrap{border-bottom:1px solid var(--line);padding-bottom:6px}
+.bookwrap:last-child{border-bottom:0}
+.bookwrap .bookrow{border-bottom:0}
+.bkdl{display:flex;align-items:center;justify-content:center;gap:8px;margin:2px 0 6px}
+.bkdl svg{width:20px;height:20px}
+.bkok{color:var(--good)!important;font-weight:600}
+.bkdel{all:unset;cursor:pointer;color:var(--muted);font-size:.8rem;text-decoration:underline;margin:0 46px 6px 0}
+.bkbar{padding:4px 0 8px}.bkbar small{color:var(--muted)}
+.bkpages{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.bkpg{background:#fff;border:1px solid var(--line);border-radius:6px;overflow:hidden;display:grid;place-items:center;color:var(--muted)}
+.bkpg canvas{display:block}
 .tfbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:6px 0 8px}
 .tfbtn svg{width:20px;height:20px}
 .tfbox{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;max-height:34vh;overflow:auto}
@@ -1359,16 +1380,18 @@ function render(){
   else if (view === 'recite') h = vRecite();
   else if (view === 'search') h = vSearch();
   else if (view === 'n40h') h = vN40h();
+  else if (view === 'book') h = BK ? vBook() : vLib();
   else if (view === 'setupReview') h = vSetupReview();
   else if (view === 'setupWird') h = vSetupWird();
   else {
-    h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'n40' ? vN40() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
+    h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'lib' ? vLib() : view === 'n40' ? vN40() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
     h += '<nav class="tabs" aria-label="الأقسام"><div class="in">' +
-      [['home','اليوم'],['n40','أحاديث'],['progress','تقدّمي']].map(([k, l]) =>
-        `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && (view === 'read' || view === 'settings')) ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
+      [['home','اليوم'],['lib','المكتبة'],['progress','تقدّمي']].map(([k, l]) =>
+        `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && (view === 'read' || view === 'settings')) || (k === 'lib' && (view === 'n40' || view === 'book')) ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
   }
   app.innerHTML = h;
   if (view === 'reader' && RD && RD.status === 'ok'){ layoutPage(); focusSura(); }
+  if (view === 'book' && BK && BK.doc) bookMount();
   if (view === 'session' && sess && sess.listening) followWord();
   if (view === 'search' && sFocus){ sFocus = false; const el = document.getElementById('qSearch'); if (el){ el.focus(); const n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} } }
 }
@@ -2377,8 +2400,102 @@ function n40Src(t){ const b = /الْبُخَارِيُّ/.test(t), m = /مُس�
   return b && m ? 'البخاري ومسلم' : b ? 'البخاري' : m ? 'مسلم' : /أَبُو دَاوُدَ/.test(t) ? 'أبو داود والترمذي' : /التِّرْمِذِيُّ/.test(t) ? 'الترمذي' : /مَاجَهْ/.test(t) ? 'ابن ماجه' : /الدَّارَقُطْنِيّ/.test(t) ? 'الدارقطني' : /الْبَيْهَقِيّ/.test(t) ? 'البيهقي' : /أَحْمَدَ/.test(t) ? 'أحمد والدارمي' : /الْحُجَّةِ/.test(t) ? 'كتاب الحجة' : ''; }
 function n40Wait(){ if (N40 === false) return `<div class="card"><p class="err">تعذّر تحميل الأحاديث. تأكد من الإنترنت وحاول مرة أخرى.</p><button class="btn" data-act="n40Retry">حاول مرة أخرى</button></div>`;
   loadN40(); return `<div class="card"><p class="muted">أجهّز الأحاديث...</p></div>`; }
+/* Library: the Forty Hadith (read inside the app) and Hajj and Umrah books.
+   The books open from the official site of the Presidency of Religious Affairs at the Two Holy Mosques (risala.prh.gov.sa):
+   they are linked, not copied, so they always come from their publisher. */
+const PRH = 'https://risala.prh.gov.sa/storage/contents/';
+const HAJJ_BOOKS = [
+  ['780/ar_sifat_alomrah_harmain.pdf', 'صفة العمرة', 'رئاسة الشؤون الدينية بالمسجد الحرام والمسجد النبوي، ١٤٤٦هـ', 37, 3.8, true],
+  ['371/ar_mukhtasarhajj.pdf', 'المختصر في صفة الحج', 'اللجنة العلمية برئاسة الشؤون الدينية بالمسجد الحرام والمسجد النبوي', 27, 14],
+  ['63/ar_sifatumrah.pdf', 'صفة العمرة', 'الشيخ عبد العزيز بن باز رحمه الله', 11, 1.8],
+  ['228/ar_sifathajj.pdf', 'صفة الحج', 'الشيخ محمد بن صالح العثيمين رحمه الله', 42, 1.4, true],
+  ['265/ar_almanhaj.pdf', 'المنهج لمريد العمرة والحج', 'الشيخ محمد بن صالح العثيمين رحمه الله', 90, 14],
+  ['209/ar_attahqiq.pdf', 'التحقيق والإيضاح لكثير من مسائل الحج والعمرة والزيارة', 'الشيخ عبد العزيز بن باز رحمه الله', 112, 4.9]];
+const LIB_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>';
+const KAABA_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4v11l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v11"/><path d="M3 10.5l9 4 9-4"/></svg>';
+const EXT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
+function vLib(){
+  let h = `<div><h1>المكتبة</h1><p class="muted">كتب مختارة من مصادر موثوقة.</p></div>`;
+  h += `<button class="card libcard" data-act="tab" data-v="n40"><span class="libic">${LIB_SVG}</span><span class="libt"><b>الأربعون النووية</b><small>اثنان وأربعون حديثًا للإمام النووي، تُقرأ داخل التطبيق ومعها البحث</small></span><span class="tgo">${CHEV}</span></button>`;
+  h += `<div class="card"><h3 class="libh">${KAABA_SVG}أحكام الحج والعمرة</h3>
+    <p class="muted">كتب تنشرها رئاسة الشؤون الدينية بالمسجد الحرام والمسجد النبوي. يُفتح الكتاب من موقعها الرسمي بالإنترنت، وبعضها يمكن تحميله في جهازك لتقرأه بدون إنترنت.</p>
+    <div class="wlist">${HAJJ_BOOKS.map((b, i) => bookRow(b, i)).join('')}</div></div>`;
+  return h;
+}
+const mbTxt = x => x >= 10 ? AR(Math.round(x)) : AR(x).replace('.', '٫');
+function bookRow(b, i){
+  const st = BKS[i] || {}, meta = `${b[2]} · ${AR(b[3])} صفحة · ${mbTxt(b[4])} ميجابايت`;
+  if (st.st === 'done') return `<div class="bookwrap"><button class="srow bookrow" data-act="bkOpen" data-v="${i}"><span class="sn">${LIB_SVG}</span><span class="st"><b>${b[1]}</b><small>${meta}</small><small class="bkok">✓ محفوظ في جهازك، يُقرأ بدون إنترنت</small></span></button>
+    <button class="bkdel" data-act="bkDel" data-v="${i}">حذف من الجهاز</button></div>`;
+  let h = `<div class="bookwrap"><a class="srow bookrow" href="${PRH + b[0]}" target="_blank" rel="noopener"><span class="sn">${EXT_SVG}</span><span class="st"><b>${b[1]}</b><small>${meta}</small></span></a>`;
+  if (b[5]) h += st.st === 'run' ? `<div class="bkbar"><div class="bar" style="color:var(--accent)"><i style="width:${st.pct || 0}%"></i></div><small>جاري التحميل ${AR(st.pct || 0)}٪</small></div>`
+    : `<button class="btn soft bkdl" data-act="bkDl" data-v="${i}">${CLOUD}حمّل للقراءة بدون إنترنت</button>${st.st === 'err' ? '<p class="err">تعذّر التحميل. تأكد من الاتصال وحاول مرة أخرى.</p>' : ''}`;
+  return h + '</div>';
+}
+/* Saved books live in their own storage on the device, with the PDF reader (pdf.js) next to them, so they open offline. */
+const BKCACHE = 'thabbit-books', PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs', PDFJSW = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+const BKS = {};
+(async () => { try { const c = await caches.open(BKCACHE); for (let i = 0; i < HAJJ_BOOKS.length; i++) if (await c.match(PRH + HAJJ_BOOKS[i][0])) BKS[i] = {st: 'done'}; if (view === 'lib') render(); } catch (e) {} })();
+async function cacheGet(c, url, onPct){
+  const hit = await c.match(url); if (hit) return hit;
+  const r = await fetch(url, {mode: 'cors'}); if (!r.ok) throw new Error('http ' + r.status);
+  const total = +r.headers.get('content-length') || 0, rd = r.body && r.body.getReader(), parts = []; let got = 0;
+  if (rd){ for (;;){ const {done, value} = await rd.read(); if (done) break; parts.push(value); got += value.length; if (onPct && total) onPct(Math.min(99, Math.round(got * 100 / total))); } }
+  const blob = rd ? new Blob(parts, {type: r.headers.get('content-type') || ''}) : await r.blob();
+  const res = new Response(blob, {headers: {'Content-Type': blob.type || r.headers.get('content-type') || 'application/octet-stream'}});
+  await c.put(url, res.clone()); return res;
+}
+async function bookDownload(i){
+  BKS[i] = {st: 'run', pct: 0}; render();
+  try { const c = await caches.open(BKCACHE);
+    await cacheGet(c, PRH + HAJJ_BOOKS[i][0], p => { BKS[i].pct = p; const el = document.querySelector(`[data-bk="${i}"]`); if (view === 'lib') render(); });
+    await cacheGet(c, PDFJS); await cacheGet(c, PDFJSW);
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+    BKS[i] = {st: 'done'};
+  } catch (e) { BKS[i] = {st: 'err'}; }
+  if (view === 'lib') render();
+}
+async function bookDelete(i){ try { const c = await caches.open(BKCACHE); await c.delete(PRH + HAJJ_BOOKS[i][0]); } catch (e) {} BKS[i] = {}; render(); }
+let PDFLIB = null, BK = null;
+async function pdfLib(){
+  if (PDFLIB) return PDFLIB;
+  const c = await caches.open(BKCACHE);
+  const js = await (await cacheGet(c, PDFJS)).text(), wjs = await (await cacheGet(c, PDFJSW)).text();
+  const lib = await import(URL.createObjectURL(new Blob([js], {type: 'text/javascript'})));
+  lib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([wjs], {type: 'text/javascript'}));
+  return (PDFLIB = lib);
+}
+function vBook(){
+  const b = HAJJ_BOOKS[BK.i];
+  return `<main class="bookv"><div class="top"><span class="brand">ثبّت</span><button class="x" data-act="tab" data-v="lib">رجوع</button></div>
+    <h2>${b[1]}</h2><p class="muted">${b[2]}</p>
+    <div id="bkPages" class="bkpages">${BK.err ? '<p class="err">تعذّر فتح الكتاب على هذا الجهاز.</p>' : BK.doc ? '' : '<p class="muted">جاري فتح الكتاب...</p>'}</div></main>`;
+}
+async function bookOpen(i){
+  BK = {i, doc: null, err: false}; view = 'book'; render(); window.scrollTo(0, 0);
+  try { const c = await caches.open(BKCACHE), hit = await c.match(PRH + HAJJ_BOOKS[i][0]); if (!hit) throw new Error('missing');
+    const data = new Uint8Array(await hit.arrayBuffer()), lib = await pdfLib();
+    const doc = await lib.getDocument({data, isEvalSupported: false}).promise;
+    if (!BK || BK.i !== i) return; BK.doc = doc; if (view === 'book') render();
+  } catch (e) { if (BK && BK.i === i){ BK.err = true; if (view === 'book') render(); } }
+}
+/* Pages are drawn only when they scroll into view, at the screen's sharpness. */
+async function bookMount(){
+  const box = document.getElementById('bkPages'); if (!box || !BK || !BK.doc) return;
+  const doc = BK.doc, W = box.clientWidth; if (!BK.ratio){ const p1 = await doc.getPage(1), v = p1.getViewport({scale: 1}); BK.ratio = v.height / v.width; }
+  if (document.getElementById('bkPages') !== box) return;
+  box.innerHTML = Array.from({length: doc.numPages}, (_, k) => `<div class="bkpg" data-p="${k + 1}" style="height:${Math.round(W * BK.ratio)}px"><span>${AR(k + 1)}</span></div>`).join('');
+  const io = new IntersectionObserver(es => es.forEach(async en => {
+    if (!en.isIntersecting) return; const el = en.target; io.unobserve(el);
+    try { const pg = await doc.getPage(+el.dataset.p), v0 = pg.getViewport({scale: 1}), dpr = Math.min(2, window.devicePixelRatio || 1);
+      const vp = pg.getViewport({scale: el.clientWidth * dpr / v0.width}), cv = document.createElement('canvas');
+      cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height); cv.style.width = '100%'; cv.style.height = 'auto';
+      await pg.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise; el.style.height = ''; el.innerHTML = ''; el.appendChild(cv);
+    } catch (e) {} }), {rootMargin: '600px 0px'});
+  box.querySelectorAll('.bkpg').forEach(el => io.observe(el));
+}
 function vN40(){
-  let h = `<div><h1>الأربعون النووية</h1><p class="muted">اثنان وأربعون حديثًا جمعها الإمام يحيى بن شرف النووي (ت ٦٧٦هـ) في أصول الدين وقواعده.</p></div>`;
+  let h = back('lib') + `<div><h1>الأربعون النووية</h1><p class="muted">اثنان وأربعون حديثًا جمعها الإمام يحيى بن شرف النووي (ت ٦٧٦هـ) في أصول الدين وقواعده.</p></div>`;
   if (!N40) return h + n40Wait();
   const last = S.n40 && S.n40.last;
   if (last) h += `<button class="btn" data-act="n40Open" data-v="${last}">أكمل من ${N40.h[last - 1].title}</button>`;
@@ -2508,7 +2625,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r88';
+const BUILD = 'r90';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2700,6 +2817,9 @@ app.addEventListener('click', e => {
   if (a === 'audCont'){ S.acont = S.acont === false; save(); if (AU && AU.ctx === 'reader'){ const g = audG(); AU.list = audReaderList(g); AU.i = 0; } render(); return; }
   if (a === 'audSess'){ const g = +v; if (AU && AU.ctx === 'sess' && audG() === g) audToggle(); else audPlay([g], 'sess'); return; }
   if (a === 'recSet'){ S.reciter = v; save(); RD.sheet = ''; if (AU){ const l = AU.list.slice(AU.i), c = AU.ctx; audPlay(l, c); } else render(); return; }
+  if (a === 'bkDl'){ bookDownload(+v); return; }
+  if (a === 'bkDel'){ bookDelete(+v); return; }
+  if (a === 'bkOpen'){ bookOpen(+v); return; }
   if (a === 'rdTf'){ R().tf = !tfOn(); save(); render(); return; }
   if (a === 'rdTfRetry'){ const s = gidToSA(RD.sel)[0]; delete tfErr[s]; render(); return; }
   if (a === 'rdMean'){ R().mean = !meanOn(); save(); if (meanOn()) loadMeans().catch(() => {}); render(); return; }
