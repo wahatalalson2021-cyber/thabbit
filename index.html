@@ -498,6 +498,8 @@ try { const r = localStorage.getItem(KEY); if (r) S = JSON.parse(r); } catch (e)
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 (function migrate(){
   if (!S) S = {v:2, days:{}, chunks:[], learned:{}, nextNew:0, lastNewDay:null, dayOffset:0, hifz:null};
+  /* The old test button ("go to the next day") is gone: put everyone back on the real date. */
+  if (S.dayOffset){ S.dayOffset = 0; setTimeout(save, 0); }
   if (!S.v){
     const names = {amma:'جزء عمّ', tabarak:'جزء تبارك'};
     S.chunks = (S.chunks || []).map(c => ({r:[[saToG(c.s, c.a), saToG(c.s, c.b)]]}));
@@ -1719,9 +1721,6 @@ function vSettings(){
     <div class="row"><span><b>الورد اليومي</b><small>${S.wird ? wirdName(S.wird) : 'غير محدد'}</small></span><button class="x" data-act="go" data-v="setupWird">تعديل</button></div>
   </div>
   ${engCard()}
-  <div class="card"><h3>وضع التجربة</h3><p class="muted">لترى كيف تعمل المراجعة دون انتظار، قدّم التطبيق يومًا واحدًا.${S.dayOffset ? ' أنت الآن متقدم ' + AR(S.dayOffset) + ' ' + (S.dayOffset === 1 ? 'يومًا' : 'أيام') + '.' : ''}</p>
-  <button class="btn soft" data-act="nextDay">انتقل إلى اليوم التالي</button>
-  ${S.dayOffset ? '<button class="btn ghost" data-act="realDay">ارجع إلى اليوم الحقيقي</button>' : ''}</div>
   <div class="card"><h3>البيانات</h3><p class="muted">التقدّم محفوظ في هذا الجهاز فقط.</p>
   ${confirmBox === 'reset' ? `<div class="confirm"><p>سيُمسح كل التقدّم ولا يمكن استرجاعه.</p><div class="rnav"><button class="btn danger" data-act="resetYes">امسح</button><button class="btn ghost" data-act="cancel">إلغاء</button></div></div>` : '<button class="btn danger" data-act="ask" data-v="reset">مسح كل البيانات</button>'}</div>
   ${IN_CLAUDE || STANDALONE ? '' : installGuide()}
@@ -2334,7 +2333,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r80';
+const BUILD = 'r81';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
