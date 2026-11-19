@@ -189,6 +189,12 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .wsetc h3{display:flex;align-items:center;gap:8px;color:var(--accent)}
 .wsetc svg{width:22px;height:22px;flex:none}
 .wsetc .btn{display:flex;align-items:center;justify-content:center;gap:8px}
+.tfbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:6px 0 8px}
+.tfbtn svg{width:20px;height:20px}
+.tfbox{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;max-height:34vh;overflow:auto}
+.tfbox h4{margin:0 0 4px;color:var(--accent);font-size:.95rem}
+.tfbox p{margin:0 0 6px;line-height:1.9}
+.tfbox small{color:var(--muted);font-size:.75rem}
 .mbox{background:var(--accent-soft);border-radius:10px;padding:10px 12px;margin:8px 0 10px}
 .mbox b{font-family:var(--f-quran);font-size:1.3rem;font-weight:400;color:var(--accent);margin-inline-end:6px}
 .mbox p{margin:2px 0 4px;line-height:1.8}
@@ -1989,6 +1995,23 @@ function meanAttr(g, mk){
   const e = meanAt(g, mk); if (!e) return ['', ''];
   return [' hm' + (RD.sel === g && RD.selW != null && e[0].includes(RD.selW) ? ' mhl' : ''), ` data-w="${mk}"`];
 }
+/* Tafsir: «التفسير الميسّر» (King Fahd Complex), published by QuranEnc.com. One small file per surah, loaded when needed. */
+const TF = {}, tfLoading = {}, tfErr = {};
+const tfOn = () => R().tf === true;
+function loadTafsir(s){
+  if (TF[s]) return Promise.resolve(TF[s]);
+  if (!tfLoading[s]){ delete tfErr[s]; tfLoading[s] = fetch('tafsir/' + s + '.json').then(r => { if (!r.ok) throw new Error('http'); return r.json(); })
+    .then(d => { TF[s] = d.t; if (view === 'reader' && RD && RD.sel) render(); return d.t; })
+    .catch(e => { delete tfLoading[s]; tfErr[s] = true; if (view === 'reader' && RD && RD.sel) render(); throw e; }); }
+  return tfLoading[s];
+}
+function tfBox(s, a){
+  if (!tfOn()) return '';
+  if (!TF[s] && !tfErr[s]) loadTafsir(s).catch(() => {});
+  const body = TF[s] ? `<p>${esc(TF[s][a - 1] || '')}</p>` : tfErr[s] ? `<p class="muted">تعذّر تحميل التفسير. تأكد من الاتصال بالإنترنت.</p><button class="btn soft" data-act="rdTfRetry">حاول مرة أخرى</button>` : '<p class="muted">جاري تحميل التفسير...</p>';
+  return `<div class="tfbox"><h4>التفسير الميسّر</h4>${body}<small>مجمع الملك فهد لطباعة المصحف الشريف · QuranEnc.com</small></div>`;
+}
+const BOOK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>';
 const HIDX = new Map();
 function heads(){ if (HEADS || !M) return; HEADS = []; M.pages.forEach(pg => pg.forEach(l => { if (l[0] === 1){ HEADS.push(l[1]); HIDX.set(l[1], HEADS.length); } else if (l[0] === 2 && !BSM) BSM = l.slice(1); })); }
 function pageReady(p){
@@ -2101,6 +2124,8 @@ function vReader(){
     const [s, a] = gidToSA(RD.sel), marked = R().marks.some(m => m.g === RD.sel), en = meanAt(RD.sel, RD.selW);
     sheet = `<div class="rsheet card"><div class="row"><b>سورة ${Q[s - 1][0]} · الآية ${AR(a)}</b><button class="x" data-act="rdUnsel" aria-label="إغلاق">✕</button></div>
       ${en ? `<div class="mbox"><b>${esc(en[1])}</b><p>${esc(en[2])}</p><small>السراج في بيان غريب القرآن · QuranEnc.com</small></div>` : ''}
+      <button class="btn ghost tfbtn" data-act="rdTf" aria-pressed="${tfOn()}">${BOOK_SVG}${tfOn() ? 'إخفاء التفسير' : 'تفسير الآية'}</button>
+      ${tfBox(s, a)}
       <div class="rnav"><button class="btn soft" data-act="rdRecite">سمّع هذه الآية</button><button class="btn ghost" data-act="rdMark">${marked ? 'إزالة العلامة' : 'ضع علامة'}</button></div>
       <button class="btn soft" data-act="rdReciteSura">${MIC_SVG}سمّع سورة ${Q[s - 1][0]} كاملة</button></div>`;
   } else if (RD.sheet === 'marks'){
@@ -2147,6 +2172,7 @@ const setFlag = (k, v) => { try { localStorage.setItem(DLK[k], v); } catch (e) {
 Object.keys(dls).forEach(k => { if (getFlag(k) === '1') dls[k].state = 'done'; });
 function dlUrls(k){
   const base = [new URL('mushaf.json', location.href).href, new URL('meanings.json', location.href).href];
+  for (let s = 1; s <= 114; s++) base.push(new URL('tafsir/' + s + '.json', location.href).href);
   if (k === 'plain') return base.concat(M.fonts.map(fontUrl));
   const out = base.concat([new URL('tajweed.json', location.href).href, fontUrl('QCF4_QBSML'), fontUrl('QCF4_Hafs_01')]);
   for (let p = 1; p <= 604; p++) out.push(tjUrl(p));
@@ -2333,7 +2359,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r81';
+const BUILD = 'r82';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2509,6 +2535,8 @@ app.addEventListener('click', e => {
   if (a === 'rdRetry'){ RD.status = 'loading'; render(); preparePage(RD.page); return; }
   if (a === 'ayah'){ const w = el.dataset.w != null ? +el.dataset.w : null; tipHide(); RD.sheet = '';
     if (RD.sel === +v && (w == null || RD.selW === w)){ RD.sel = null; RD.selW = null; } else { RD.sel = +v; RD.selW = w; } render(); return; }
+  if (a === 'rdTf'){ R().tf = !tfOn(); save(); render(); return; }
+  if (a === 'rdTfRetry'){ const s = gidToSA(RD.sel)[0]; delete tfErr[s]; render(); return; }
   if (a === 'rdMean'){ R().mean = !meanOn(); save(); if (meanOn()) loadMeans().catch(() => {}); render(); return; }
   if (a === 'rdUnsel'){ RD.sel = null; RD.selW = null; render(); return; }
   if (a === 'rdMark'){ const r = R(), i = r.marks.findIndex(m => m.g === RD.sel); if (i >= 0) r.marks.splice(i, 1); else r.marks.unshift({g:RD.sel, p:RD.page}); save(); render(); return; }
