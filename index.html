@@ -689,7 +689,7 @@ function engDecode(R0){
   return R0.decoding;
 }
 function engAudio(x, rate, R1){
-  const R0 = R1 || REC; if (!R0 || R0.stopping) return;
+  const R0 = R1 || REC; if (!R0 || R0.stopping || R0.dead) return;
   R0.rate = rate; const y = x, n = x.length;
   let e = 0; for (let i = 0; i < n; i++) e += y[i] * y[i]; const rms = Math.sqrt(e / Math.max(1, n)), dur = n / rate;
   if (rms < R0.noise * 2) R0.noise = R0.noise * 0.95 + rms * 0.05;
@@ -734,9 +734,9 @@ async function engPump(){
   try { const y = R0.q.shift().y; if (!y.length) throw 0; const sec = y.length / 16000, piece = {y, text: ''}; R0.pieces.push(piece);
     const t0 = performance.now(), t = await engWrite(y);
     engLog('قطعة ' + sec.toFixed(1) + 'ث · كتابة ' + ((performance.now() - t0) / 1000).toFixed(1) + 'ث · ' + t);
-    piece.text = t; if (sess === R0.s0){ engText(R0); recompute(false); piece.endP = sess.p; } }
-  catch (e) { if (e !== 0){ engLog('خطأ: ' + (e && e.message || e)); if (sess === R0.s0) sess.micErr = 'تعذّرت كتابة جزء من التلاوة. (' + (e && e.message || e) + ')'; } }
-  R0.busy = false; liveText = R0.stopping ? 'أكتب آخر ما قرأته...' : '';
+    piece.text = t; if (sess === R0.s0 && !R0.dead){ engText(R0); recompute(false); piece.endP = sess.p; } }
+  catch (e) { if (e !== 0){ engLog('خطأ: ' + (e && e.message || e)); if (sess === R0.s0 && !R0.dead) sess.micErr = 'تعذّرت كتابة جزء من التلاوة. (' + (e && e.message || e) + ')'; } }
+  R0.busy = false; if (R0.dead) return; liveText = R0.stopping ? 'أكتب آخر ما قرأته...' : '';
   if (REC === R0 && view === 'session') render();
   engPump();
 }
@@ -763,8 +763,10 @@ async function engReview(R0){
     else { if (g) a = Math.max(a, g[1] + 1); if (a <= b) groups.push([a, b]); } });   // groups never overlap
   liveText = 'أراجع المواضع المشكوك فيها...'; engLive();
   for (const [a, b] of groups){
+    if (R0.dead) return;
     const parts = P.slice(a, b + 1), n = parts.reduce((x, p) => x + p.y.length, 0), y = new Float32Array(n); let o = 0; parts.forEach(p => { y.set(p.y, o); o += p.y.length; });
     try { const t0 = performance.now(), t = await engWrite(y); engLog('مراجعة ' + (n / 16000).toFixed(1) + 'ث · ' + ((performance.now() - t0) / 1000).toFixed(1) + 'ث · ' + t);
+      if (R0.dead) return;
       if (t){ /* keep the new text only if it matches the mushaf better than before */
         const okN = () => { engText(R0); recompute(true); return Object.values(sess.ws).filter(v => v === 'ok').length; };
         const before = okN(), old = parts.map(p => p.text);
@@ -772,7 +774,7 @@ async function engReview(R0){
         const after = okN(); if (after < before){ parts.forEach((p, k) => { p.text = old[k]; }); engLog('مراجعة: أبقيت النص الأول (' + after + ' < ' + before + ')'); } } }
     catch (e) { engLog('مراجعة: خطأ ' + (e && e.message || e)); }
   }
-  engText(R0);
+  if (!R0.dead) engText(R0);
 }
 function engLive(){ const el = document.getElementById('live'); if (el) el.textContent = liveText || hearMsg(); }
 /* The reader pressed "finished" (or reached the end): cut what is left, write it, then show the result. */
@@ -793,8 +795,8 @@ function engRelease(R0){ try { if (R0.mr){ R0.mr.ondataavailable = null; if (R0.
   try { if (R0.proc){ R0.proc.onaudioprocess = null; if (R0.proc.port) R0.proc.port.onmessage = null; } R0.src && R0.src.disconnect(); R0.proc && R0.proc.disconnect(); } catch (e) {}
   try { R0.stream && R0.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { R0.ctx.close(); } catch (e) {} }
 async function engFinish(){ const R0 = REC; if (!R0 || R0.finishing) return; R0.finishing = true;
-  if (sess === R0.s0){ sess.listening = false; recompute(true); try { await engReview(R0); } catch (e) {} }
-  REC = null; if (sess === R0.s0){ sess.listening = false; sess.draining = false; liveText = ''; recompute(true); if (view === 'session') render(); } }
+  if (sess === R0.s0 && !R0.dead){ sess.listening = false; recompute(true); try { await engReview(R0); } catch (e) {} }
+  if (REC === R0) REC = null; if (sess === R0.s0 && !R0.dead){ sess.listening = false; sess.draining = false; liveText = ''; recompute(true); if (view === 'session') render(); } }
 function engClose(){ const R0 = REC; REC = null; if (R0) engRelease(R0); }
 
 /* ---------- recitation matching ---------- */
@@ -1812,6 +1814,8 @@ function startSession(queue){
   initStep(); view = 'session'; render(); window.scrollTo(0, 0);
 }
 function initStep(){
+  /* A recording still finishing from the previous page must not write into this one (and must not block the mic button). */
+  if (REC){ REC.dead = true; engClose(); }
   const t = sess.queue[sess.pos];
   sess.phase = t.type === 'new' ? 'read' : 'test';
   sess.reps = {}; sess.ri = 0;
@@ -2504,7 +2508,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r86';
+const BUILD = 'r87';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
