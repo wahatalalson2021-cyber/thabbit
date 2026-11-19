@@ -265,6 +265,21 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .mtsel{width:100%;font:inherit;padding:10px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
 #mtRec{display:inline-flex;gap:8px;align-items:center;justify-content:center}#mtRec svg{width:18px;height:18px}audio{width:100%}
 .mictip{display:flex;flex-direction:column;gap:8px;align-items:stretch}.mictip .btn{width:auto}
+.n40card{gap:12px;background:linear-gradient(120deg,color-mix(in srgb,var(--gold) 9%,var(--surface)),var(--surface));border-color:color-mix(in srgb,var(--gold) 35%,var(--line))}
+.n40ct{display:flex;gap:12px;align-items:center}.n40ct h3{margin:0}.n40ct p{margin:2px 0 0}
+.n40ic{flex:none;width:52px;height:52px;border-radius:14px;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:700;font-size:1.2rem;box-shadow:inset 0 0 0 2px #e9cf8f}
+.n40q{margin:0}.n40t small.snip{white-space:normal;font-size:1.05rem}.n40t mark{background:color-mix(in srgb,var(--gold) 35%,transparent);color:inherit;border-radius:4px;padding:0 2px}.n40none{text-align:center}
+.n40list{padding:4px 12px;gap:0}.n40row{display:flex;align-items:center;gap:12px;width:100%;text-align:start;background:none;border:0;border-bottom:1px solid var(--line);padding:12px 2px;font:inherit;color:inherit;cursor:pointer}
+.n40row:last-child{border-bottom:0}.n40row.last{background:color-mix(in srgb,var(--accent) 6%,transparent);border-radius:10px}
+.n40num{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--gold);color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+.n40t{flex:1;display:flex;flex-direction:column;min-width:0}.n40t small{color:var(--muted);font-family:var(--f-quran);font-size:1rem;line-height:1.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.n40src{flex:none;font-size:.72rem;color:var(--accent);background:var(--accent-soft);border-radius:99px;padding:3px 9px}
+.n40head{display:flex;flex-direction:column;gap:2px;position:relative}.n40head h1{margin:0}.n40pos{color:var(--gold);font-weight:600;font-size:.9rem}
+.n40size{position:absolute;left:0;bottom:4px;display:flex;gap:6px}
+.n40text{font-family:var(--f-quran);line-height:2.2}.n40text p{margin:0 0 .6em}
+.n40tak{display:flex;flex-direction:column;gap:2px;border-right:4px solid var(--gold);background:color-mix(in srgb,var(--gold) 8%,var(--surface));border-radius:10px;padding:10px 14px}
+.n40tak b{color:var(--gold);font-size:.85rem}.n40tak span{font-family:var(--f-quran);font-size:1.1rem;line-height:1.9}
+.n40nav .btn[disabled]{opacity:.4}.n40foot{font-size:.78rem;text-align:center}
 .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:340px;overflow:auto;padding:2px}
 .sgrid button{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 2px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .setrows .row{padding:6px 0;border-bottom:1px solid var(--line)}
@@ -1247,6 +1262,8 @@ function render(){
   else if (view === 'mist') h = vMist();
   else if (view === 'recite') h = vRecite();
   else if (view === 'search') h = vSearch();
+  else if (view === 'n40') h = vN40();
+  else if (view === 'n40h') h = vN40h();
   else if (view === 'setupReview') h = vSetupReview();
   else if (view === 'setupWird') h = vSetupWird();
   else {
@@ -2126,6 +2143,60 @@ function dlCard(big){
   if (d.state === 'run') return `<div class="card dlcard${big ? ' fancy' : ''}">${img}<div class="dltxt"><h3>جاري تحميل ${name}...</h3><div class="bar" style="color:var(--accent)"><i style="width:${d.pct}%"></i></div><p class="muted">${AR(d.pct)}٪ · أبقِ التطبيق مفتوحًا حتى ينتهي.</p></div></div>`;
   return `<div class="card dlcard${big ? ' fancy' : ''}">${img}<div class="dltxt"><h3>${k === 'tj' ? 'مصحف التجويد الملوّن على جوالك' : 'المصحف الشريف على جوالك'}</h3>${big ? '<span class="gdiv"></span>' : ''}<p class="muted">حمّله مرة واحدة، واقرأ القرآن كاملًا بدون إنترنت. حجمه حوالي ${size} ميجابايت، ويُفضَّل تحميله على شبكة Wi-Fi.</p>${d.err ? `<p class="err">${d.err}</p>` : ''}<button class="btn dlbtn" data-act="dlStart">${CLOUD}تحميل المصحف</button></div></div>`;
 }
+/* ---------- Nawawi's Forty Hadith: reading (text and sources from the standard matn, loaded once and kept offline) ---------- */
+let N40 = null, n40Loading = null, n40Cur = 1;
+function loadN40(){ if (!n40Loading) n40Loading = fetch('n40.json').then(r => { if (!r.ok) throw 0; return r.json(); }).then(d => { N40 = d; if (view === 'n40' || view === 'n40h') render(); }).catch(() => { n40Loading = null; N40 = false; if (view === 'n40' || view === 'n40h') render(); }); return n40Loading; }
+function n40Src(t){ const b = /الْبُخَارِيُّ/.test(t), m = /مُسْلِم/.test(t);
+  return b && m ? 'البخاري ومسلم' : b ? 'البخاري' : m ? 'مسلم' : /أَبُو دَاوُدَ/.test(t) ? 'أبو داود والترمذي' : /التِّرْمِذِيُّ/.test(t) ? 'الترمذي' : /مَاجَهْ/.test(t) ? 'ابن ماجه' : /الدَّارَقُطْنِيّ/.test(t) ? 'الدارقطني' : /الْبَيْهَقِيّ/.test(t) ? 'البيهقي' : /أَحْمَدَ/.test(t) ? 'أحمد والدارمي' : /الْحُجَّةِ/.test(t) ? 'كتاب الحجة' : ''; }
+function n40Wait(){ if (N40 === false) return `<div class="card"><p class="err">تعذّر تحميل الأحاديث. تأكد من الإنترنت وحاول مرة أخرى.</p><button class="btn" data-act="n40Retry">حاول مرة أخرى</button></div>`;
+  loadN40(); return `<div class="card"><p class="muted">أجهّز الأحاديث...</p></div>`; }
+function vN40(){
+  let h = `<main>${back('read')}<div><h1>الأربعون النووية</h1><p class="muted">اثنان وأربعون حديثًا جمعها الإمام يحيى بن شرف النووي (ت ٦٧٦هـ) في أصول الدين وقواعده.</p></div>`;
+  if (!N40) return h + n40Wait() + '</main>';
+  const last = S.n40 && S.n40.last;
+  if (last) h += `<button class="btn" data-act="n40Open" data-v="${last}">أكمل من ${N40.h[last - 1].title}</button>`;
+  h += `<label class="sbox n40q">${SEARCH_SVG}<input id="n40Q" type="search" value="${esc(n40Query)}" placeholder="ابحث بكلمة أو برقم الحديث" autocomplete="off" enterkeyhint="search" aria-label="ابحث في الأحاديث"></label>`;
+  h += `<div id="n40Res">${n40Results()}</div>`;
+  return h + '</main>';
+}
+/* Search: letters only (no diacritics, any form of alif / ya / ta marbuta), so "انما الاعمال" finds "إنَّمَا الْأَعْمَالُ".
+   A number (١٢ or 12) goes to that hadith. */
+let n40Query = '';
+function n40Norm(t){ const map = []; let o = '';
+  for (let i = 0; i < t.length; i++){ let c = t[i];
+    if (/[\u064B-\u065F\u0670\u0640\u06D6-\u06ED]/.test(c)) continue;
+    c = c.replace(/[أإآٱ]/, 'ا').replace('ى', 'ي').replace('ة', 'ه').replace('ؤ', 'و').replace('ئ', 'ي').replace('ﷺ', ' ');
+    o += c; map.push(i); }
+  return [o, map]; }
+function n40Row(x, snip){ const last = S.n40 && S.n40.last;
+  return `<button class="n40row${x.n === last ? ' last' : ''}" data-act="n40Open" data-v="${x.n}"><span class="n40num">${AR(x.n)}</span><span class="n40t"><b>${x.title}</b><small${snip ? ' class="snip"' : ''}>${snip || x.lead}</small></span>${n40Src(x.tak) ? `<span class="n40src">${n40Src(x.tak)}</span>` : ''}</button>`; }
+function n40Results(){
+  if (!N40) return '';
+  const q0 = n40Query.trim(), num = +q0.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  if (!q0) return `<div class="card n40list">${N40.h.map(x => n40Row(x)).join('')}</div>`;
+  if (num >= 1 && num <= 42 && /^[0-9٠-٩]+$/.test(q0)) return `<div class="card n40list">${n40Row(N40.h[num - 1])}</div>`;
+  const q = n40Norm(q0)[0].replace(/\s+/g, ' ').trim(); if (q.length < 2) return `<p class="muted">اكتب حرفين على الأقل.</p>`;
+  const found = [];
+  N40.h.forEach(x => { const full = x.body + '\n' + (x.extra || ''), [n, map] = n40Norm(full), i = n.indexOf(q); if (i < 0) return;
+    const a = map[i], b = map[i + q.length - 1] + 1, s0 = Math.max(0, full.lastIndexOf(' ', Math.max(0, a - 45))), s1 = full.indexOf(' ', Math.min(full.length, b + 45));
+    const e = s1 < 0 ? full.length : s1, cnt = n.split(q).length - 1;
+    found.push([x, (s0 > 0 ? '... ' : '') + esc(full.slice(s0, a)) + '<mark>' + esc(full.slice(a, b)) + '</mark>' + esc(full.slice(b, e)) + (e < full.length ? ' ...' : ''), cnt]); });
+  if (!found.length) return `<p class="muted n40none">لم أجد «${esc(q0)}» في الأحاديث. جرّب كلمة أخرى أو جزءًا منها.</p>`;
+  const tot = found.reduce((t, f) => t + f[2], 0);
+  return `<p class="scount">${countWord(found.length, 'حديث واحد', 'حديثان', 'أحاديث', 'حديثًا')}${tot > found.length ? ' · ' + countWord(tot, 'موضع واحد', 'موضعان', 'مواضع', 'موضعًا') : ''}</p><div class="card n40list">${found.map(f => n40Row(f[0], f[1])).join('')}</div>`;
+}
+function n40Para(t){ return t.split('\n').map(p => p.trim()).filter(Boolean).map(p => `<p>${p}</p>`).join(''); }
+function vN40h(){
+  let h = `<main><div class="top"><span class="brand">ثبّت</span><button class="x" data-act="tab" data-v="n40">الأحاديث</button></div>`;
+  if (!N40) return h + n40Wait() + '</main>';
+  const x = N40.h[n40Cur - 1], sz = (S.n40 && S.n40.size) || 1;
+  h += `<div class="n40head"><span class="n40pos">${AR(x.n)} من ٤٢</span><h1>${x.title}</h1><div class="n40size"><button class="x" data-act="n40Size" data-v="-1" aria-label="تصغير الخط">أ-</button><button class="x" data-act="n40Size" data-v="1" aria-label="تكبير الخط">أ+</button></div></div>
+    <article class="card n40text" style="font-size:${(1.32 * sz).toFixed(2)}rem">${n40Para(x.body)}${x.extra ? n40Para(x.extra) : ''}</article>
+    <div class="n40tak"><b>التخريج</b><span>${x.tak}</span></div>
+    <div class="rnav n40nav"><button class="btn soft" data-act="n40Open" data-v="${x.n + 1}" ${x.n >= 42 ? 'disabled' : ''}>الحديث التالي</button><button class="btn ghost" data-act="n40Open" data-v="${x.n - 1}" ${x.n <= 1 ? 'disabled' : ''}>السابق</button></div>
+    <p class="muted n40foot">${N40.source}</p>`;
+  return h + '</main>';
+}
 function vRead(){
   const r = R();
   let h = `<h1>اقرأ</h1>`;
@@ -2138,6 +2209,9 @@ function vRead(){
     h += `<div class="card"><div class="row"><h3>الورد اليومي · ${wirdName(S.wird)}</h3>${pct != null ? `<b>${AR(pct)}٪</b>` : ''}</div>${pct != null ? `<div class="bar" style="color:var(--accent)"><i style="width:${pct}%"></i></div>` : ''}
       <p>اليوم: من صفحة ${AR(wt.from)} إلى ${AR(wt.to)}</p><p class="muted">${wt.left ? 'بقي ' + AR(wt.left) + ' ' + pagesWord(wt.left) : 'أتممت ورد اليوم، بارك الله فيك'}</p>
       <div class="rnav">${wt.left ? `<button class="btn" data-act="rdOpen" data-v="${S.wird.pos}">${wt.done ? 'أكمل الورد' : 'ابدأ الورد'}</button>` : ''}<button class="btn ghost" data-act="go" data-v="setupWird">تعديل</button></div></div>`; }
+  { const last = S.n40 && S.n40.last;
+    h += `<div class="card n40card"><div class="n40ct"><span class="n40ic">٤٢</span><div><h3>الأربعون النووية</h3><p class="muted">أحاديث جامعة في أصول الدين، جمعها الإمام النووي</p></div></div>
+      <div class="rnav"><button class="btn soft" data-act="go" data-v="n40">${last ? 'فهرس الأحاديث' : 'افتح الأحاديث'}</button>${last ? `<button class="btn" data-act="n40Open" data-v="${last}">أكمل من الحديث ${AR(last)}</button>` : ''}</div></div>`; }
   h += dlCard();
   h += `<div class="card"><div class="tabs3" role="group" aria-label="الفهرس">${[['sura','السور'],['juz','الأجزاء'],['marks','علاماتي']].map(([k2, l]) => `<button data-act="rdTab" data-v="${k2}" aria-pressed="${rdTab === k2}">${l}</button>`).join('')}</div>`;
   if (rdTab === 'sura') h += `<input class="search" id="rdSearch" type="search" placeholder="ابحث عن سورة" value="${esc(rdQuery)}" autocomplete="off"><div id="rdList">${suraRows()}</div>`;
@@ -2159,7 +2233,7 @@ app.addEventListener('touchend', e => {
 document.addEventListener('keydown', e => { if (view !== 'reader') return; if (e.key === 'ArrowLeft') goPage(RD.page + 1); else if (e.key === 'ArrowRight') goPage(RD.page - 1); });
 const RCF = {rcA:'a', rcB:'b', rcFA:'fa', rcTA:'ta'};
 function rcRead(el){ const k = RCF[el.id], n = toNum(el.value); if (!n) return; const max = k === 'fa' || k === 'ta' ? nAy(rc.s) : 604; rc[k] = Math.max(1, Math.min(max, n)); const sum = document.getElementById('rcSum'); if (sum) sum.textContent = rcSum(rc); }
-app.addEventListener('input', e => { if (e.target.id === 'nameIn'){ S.name = e.target.value.trim().slice(0, 30); save(); return; } if (RCF[e.target.id]){ rcRead(e.target); return; } if (e.target.id === 'qSearch'){ sQuery = e.target.value; sLimit = 50; clearTimeout(sTimer); sTimer = setTimeout(() => { const el = document.getElementById('qRes'); if (el) el.innerHTML = searchResults(); }, 250); return; } if (e.target.id === 'rdSearch'){ rdQuery = e.target.value; const el = document.getElementById('rdList'); if (el) el.innerHTML = suraRows(); } });
+app.addEventListener('input', e => { if (e.target.id === 'n40Q'){ n40Query = e.target.value; const el = document.getElementById('n40Res'); if (el) el.innerHTML = n40Results(); return; } if (e.target.id === 'nameIn'){ S.name = e.target.value.trim().slice(0, 30); save(); return; } if (RCF[e.target.id]){ rcRead(e.target); return; } if (e.target.id === 'qSearch'){ sQuery = e.target.value; sLimit = 50; clearTimeout(sTimer); sTimer = setTimeout(() => { const el = document.getElementById('qRes'); if (el) el.innerHTML = searchResults(); }, 250); return; } if (e.target.id === 'rdSearch'){ rdQuery = e.target.value; const el = document.getElementById('rdList'); if (el) el.innerHTML = suraRows(); } });
 
 /* ---------- install as an app ---------- */
 let installEvt = null;
@@ -2210,7 +2284,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r75';
+const BUILD = 'r76';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2234,6 +2308,9 @@ app.addEventListener('click', e => {
   if (a === 'install'){ if (installEvt){ installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; render(); }); } return; }
   if (a === 'installHide'){ installHidden = true; try { localStorage.setItem('thabbit-install-hide', '1'); } catch (err) {} render(); return; }
   if (a === 'tab'){ view = v; confirmBox = null; render(); window.scrollTo(0, 0); return; }
+  if (a === 'n40Open'){ const n = Math.max(1, Math.min(42, +v)); n40Cur = n; S.n40 = Object.assign(S.n40 || {}, {last: n}); save(); view = 'n40h'; loadN40(); render(); window.scrollTo(0, 0); return; }
+  if (a === 'n40Size'){ const c = (S.n40 && S.n40.size) || 1; S.n40 = Object.assign(S.n40 || {}, {size: Math.max(0.8, Math.min(1.8, Math.round((c + 0.15 * +v) * 100) / 100))}); save(); render(); return; }
+  if (a === 'n40Retry'){ N40 = null; loadN40(); render(); return; }
   if (a === 'go'){ go(v); return; }
   if (a === 'goHifz'){ go('setupHifz'); return; }
   if (a === 'goReview'){ go('setupReview'); return; }
