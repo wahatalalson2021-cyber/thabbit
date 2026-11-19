@@ -2508,7 +2508,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r87';
+const BUILD = 'r88';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2676,7 +2676,11 @@ app.addEventListener('click', e => {
     else if (t.arch != null) schedule(S.arch[t.arch], g);
     else if (!t.chunk && S.learned[t.idx]) schedule(S.learned[t.idx], g);
     if (t.type === 'review') doneItem(t);
-    markDay(); save(); advance(); return;
+    const wasMic = sess.usedMic;
+    markDay(); save(); advance();
+    /* He was reciting by voice: start listening on the next page at once (this tap counts as the start). */
+    if (wasMic && sess && view === 'session' && sess.phase === 'test'){ const mb = app.querySelector('.mic[data-act="mic"]'); if (mb && !mb.disabled) mb.click(); }
+    return;
   }
   /* reading */
   if (a === 'rdOpen'){ openReader(+v, view); return; }
