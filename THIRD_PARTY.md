@@ -31,3 +31,7 @@ From **quran-meta** v7.0.0 (Hafs lists), MIT License, Copyright (c) 2020 Quran-C
   Source: https://huggingface.co/tarteel-ai/whisper-base-ar-quran
 - Converted to ONNX and quantized to 8-bit for on-device use (files in /models/tarteel-base). Weights are otherwise unchanged.
 - Runs in the browser with Transformers.js (@huggingface/transformers, Apache License 2.0), loaded from jsDelivr.
+
+## معاني الكلمات (meanings.json)
+- المصدر: «السراج في بيان غريب القرآن»، معاني الكلمات باللغة العربية، من موسوعة القرآن الكريم QuranEnc.com (المفتاح: arabic_seraj).
+- أُخذت النسخة بتاريخ 2026-11-19 عبر واجهة QuranEnc.com البرمجية، ويُعرض النص كما هو دون تعديل أو إضافة أو حذف، في تطبيق مجاني بلا إعلانات، وفق شروط إعادة النشر في الموقع.

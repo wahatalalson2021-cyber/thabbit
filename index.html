@@ -180,6 +180,15 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .mw{border-radius:4px;transition:background .15s}
 .mw[data-act]{cursor:pointer}
 .mw.sel{background:color-mix(in srgb,var(--gold) 32%,transparent)}
+.mw.hm{background-image:radial-gradient(circle,color-mix(in srgb,var(--accent) 70%,transparent) 45%,transparent 55%);background-size:.16em .16em;background-repeat:repeat-x;background-position:50% 96%}
+.mw.mhv,.mw.mhl,.mw.sel.mhl{background-color:color-mix(in srgb,var(--accent) 22%,transparent)}
+#mtip{position:fixed;z-index:40;max-width:min(320px,calc(100vw - 16px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px rgb(0 0 0 / .18);font-family:var(--f-ui);pointer-events:none;direction:rtl}
+#mtip b{display:block;font-family:var(--f-quran);font-size:1.25rem;font-weight:400;color:var(--accent);margin-bottom:2px}
+#mtip span{font-size:1rem;line-height:1.7}
+.mbox{background:var(--accent-soft);border-radius:10px;padding:10px 12px;margin:8px 0 10px}
+.mbox b{font-family:var(--f-quran);font-size:1.3rem;font-weight:400;color:var(--accent);margin-inline-end:6px}
+.mbox p{margin:2px 0 4px;line-height:1.8}
+.mbox small{color:var(--muted);font-size:.75rem}
 .shb{display:inline-flex;justify-content:center;align-items:center;min-width:74%;height:1.55em;border:2px solid var(--gold);border-radius:999px;background:color-mix(in srgb,var(--accent) 12%,var(--paper));font-size:1.12em;position:relative}
 .shb::before,.shb::after{content:"";position:absolute;top:50%;width:.42em;height:.42em;background:var(--gold);transform:translateY(-50%) rotate(45deg)}
 .shb::before{right:-.24em}.shb::after{left:-.24em}
@@ -1912,6 +1921,7 @@ function openReader(p, back){
   RD = {page:p, status: pageReady(p) ? 'ok' : 'loading', sel:null, sheet:'', back: back || (view === 'reader' ? 'read' : view)};
   view = 'reader'; R().page = p; save(); render(); window.scrollTo(0, 0);
   if (RD.status !== 'ok') preparePage(p);
+  if (meanOn()) loadMeans().catch(() => {});
 }
 function goPage(np){
   if (np < 1 || np > 604) return;
@@ -1944,6 +1954,34 @@ function tjFont(p){
   }).catch(e => { delete tjReady[n]; throw e; });
   return tjReady[n];
 }
+/* Word meanings (غريب القرآن): «السراج في بيان غريب القرآن», published by QuranEnc.com. Shown word by word on the mushaf. */
+let MN = null, mnLoading = null, MNHZ = new Set();
+const meanOn = () => R().mean !== false;
+function loadMeans(){
+  if (MN) return Promise.resolve(MN);
+  if (!mnLoading) mnLoading = fetch('meanings.json').then(r => { if (!r.ok) throw new Error('http'); return r.json(); }).then(d => {
+    MNHZ = new Set(d.hz); d.w = {};
+    for (const g in d.a){ const m = new Map(); d.a[g].forEach((e, i) => e[0].forEach(k => { if (!m.has(k)) m.set(k, i); })); d.w[g] = m; }
+    MN = d; if (view === 'reader' && meanOn()) render(); return d;
+  }).catch(e => { mnLoading = null; throw e; });
+  return mnLoading;
+}
+function meanAt(g, k){ if (!MN || !meanOn() || k == null) return null; const m = MN.w[g]; return m && m.has(k) ? MN.a[g][m.get(k)] : null; }
+/* The tajweed mushaf joins the hizb sign and «إل ياسين» into fewer pieces, so shift its word numbers to match. */
+const tj2m = (g, k) => k + (MNHZ.has(g) ? 1 : 0) + (g === 3918 && k >= 3 ? 1 : 0);
+/* Words of an ayah that began on an earlier page, so word numbers continue across a page turn. */
+function wordStart(p, tj){
+  const c = {};
+  for (let q = Math.max(1, p - 2); q < p; q++){
+    if (tj){ for (const l of TJ.pages[q - 1]) if (l[0] !== 1 && l[0] !== 2) for (const w of l.slice(2)) c[w[1]] = (c[w[1]] || 0) + 1; }
+    else for (const l of M.pages[q - 1]) if (l[0] === 0) for (const x of l.slice(1)){ const g = x % 8192; if (g) c[g] = (c[g] || 0) + 1; }
+  }
+  return c;
+}
+function meanAttr(g, mk){
+  const e = meanAt(g, mk); if (!e) return ['', ''];
+  return [' hm' + (RD.sel === g && RD.selW != null && e[0].includes(RD.selW) ? ' mhl' : ''), ` data-w="${mk}"`];
+}
 const HIDX = new Map();
 function heads(){ if (HEADS || !M) return; HEADS = []; M.pages.forEach(pg => pg.forEach(l => { if (l[0] === 1){ HEADS.push(l[1]); HIDX.set(l[1], HEADS.length); } else if (l[0] === 2 && !BSM) BSM = l.slice(1); })); }
 function pageReady(p){
@@ -1956,7 +1994,10 @@ function tjPageHtml(p){
   const big = rsize() > 0 && !isLand(), fam = 'TJ' + p, pal = isDark() ? `;font-palette:--tjd${p}` : '';
   let h = `<div class="mlines tj${p <= 2 ? ' opening' : ''}${big ? ' big' : ''}" id="mlines">`, flow = '';
   const flush = () => { if (flow){ h += `<div class="flow">${flow}</div>`; flow = ''; } };
-  const mw = (txt, g) => `<span class="mw${RD.sel && g === RD.sel ? ' sel' : ''}" style="font-family:${fam}${pal}" data-act="ayah" data-v="${g}">${txt}</span>`;
+  const wc = MN && meanOn() ? wordStart(p, true) : null;
+  const mw = (txt, g) => { let m = ['', ''];
+    if (wc){ const k = wc[g] = (wc[g] || 0) + 1; m = meanAttr(g, tj2m(g, k - 1)); }
+    return `<span class="mw${RD.sel && g === RD.sel ? ' sel' : ''}${m[0]}" style="font-family:${fam}${pal}" data-act="ayah" data-v="${g}"${m[1]}>${txt}</span>`; };
   const enc = x => { const d = decode(x); return `<span class="mw" style="font-family:${M.fonts[d.fi]}">${String.fromCodePoint(d.code)}</span>`; };
   for (const l of TJ.pages[p - 1]){
     if (l[0] === 1){ flush(); h += `<div class="ml sh" data-sura="${l[1]}"><span class="shb">${enc(HEADS[l[1] - 1])}</span></div>`; continue; }
@@ -1974,11 +2015,14 @@ function pageHtml(p){
   const big = rsize() > 0 && !isLand();
   let h = `<div class="mlines${p <= 2 ? ' opening' : ''}${big ? ' big' : ''}" id="mlines">`, flow = '';
   const flush = () => { if (flow){ h += `<div class="flow">${flow}</div>`; flow = ''; } };
+  const wc = MN && meanOn() ? wordStart(p, false) : null;
   for (const l of M.pages[p - 1]){
     const t = l[0];
-    const w = l.slice(1).map(x => { const d = decode(x);
-      return `<span class="mw${RD.sel && d.g === RD.sel ? ' sel' : ''}" style="font-family:${M.fonts[d.fi]}"${d.g ? ` data-act="ayah" data-v="${d.g}"` : ''}>${String.fromCodePoint(d.code)}</span>`; }).join('');
-    if (t === 0 && big){ flow += (flow ? ' ' : '') + l.slice(1).map(x => { const d = decode(x); return `<span class="mw${RD.sel && d.g === RD.sel ? ' sel' : ''}" style="font-family:${M.fonts[d.fi]}"${d.g ? ` data-act="ayah" data-v="${d.g}"` : ''}>${String.fromCodePoint(d.code)}</span>`; }).join(' '); continue; }
+    const sp = l.slice(1).map(x => { const d = decode(x); let m = ['', ''];
+      if (wc && t === 0 && d.g){ const k = wc[d.g] = (wc[d.g] || 0) + 1; m = meanAttr(d.g, k - 1); }
+      return `<span class="mw${RD.sel && d.g === RD.sel ? ' sel' : ''}${m[0]}" style="font-family:${M.fonts[d.fi]}"${d.g ? ` data-act="ayah" data-v="${d.g}"` : ''}${m[1]}>${String.fromCodePoint(d.code)}</span>`; });
+    if (t === 0 && big){ flow += (flow ? ' ' : '') + sp.join(' '); continue; }
+    const w = sp.join('');
     flush();
     h += t === 1 ? `<div class="ml sh" data-sura="${HIDX.get(l[1]) || ''}"><span class="shb">${w}</span></div>` : t === 2 ? `<div class="ml bs">${w}</div>` : `<div class="ml">${w}</div>`;
   }
@@ -2047,8 +2091,9 @@ function vReader(){
   else body = pageHtml(p);
   let sheet = '';
   if (RD.sel){
-    const [s, a] = gidToSA(RD.sel), marked = R().marks.some(m => m.g === RD.sel);
+    const [s, a] = gidToSA(RD.sel), marked = R().marks.some(m => m.g === RD.sel), en = meanAt(RD.sel, RD.selW);
     sheet = `<div class="rsheet card"><div class="row"><b>سورة ${Q[s - 1][0]} · الآية ${AR(a)}</b><button class="x" data-act="rdUnsel" aria-label="إغلاق">✕</button></div>
+      ${en ? `<div class="mbox"><b>${esc(en[1])}</b><p>${esc(en[2])}</p><small>السراج في بيان غريب القرآن · QuranEnc.com</small></div>` : ''}
       <div class="rnav"><button class="btn soft" data-act="rdRecite">سمّع هذه الآية</button><button class="btn ghost" data-act="rdMark">${marked ? 'إزالة العلامة' : 'ضع علامة'}</button></div>
       <button class="btn soft" data-act="rdReciteSura">${MIC_SVG}سمّع سورة ${Q[s - 1][0]} كاملة</button></div>`;
   } else if (RD.sheet === 'marks'){
@@ -2059,6 +2104,7 @@ function vReader(){
   } else if (RD.sheet === 'size'){
     sheet = `<div class="rsheet card"><div class="row"><b>الخط والألوان</b><button class="x" data-act="rdSheet" data-v="" aria-label="إغلاق">✕</button></div>
       <button class="opt" data-act="rdTj" aria-pressed="${tjOn()}"><span class="dot"></span><span><b>مصحف التجويد الملوّن</b><span class="muted" style="display:block">ألوان أحكام التجويد، بخطوط مجمع الملك فهد</span></span></button>
+      <button class="opt" data-act="rdMean" aria-pressed="${meanOn()}"><span class="dot"></span><span><b>معاني الكلمات</b><span class="muted" style="display:block">الكلمات المنقّطة لها معنى: ضع المؤشر عليها أو اضغطها. المصدر: «السراج في بيان غريب القرآن» من موسوعة القرآن الكريم QuranEnc.com</span></span></button>
       <div class="tabs3">${RSIZES.map(([v, l]) => `<button data-act="rdSize" data-v="${v}" aria-pressed="${rsize() === v}">${l}</button>`).join('')}</div>
       <p class="muted">«مثل المصحف» يعرض الأسطر كما في المصحف الورقي. «كبير» و«أكبر» يكبّران الخط ويوزّعان كلمات الصفحة نفسها على أسطر أقصر.</p></div>`;
   }
@@ -2093,7 +2139,7 @@ const getFlag = k => { try { return localStorage.getItem(DLK[k]); } catch (e) { 
 const setFlag = (k, v) => { try { localStorage.setItem(DLK[k], v); } catch (e) {} };
 Object.keys(dls).forEach(k => { if (getFlag(k) === '1') dls[k].state = 'done'; });
 function dlUrls(k){
-  const base = [new URL('mushaf.json', location.href).href];
+  const base = [new URL('mushaf.json', location.href).href, new URL('meanings.json', location.href).href];
   if (k === 'plain') return base.concat(M.fonts.map(fontUrl));
   const out = base.concat([new URL('tajweed.json', location.href).href, fontUrl('QCF4_QBSML'), fontUrl('QCF4_Hafs_01')]);
   for (let p = 1; p <= 604; p++) out.push(tjUrl(p));
@@ -2280,7 +2326,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r77';
+const BUILD = 'r78';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2298,6 +2344,25 @@ function go(v){
   if (v === 'setupWird'){ const w = S.wird; wd = w ? {mode: w.days ? 'khatma' : w.per % 20 === 0 ? 'juz' : 'pages', n: w.days || (w.per % 20 === 0 ? w.per / 20 : w.per), from: w.pos} : {mode:'pages', n:5, from: R().page || 1}; }
   view = v; render(); window.scrollTo(0, 0);
 }
+/* Computer with a mouse: rest the pointer on a dotted word to see its meaning. */
+const HOVER = matchMedia('(hover: hover) and (pointer: fine)');
+let tipEl = null;
+function tipHide(){ if (tipEl) tipEl.hidden = true; document.querySelectorAll('.mw.mhv').forEach(x => x.classList.remove('mhv')); }
+app.addEventListener('mouseover', e => {
+  if (!HOVER.matches) return;
+  const w = e.target.closest('.mw.hm'); if (!w){ if (tipEl && !tipEl.hidden) tipHide(); return; }
+  const g = +w.dataset.v, en = meanAt(g, +w.dataset.w); if (!en) return;
+  tipHide();
+  document.querySelectorAll(`.mw.hm[data-v="${g}"]`).forEach(x => { if (en[0].includes(+x.dataset.w)) x.classList.add('mhv'); });
+  if (!tipEl){ tipEl = document.createElement('div'); tipEl.id = 'mtip'; document.body.appendChild(tipEl); }
+  tipEl.innerHTML = `<b>${esc(en[1])}</b><span>${esc(en[2])}</span>`; tipEl.hidden = false;
+  const r = w.getBoundingClientRect(), tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+  const x = Math.max(8, Math.min(innerWidth - tw - 8, r.left + r.width / 2 - tw / 2));
+  let y = r.top - th - 8; if (y < 8) y = r.bottom + 8;
+  tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
+});
+app.addEventListener('mouseout', e => { const w = e.target.closest('.mw.hm'); if (w && !(e.relatedTarget && w.contains(e.relatedTarget))) tipHide(); });
+addEventListener('scroll', () => { if (tipEl && !tipEl.hidden) tipHide(); }, {passive:true});
 app.addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act, v = el.dataset.v;
@@ -2435,8 +2500,10 @@ app.addEventListener('click', e => {
   if (a === 'rdNext'){ goPage(RD.page + 1); return; }
   if (a === 'rdPrev'){ goPage(RD.page - 1); return; }
   if (a === 'rdRetry'){ RD.status = 'loading'; render(); preparePage(RD.page); return; }
-  if (a === 'ayah'){ RD.sheet = ''; RD.sel = RD.sel === +v ? null : +v; render(); return; }
-  if (a === 'rdUnsel'){ RD.sel = null; render(); return; }
+  if (a === 'ayah'){ const w = el.dataset.w != null ? +el.dataset.w : null; tipHide(); RD.sheet = '';
+    if (RD.sel === +v && (w == null || RD.selW === w)){ RD.sel = null; RD.selW = null; } else { RD.sel = +v; RD.selW = w; } render(); return; }
+  if (a === 'rdMean'){ R().mean = !meanOn(); save(); if (meanOn()) loadMeans().catch(() => {}); render(); return; }
+  if (a === 'rdUnsel'){ RD.sel = null; RD.selW = null; render(); return; }
   if (a === 'rdMark'){ const r = R(), i = r.marks.findIndex(m => m.g === RD.sel); if (i >= 0) r.marks.splice(i, 1); else r.marks.unshift({g:RD.sel, p:RD.page}); save(); render(); return; }
   if (a === 'rdRecite'){ const g = RD.sel; retReader = true; startSession([{type:'practice', chunk:{r:[[g, g]]}}]); return; }
   if (a === 'rdFinish'){ if (S.wird){ S.wird.pos = 605; markDay(); save(); } view = 'home'; render(); window.scrollTo(0, 0); return; }
