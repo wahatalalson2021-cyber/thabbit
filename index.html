@@ -1160,6 +1160,23 @@ function processSpoken(flush){
      at once (the colours are corrected as more words come) is better than waiting silently for the next words */
   let best = 1e9; for (let i = 0; i <= n; i++) best = Math.min(best, D[at(i, m)]);
   let bi = 0; for (let i = 0; i <= n; i++) if (D[at(i, m)] <= best + 0.15) bi = i;
+  /* Repeated phrases (e.g. «فبأي آلاء ربكما تكذبان» in Ar-Rahman): if the line-up reaches its end only by jumping over 2+ unread
+     words and then matching a short phrase that also occurs earlier in the text, the reader has not really got there yet.
+     Stay before the jump and wait for more words (a real skip is confirmed once he reads on past the repeated phrase). */
+  for (let guard = 0; guard < 8 && bi > 0; guard++){
+    let i2 = bi, j2 = m, okAfter = 0, gapEnd = -1, gapLen = 0;
+    while (i2 > 0 || j2 > 0){
+      const o = op[at(i2, j2)];
+      if (o === 2){ let q = i2; while (q > 0 && op[at(q, j2)] === 2) q--; gapLen = i2 - q; gapEnd = i2; i2 = q; if (gapLen >= 2) break; continue; }
+      if (o === 1){ okAfter++; i2--; j2--; } else if (o === 3) j2--; else if (o === 4){ okAfter += 2; i2 -= 2; j2--; } else if (o === 5){ okAfter++; i2--; j2 -= 2; }
+      else if (o === 7){ const v = ok[at(i2, j2)] & 63; okAfter += v >> 2; i2 -= v >> 2; j2 -= v & 3; } else if (o === 6){ okAfter++; i2--; j2 -= ok[at(i2 + 1, j2)] || 1; }
+      else break;
+    }
+    if (gapLen < 2 || okAfter > 6 || gapEnd < 0) break;
+    const tail = E.slice(gapEnd, bi).join(' '), before = E.slice(0, i2).join(' ');
+    if (!tail || !(' ' + before + ' ').includes(' ' + tail + ' ')) break;
+    bi = i2;
+  }
   const ws = {}, hd = {}, skip = new Set(), ins = {}; let i = bi, j = m;
   while (i > 0 || j > 0){
     const o = op[at(i, j)];
@@ -1179,7 +1196,9 @@ function processSpoken(flush){
      The corrected word is shown orange so he sees it. Re-reading the text just before (a normal restart) is not marked. */
   if (sess.engine === 'model') for (const k in ins){ const q = +k; if (q >= bi || ws[q] !== 'ok' || q === 0 || (sess.bounds && sess.bounds.has(q))) continue;   // before a surah: isti'adha/basmala, however written
     const run = ins[k].filter(w => !(PRE.has(w) && (q === 0 || (sess.bounds && sess.bounds.has(q)))));
-    if (run.length && !reRead(run, q)){ let t = 0; while (t < run.length && E[q + t] && q + t < bi && same(E[q + t], run[t])) t++;   // "وما يعلمون" before "وما يشعرون": the changed word is يشعرون
+    /* the same phrase said again (the reader repeating the ayah he is on) is not a correction */
+    const repHere = run.length && [...Array(run.length).keys()].some(L0 => { const L = L0 + 1; return run.length % L === 0 && q + L <= n && run.every((w, t) => same(E[q + (t % L)], w)); });
+    if (run.length && !repHere && !reRead(run, q)){ let t = 0; while (t < run.length && E[q + t] && q + t < bi && same(E[q + t], run[t])) t++;   // "وما يعلمون" before "وما يشعرون": the changed word is يشعرون
       const r = q + t < bi && ws[q + t] === 'ok' ? q + t : q; ws[r] = 'soft'; hd[r] = 'قلتَ قبلها: ' + run.join(' '); } }
   if (bi !== sess.p){ sess.pT = Date.now(); if (sess.glow){ sess.glow = false; const b = document.getElementById('hintBtn'); if (b) b.classList.remove('glow'); } }
   sess.ws = ws; sess.heard = hd; sess.p = bi;
@@ -2484,7 +2503,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r84';
+const BUILD = 'r85';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
