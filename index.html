@@ -76,8 +76,8 @@ p{margin:0}
 .stat span{font-size:.78rem;color:var(--muted)}
 /* tabs */
 nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center}
-nav.tabs .in{max-width:520px;width:100%;display:grid;grid-template-columns:repeat(4,1fr)}
-nav.tabs button{border:0;background:none;padding:12px 4px 14px;font-size:.88rem;color:var(--muted);font-weight:600;border-top:3px solid transparent}
+nav.tabs .in{max-width:520px;width:100%;display:grid;grid-template-columns:repeat(5,1fr)}
+nav.tabs button{border:0;background:none;padding:12px 2px 14px;font-size:.84rem;white-space:nowrap;color:var(--muted);font-weight:600;border-top:3px solid transparent}
 nav.tabs button[aria-current="page"]{color:var(--accent);border-top-color:var(--accent)}
 /* options */
 .opt{display:flex;gap:12px;align-items:flex-start;text-align:start;width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:12px;padding:14px}
@@ -1262,14 +1262,13 @@ function render(){
   else if (view === 'mist') h = vMist();
   else if (view === 'recite') h = vRecite();
   else if (view === 'search') h = vSearch();
-  else if (view === 'n40') h = vN40();
   else if (view === 'n40h') h = vN40h();
   else if (view === 'setupReview') h = vSetupReview();
   else if (view === 'setupWird') h = vSetupWird();
   else {
-    h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
+    h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'n40' ? vN40() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
     h += '<nav class="tabs" aria-label="الأقسام"><div class="in">' +
-      [['home','اليوم'],['read','اقرأ'],['progress','تقدّمي'],['settings','الإعدادات']].map(([k, l]) =>
+      [['home','اليوم'],['read','اقرأ'],['n40','أحاديث'],['progress','تقدّمي'],['settings','الإعدادات']].map(([k, l]) =>
         `<button data-act="tab" data-v="${k}" ${view === k ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
   }
   app.innerHTML = h;
@@ -2151,13 +2150,13 @@ function n40Src(t){ const b = /الْبُخَارِيُّ/.test(t), m = /مُس�
 function n40Wait(){ if (N40 === false) return `<div class="card"><p class="err">تعذّر تحميل الأحاديث. تأكد من الإنترنت وحاول مرة أخرى.</p><button class="btn" data-act="n40Retry">حاول مرة أخرى</button></div>`;
   loadN40(); return `<div class="card"><p class="muted">أجهّز الأحاديث...</p></div>`; }
 function vN40(){
-  let h = `<main>${back('read')}<div><h1>الأربعون النووية</h1><p class="muted">اثنان وأربعون حديثًا جمعها الإمام يحيى بن شرف النووي (ت ٦٧٦هـ) في أصول الدين وقواعده.</p></div>`;
-  if (!N40) return h + n40Wait() + '</main>';
+  let h = `<div><h1>الأربعون النووية</h1><p class="muted">اثنان وأربعون حديثًا جمعها الإمام يحيى بن شرف النووي (ت ٦٧٦هـ) في أصول الدين وقواعده.</p></div>`;
+  if (!N40) return h + n40Wait();
   const last = S.n40 && S.n40.last;
   if (last) h += `<button class="btn" data-act="n40Open" data-v="${last}">أكمل من ${N40.h[last - 1].title}</button>`;
   h += `<label class="sbox n40q">${SEARCH_SVG}<input id="n40Q" type="search" value="${esc(n40Query)}" placeholder="ابحث بكلمة أو برقم الحديث" autocomplete="off" enterkeyhint="search" aria-label="ابحث في الأحاديث"></label>`;
   h += `<div id="n40Res">${n40Results()}</div>`;
-  return h + '</main>';
+  return h;
 }
 /* Search: letters only (no diacritics, any form of alif / ya / ta marbuta), so "انما الاعمال" finds "إنَّمَا الْأَعْمَالُ".
    A number (١٢ or 12) goes to that hadith. */
@@ -2187,7 +2186,7 @@ function n40Results(){
 }
 function n40Para(t){ return t.split('\n').map(p => p.trim()).filter(Boolean).map(p => `<p>${p}</p>`).join(''); }
 function vN40h(){
-  let h = `<main><div class="top"><span class="brand">ثبّت</span><button class="x" data-act="tab" data-v="n40">الأحاديث</button></div>`;
+  let h = `<main><div class="top"><span class="brand">ثبّت</span><button class="x" data-act="tab" data-v="n40">رجوع</button></div>`;
   if (!N40) return h + n40Wait() + '</main>';
   const x = N40.h[n40Cur - 1], sz = (S.n40 && S.n40.size) || 1;
   h += `<div class="n40head"><span class="n40pos">${AR(x.n)} من ٤٢</span><h1>${x.title}</h1><div class="n40size"><button class="x" data-act="n40Size" data-v="-1" aria-label="تصغير الخط">أ-</button><button class="x" data-act="n40Size" data-v="1" aria-label="تكبير الخط">أ+</button></div></div>
@@ -2209,9 +2208,6 @@ function vRead(){
     h += `<div class="card"><div class="row"><h3>الورد اليومي · ${wirdName(S.wird)}</h3>${pct != null ? `<b>${AR(pct)}٪</b>` : ''}</div>${pct != null ? `<div class="bar" style="color:var(--accent)"><i style="width:${pct}%"></i></div>` : ''}
       <p>اليوم: من صفحة ${AR(wt.from)} إلى ${AR(wt.to)}</p><p class="muted">${wt.left ? 'بقي ' + AR(wt.left) + ' ' + pagesWord(wt.left) : 'أتممت ورد اليوم، بارك الله فيك'}</p>
       <div class="rnav">${wt.left ? `<button class="btn" data-act="rdOpen" data-v="${S.wird.pos}">${wt.done ? 'أكمل الورد' : 'ابدأ الورد'}</button>` : ''}<button class="btn ghost" data-act="go" data-v="setupWird">تعديل</button></div></div>`; }
-  { const last = S.n40 && S.n40.last;
-    h += `<div class="card n40card"><div class="n40ct"><span class="n40ic">٤٢</span><div><h3>الأربعون النووية</h3><p class="muted">أحاديث جامعة في أصول الدين، جمعها الإمام النووي</p></div></div>
-      <div class="rnav"><button class="btn soft" data-act="go" data-v="n40">${last ? 'فهرس الأحاديث' : 'افتح الأحاديث'}</button>${last ? `<button class="btn" data-act="n40Open" data-v="${last}">أكمل من الحديث ${AR(last)}</button>` : ''}</div></div>`; }
   h += dlCard();
   h += `<div class="card"><div class="tabs3" role="group" aria-label="الفهرس">${[['sura','السور'],['juz','الأجزاء'],['marks','علاماتي']].map(([k2, l]) => `<button data-act="rdTab" data-v="${k2}" aria-pressed="${rdTab === k2}">${l}</button>`).join('')}</div>`;
   if (rdTab === 'sura') h += `<input class="search" id="rdSearch" type="search" placeholder="ابحث عن سورة" value="${esc(rdQuery)}" autocomplete="off"><div id="rdList">${suraRows()}</div>`;
@@ -2284,7 +2280,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r76';
+const BUILD = 'r77';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
