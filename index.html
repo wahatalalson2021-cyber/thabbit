@@ -207,6 +207,11 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .aunote{display:block;text-align:center;color:var(--muted);font-size:.8rem;margin-bottom:6px}
 .aunote button{all:unset;cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 .recsel{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);max-width:180px}
+.hintbtn{display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 8px}
+.hintbtn svg{width:20px;height:20px}
+.hintbtn.glow{animation:hglow 1.2s ease-in-out infinite;background:color-mix(in srgb,var(--warn) 22%,var(--surface));color:var(--ink)}
+@keyframes hglow{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--warn) 55%,transparent)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--warn) 0%,transparent)}}
+@media (prefers-reduced-motion: reduce){.hintbtn.glow{animation:none;outline:3px solid var(--warn)}}
 .tfbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:6px 0 8px}
 .tfbtn svg{width:20px;height:20px}
 .tfbox{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;max-height:34vh;overflow:auto}
@@ -630,7 +635,7 @@ async function engStart(){
   const s0 = sess, Ctx = window.AudioContext || window.webkitAudioContext, MR = !!window.MediaRecorder;
   const ctx = MR ? null : new Ctx();                       // created inside the tap, so the iPhone allows it
   REC = {s0, ctx, q: [], busy: false, stopping: false, seg: [], segN: 0, speech: 0, sil: 0, noise: 0.003, pre: [], blocks: [], cands: [], pieces: [], base: (sess.finalText || '').trim()};
-  sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.interim = ''; sess.hear = 'audio'; sess.micTip = false; sess.engine = 'model';
+  sess.listening = true; sess.pT = Date.now(); sess.usedMic = true; sess.micErr = ''; sess.interim = ''; sess.hear = 'audio'; sess.micTip = false; sess.engine = 'model';
   liveText = ASR ? '' : 'أجهّز المحرك الدقيق... ابدأ القراءة'; render();
   ENGLOG.length = 0; engLog('بدء · ' + (ASR ? 'المحرك في الذاكرة' : 'تحميل المحرك من الجهاز'));
   /* On computers and Android the browser "cleans" the voice for calls (noise suppression, automatic volume), which blurs
@@ -1176,9 +1181,35 @@ function processSpoken(flush){
     const run = ins[k].filter(w => !(PRE.has(w) && (q === 0 || (sess.bounds && sess.bounds.has(q)))));
     if (run.length && !reRead(run, q)){ let t = 0; while (t < run.length && E[q + t] && q + t < bi && same(E[q + t], run[t])) t++;   // "وما يعلمون" before "وما يشعرون": the changed word is يشعرون
       const r = q + t < bi && ws[q + t] === 'ok' ? q + t : q; ws[r] = 'soft'; hd[r] = 'قلتَ قبلها: ' + run.join(' '); } }
+  if (bi !== sess.p){ sess.pT = Date.now(); if (sess.glow){ sess.glow = false; const b = document.getElementById('hintBtn'); if (b) b.classList.remove('glow'); } }
   sess.ws = ws; sess.heard = hd; sess.p = bi;
   if (sess.p >= n){ sess.reveal = n; stopMic(); }
 }
+/* "Remind me how the next ayah starts": the first two words of the next ayah the reader has not reached, shown as help.
+   While reciting by voice, if he stops for a few seconds right at the start of an ayah, the button glows (it reveals nothing by itself). */
+const BULB_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z"/></svg>';
+function hintCur(){
+  if (!sess || !sess.starts) return 0;
+  let cur = Math.max(sess.p || 0, sess.reveal || 0);
+  while (cur < sess.total && (sess.shown.has(cur) || sess.ws[cur])) cur++;
+  return cur;
+}
+function hintTarget(){
+  if (!sess || !sess.starts) return null;
+  const cur = hintCur();
+  for (let ai = 0; ai < sess.starts.length; ai++){
+    const st = sess.starts[ai];
+    if (st >= cur && st < sess.total && !sess.shown.has(st) && !sess.ws[st] && st >= sess.reveal) return {ai, st, end: ai + 1 < sess.starts.length ? sess.starts[ai + 1] : sess.total};
+  }
+  return null;
+}
+setInterval(() => {
+  if (view !== 'session' || !sess || !sess.listening || sess.glow || !sess.starts) return;
+  const cur = hintCur(), t = hintTarget();
+  if (t && t.st === cur && sess.pT && Date.now() - sess.pT > 4000 && (sess.p || 0) > 0){
+    sess.glow = true; const b = document.getElementById('hintBtn'); if (b) b.classList.add('glow');
+  }
+}, 1000);
 function hearMsg(){
   const h = sess && sess.hear;
   return h === 'speech' ? 'أسمعك... تابع القراءة' : h === 'sound' ? 'يصلني صوت...' : h === 'audio' ? 'الميكروفون يعمل. ابدأ القراءة من أول المقطع' : 'أجهّز الميكروفون...';
@@ -1765,7 +1796,7 @@ function initStep(){
   sess.phase = t.type === 'new' ? 'read' : 'test';
   sess.reps = {}; sess.ri = 0;
   sess.reveal = t.type === 'new' ? 1 : 2;
-  sess.shown = new Set();
+  sess.shown = new Set(); sess.glow = false; sess.pT = Date.now(); sess.starts = null;
   sess.peeked = new Set();
   { const ay = chunkAyat(itemChunk(t)); sess.exp = []; sess.bounds = new Set();
     sess.muq = new Map();
@@ -1806,8 +1837,10 @@ function vSession(){
     h += `</div>`;
   } else {
     let k = 0, words = '';
+    const starts = [];
     chunkAyat(c).forEach((x, xi) => {
       if (x.head || xi === 0){ const hh = headHtml(x, multi); if (hh) words += (words ? '</div>' : '') + hh + '<div class="mushaf">'; else if (!words) words = '<div class="mushaf">'; }
+      starts.push(k);
       words += x.txt.split(' ').map(w => {
         const i = k++; const st = sess.ws[i]; const vis = i < sess.reveal || sess.shown.has(i) || st;
         let cls = !vis ? 'hid' : st === 'miss' ? 'miss' : st === 'soft' ? 'soft' : sess.peeked.has(i) ? 'hint' : '';
@@ -1817,7 +1850,7 @@ function vSession(){
       }).join(' ') + ` <span class="num">﴿${AR(x.a)}﴾</span> `;
     });
     words += '</div>';
-    sess.total = k;
+    sess.total = k; sess.starts = starts; sess.ayNums = chunkAyat(c).map(x => x.a);
     const allShown = sess.reveal >= k;
     h += `<p class="muted">${t.type === 'new' ? 'الآيات مخفية الآن. اقرأها من حفظك بصوت مسموع، واكشف الكلمة إذا توقفت.' : 'اقرأ من حفظك بصوت مسموع من أوله. أول كلمتين ظاهرتان لتبدأ.'}</p>${words}`;
     if (!allShown){
@@ -1833,6 +1866,8 @@ function vSession(){
       } else if (DICT === null){
         h += `<p class="muted">${IN_CLAUDE ? 'التسميع بالصوت يعمل من نسخة التطبيق المستقلة، لأن صفحات Claude لا تسمح بالميكروفون. هنا اقرأ من حفظك ثم قيّم نفسك.' : 'هذا المتصفح لا يدعم التسميع بالصوت. جرّب Chrome أو Safari، أو اقرأ من حفظك ثم قيّم نفسك.'}</p>`;
       }
+      const ht = hintTarget();
+      if (ht) h += `<button class="btn soft hintbtn${sess.glow ? ' glow' : ''}" id="hintBtn" data-act="hintAy">${BULB_SVG}ذكّرني ببداية الآية ${AR(sess.ayNums[ht.ai])}</button>`;
       h += `<div class="rnav"><button class="btn soft" data-act="next">اكشف الكلمة التالية</button><button class="btn ghost" data-act="all">أنهيت، أظهر النص</button></div></div>`;
     } else {
       const hints = sess.peeked.size;
@@ -2449,7 +2484,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r83';
+const BUILD = 'r84';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2587,10 +2622,15 @@ app.addEventListener('click', e => {
     if (!DICT) return;
     if (sess.listening || dictState !== 'idle'){ DICT.stop().catch(() => {}); return; }
     audioUnlock();
-    sess.listening = true; sess.usedMic = true; sess.micErr = ''; sess.interim = ''; liveText = ''; sess.hear = null; sess.micTip = false;
+    sess.listening = true; sess.pT = Date.now(); sess.usedMic = true; sess.micErr = ''; sess.interim = ''; liveText = ''; sess.hear = null; sess.micTip = false;
     const L = LANGS[langIdx];
     DICT.start(L ? {language:L} : undefined).then(() => saveLang(), err => { if (sess){ sess.listening = false; sess.micErr = micFail(err && err.code); render(); } });
     render(); return;
+  }
+  if (a === 'hintAy'){
+    const t = hintTarget(); if (!t) return;
+    for (let i = t.st; i < Math.min(t.st + 2, t.end); i++){ if (!sess.ws[i]){ sess.shown.add(i); sess.peeked.add(i); } }
+    sess.glow = false; sess.pT = Date.now(); render(); return;
   }
   if (a === 'next'){
     sess.reveal = Math.max(sess.reveal, sess.p);
