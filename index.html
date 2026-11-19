@@ -450,6 +450,27 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .tgo svg{width:18px;height:18px}
 .tile .tmain .tline{padding-left:40px}
+/* compact home: everything for today visible on the first screen */
+header.hero{min-height:0;padding-top:12px;padding-bottom:22px}
+header.hero .emblem svg{width:36px;height:42px}
+header.hero .gear{height:36px;font-size:.85rem;padding:0 12px 0 10px}
+header.hero .herotxt{margin-top:2px;gap:0}
+.hrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header.hero .hrow .chip{margin:0;font-size:.78rem;padding:3px 10px}
+header.hero .herotxt h1{font-size:1.45rem;margin:2px 0 0}
+.ptcard{padding:10px 12px}
+.ptcard{margin-top:0}
+.ptstrip{flex-wrap:nowrap}
+.ptmain{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;flex:1;min-width:0;flex-wrap:wrap}
+.ptchev{color:var(--muted);font-size:.8rem}
+.ptstrip .ptcity{flex:none}
+.tmain{min-height:118px;padding:12px 12px 10px;gap:4px}
+.tic{width:36px;height:36px;border-radius:10px}
+.tic svg{width:20px;height:20px}
+.tmain b{font-size:1.05rem}
+.tiles{margin-top:0}
+header.hero ~ .ptcard{margin-top:0}
+header.hero .heroart .lanterns,header.hero .heroart .cord,header.hero .heroart .glow{display:none}
 .dlcard.fancy{position:relative;overflow:hidden;background-color:color-mix(in srgb,var(--gold) 7%,var(--surface));background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='-24 -24 48 48'%3E%3Cg fill='none' stroke='%23b5882e' stroke-opacity='.13' stroke-width='1'%3E%3Crect x='-12' y='-12' width='24' height='24'/%3E%3Crect x='-12' y='-12' width='24' height='24' transform='rotate(45)'/%3E%3C/g%3E%3C/svg%3E");border-color:color-mix(in srgb,var(--gold) 35%,var(--line))}
 .dlcard.fancy .mimg{width:104px;height:120px}
 .gdiv{display:block;width:70%;height:1px;background:linear-gradient(to left,transparent,var(--gold),transparent)}
@@ -1536,7 +1557,7 @@ function progCard(){
 }
 function vHome(){
   const st = streak(); TPCT = tilePct();
-  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}<button class="gear" data-act="tab" data-v="settings" >${GEAR}<span>الإعدادات</span></button></div><div class="herotxt"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><h1>ماذا تريد اليوم؟</h1><span class="swoosh"></span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button>${ptCard()}<div class="tiles">`;
+  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}<button class="gear" data-act="tab" data-v="settings" >${GEAR}<span>الإعدادات</span></button></div><div class="herotxt"><div class="hrow"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div><h1>ماذا تريد اليوم؟</h1></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button>${ptCard()}<div class="tiles">`;
   const rp = R().page;
   h += tile('read', 'قراءة', 'المصحف والفهرس والعلامات', 'go', 'read');
   if (!S.hifz) h += tile('hifz', 'حفظ', 'اختر ما تحفظه ومقداره', 'go', 'setupHifz');
@@ -2296,6 +2317,7 @@ function ptToday(pl, ms){
 }
 const ptFmt = m => { m = ((m % 1440) + 1440) % 1440; const h = Math.floor(m / 60), mm = m % 60; return AR((h % 12) || 12) + ':' + AR(String(mm).padStart(2, '0')) + (h < 12 ? ' ص' : ' م'); };
 function ptLeft(d){ const h = Math.floor(d / 60), m = d % 60; return 'بعد ' + [h ? (h === 1 ? 'ساعة' : h === 2 ? 'ساعتين' : AR(h) + (h <= 10 ? ' ساعات' : ' ساعة')) : '', m ? (m === 1 ? 'دقيقة' : m === 2 ? 'دقيقتين' : AR(m) + (m <= 10 ? ' دقائق' : ' دقيقة')) : ''].filter(Boolean).join(' و') || 'الآن'; }
+function ptLeftShort(d){ const h = Math.floor(d / 60), m = d % 60; return 'بعد ' + (h ? AR(h) + ' س ' : '') + AR(m) + ' د'; }
 function ptNext(T){ for (const k of PT_KEYS) if (k !== 'sunrise' && T.mins[k] > T.now) return {k, d: T.mins[k] - T.now, at: T.mins[k]};
   return {k: 'fajr', d: T.mins.fajr + 1440 - T.now, at: T.mins.fajr}; }
 const MOSQUE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V11a8 6 0 0 1 16 0v10z"/><path d="M12 3v2M9 21v-4a3 3 0 0 1 6 0v4M2 21h20"/></svg>';
@@ -2303,8 +2325,9 @@ function ptCardInner(){
   const pl = ptPlace();
   if (!pl) return `<div class="ptop"><b>${MOSQUE_SVG}مواقيت الصلاة</b></div><p class="muted">حدّد مدينتك لتظهر مواقيت الصلاة وتنبيه دخول الوقت.</p>
     <div class="rnav"><button class="btn" data-act="ptGps">استخدم موقعي</button><button class="btn ghost" data-act="go" data-v="ptset">اختر المدينة</button></div>`;
-  const T = ptToday(pl), nx = ptNext(T);
-  return `<div class="ptop"><b>${MOSQUE_SVG}${PT_NAMES[nx.k]} ${ptFmt(nx.at)}</b><span class="ptleft">${ptLeft(nx.d)}</span></div>
+  const T = ptToday(pl), nx = ptNext(T), open = S.ptOpen === true || view === 'ptset';
+  if (!open) return `<div class="ptop ptstrip"><button class="ptmain" data-act="ptOpen" aria-expanded="false"><b>${MOSQUE_SVG}${PT_NAMES[nx.k]} ${ptFmt(nx.at)}</b><span class="ptleft">${ptLeftShort(nx.d)}</span><span class="ptchev">▾</span></button><button class="ptcity" data-act="go" data-v="qibla">${KAABA_MINI}القبلة</button></div>`;
+  return `<div class="ptop">${view === 'ptset' ? '' : '<button class="ptmain" data-act="ptOpen" aria-expanded="true">'}<b>${MOSQUE_SVG}${PT_NAMES[nx.k]} ${ptFmt(nx.at)}</b><span class="ptleft">${ptLeft(nx.d)}</span>${view === 'ptset' ? '' : '<span class="ptchev">▴</span></button>'}</div>
     <div class="ptrow">${PT_KEYS.map(k => `<span class="${k === nx.k ? 'on' : T.mins[k] <= T.now ? 'past' : ''}"><small>${PT_NAMES[k]}</small><b>${ptFmt(T.mins[k]).replace(/ [صم]$/, '')}</b></span>`).join('')}</div>
     <div class="ptfoot"><button class="ptcity" data-act="go" data-v="qibla">${KAABA_MINI}اتجاه القبلة</button><button class="ptcity" data-act="go" data-v="ptset">${esc(pl.name)} ▾</button></div>`;
 }
@@ -2851,7 +2874,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r93';
+const BUILD = 'r94';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3044,6 +3067,7 @@ app.addEventListener('click', e => {
   if (a === 'audSess'){ const g = +v; if (AU && AU.ctx === 'sess' && audG() === g) audToggle(); else audPlay([g], 'sess'); return; }
   if (a === 'recSet'){ S.reciter = v; save(); RD.sheet = ''; if (AU){ const l = AU.list.slice(AU.i), c = AU.ctx; audPlay(l, c); } else render(); return; }
   if (a === 'ptGps'){ ptGps(); return; }
+  if (a === 'ptOpen'){ S.ptOpen = !(S.ptOpen === true); save(); const c = document.getElementById('ptCard'); if (c) c.innerHTML = ptCardInner(); else render(); return; }
   if (a === 'qOn'){ qibOn(); return; }
   if (a === 'ptSound'){ S.pt = Object.assign(S.pt || {}, {sound: S.pt && S.pt.sound === false}); save(); render(); return; }
   if (a === 'adhanTry'){ const au = adhanEl(); if (!au.paused){ adhanStop(); el.textContent = 'استمع'; } else { adhanPlay(); el.textContent = 'إيقاف'; } return; }
