@@ -260,6 +260,11 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .spbtn{margin-top:34px;border:0;border-radius:999px;padding:15px 28px;font:inherit;font-size:1.1rem;font-weight:700;color:#3b2c08;background:linear-gradient(180deg,#f3dc9c,#d8b45c);box-shadow:0 6px 18px rgb(0 0 0 / .25);cursor:pointer}
 .spbtn:active{transform:scale(.98)}
 @keyframes spIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.mtmeter{height:16px;border-radius:99px;background:var(--bg);border:1px solid var(--line);overflow:hidden}.mtmeter i{display:block;height:100%;width:0;background:linear-gradient(to left,#2c8a4b,#7cc576);border-radius:99px;transition:width .08s}
+.mtv{margin:4px 0 0;font-weight:600}.mtv.good{color:var(--good)}.mtv.low{color:var(--warn)}.mtv.none{color:var(--muted)}
+.mtsel{width:100%;font:inherit;padding:10px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
+#mtRec{display:inline-flex;gap:8px;align-items:center;justify-content:center}#mtRec svg{width:18px;height:18px}audio{width:100%}
+.mictip{display:flex;flex-direction:column;gap:8px;align-items:stretch}.mictip .btn{width:auto}
 .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:340px;overflow:auto;padding:2px}
 .sgrid button{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 2px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .setrows .row{padding:6px 0;border-bottom:1px solid var(--line)}
@@ -555,6 +560,12 @@ async function engDownload(){
 function engDelete(){ caches.delete('transformers-cache').catch(() => {}); try { ASR && ASR.worker && ASR.worker.terminate(); } catch (e) {} ASR = null; asrLoad = null; ENG.st = 'none'; engFlag('run', null); engFlag('bad', null); engFlag('later', null); render(); }
 const useEngine = () => ENG.st === 'ready';
 
+/* The microphone the reader chose in "اختبار الميكروفون" (if it is still connected), otherwise the device's default. */
+async function micStream(extra){
+  const base = Object.assign({}, extra || {});
+  if (S.micId){ try { return await navigator.mediaDevices.getUserMedia({audio: Object.assign({deviceId: {exact: S.micId}}, base)}); } catch (e) {} }
+  return navigator.mediaDevices.getUserMedia({audio: Object.keys(base).length ? base : true});
+}
 /* Live capture: raw sound from the microphone, cut into pieces at pauses, each piece written out by the model. */
 let REC = null; const ENGLOG = []; let engT0 = 0;
 function engLog(m){ if (!ENGLOG.length) engT0 = performance.now(); ENGLOG.push(((performance.now() - engT0) / 1000).toFixed(1) + 's ' + m); if (ENGLOG.length > 60) ENGLOG.shift(); }
@@ -568,7 +579,8 @@ async function engStart(){
   /* On computers and Android the browser "cleans" the voice for calls (noise suppression, automatic volume), which blurs
      recitation for the model; ask for the plain sound there. The iPhone already gives clean sound and is left as it is. */
   const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  try { REC.stream = await navigator.mediaDevices.getUserMedia({audio: IOS ? true : {echoCancellation: false, noiseSuppression: false, autoGainControl: false}}); }
+  const want = IOS ? {} : {echoCancellation: false, noiseSuppression: false, autoGainControl: false};
+  try { REC.stream = await micStream(want); }
   catch (e) { engClose(); if (sess === s0){ sess.listening = false; sess.micErr = 'لم يُسمح باستخدام الميكروفون. اسمح لـ Safari باستخدامه ثم حاول مرة أخرى.'; render(); } return; }
   if (!REC || REC.s0 !== sess){ engClose(); return; }
   if (MR){
@@ -578,6 +590,7 @@ async function engStart(){
     const R0 = REC, mr = new MediaRecorder(R0.stream); R0.mr = mr; R0.chunks = []; R0.done = 0;
     mr.ondataavailable = e => { if (e.data && e.data.size && R0.mr === mr){ R0.chunks.push(e.data); engDecode(R0); } };
     mr.start(1000); engLog('التقاط: تسجيل ' + (mr.mimeType || ''));
+    setTimeout(() => { if (REC === R0 && !R0.stopping && !R0.speech && !R0.pieces.length && sess === s0){ sess.micTip = true; if (view === 'session') render(); } }, 7000);
     loadASR().then(() => { if (REC && liveText.startsWith('أجهّز')){ liveText = ''; engLive(); } engPump(); }, err => { if (REC){ engFlag('bad', '1'); ENG.st = 'bad'; engClose(); if (sess === s0){ sess.listening = false; sess.micErr = 'تعذّر تشغيل المحرك الدقيق على هذا الجهاز. اضغط «سمّع بصوتك» مرة أخرى للتسميع بخدمة الجوال.'; render(); } } });
     return;
   }
@@ -1224,7 +1237,9 @@ const pagesWord = n => n === 1 ? 'صفحة' : n === 2 ? 'صفحتان' : n <= 10
 
 function render(){
   let h = '';
-  if (view === 'session') h = vSession();
+  if (view !== 'mictest' && MT) mtStop();
+  if (view === 'mictest') h = vMicTest();
+  else if (view === 'session') h = vSession();
   else if (view === 'reader') h = vReader();
   else if (view === 'setupHifz') h = vSetupHifz();
   else if (view === 'hifzMenu') h = vHifzMenu();
@@ -1453,6 +1468,52 @@ function vMist(){
     <div class="card"><h3>آيات أخطأت فيها</h3>${ks.length ? `<button class="btn" data-act="mistGo" data-v="all">سمّع كل الآيات (${AR(ks.length)})</button><div class="wlist">${rows}</div>` : '<p class="muted">لا توجد الآن. كل آية تخطئ فيها بالأحمر أثناء التسميع بصوتك تظهر هنا، وتخرج وحدها إذا سمّعتها مرتين بلا خطأ.</p>'}</div>
     <div class="card"><h3>حفظ ضعيف حدّدته</h3>${wu.length ? `<div class="wlist">${wrows}</div>` : '<p class="muted">لم تحدّد شيئًا. من «مراجعة جديدة» اضغط الجزء أو السورة مرتين ليصير برتقاليًا.</p><button class="btn ghost" data-act="go" data-v="setupReview">حدّد الحفظ الضعيف</button>'}</div></main>`;
 }
+/* ---------- microphone test: choose the microphone, see the sound level live, record 5 s and listen ---------- */
+let MT = null;
+function mtStop(){ if (!MT) return; const m = MT; MT = null; try { cancelAnimationFrame(m.raf); } catch (e) {} try { m.stream && m.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { m.ctx && m.ctx.close(); } catch (e) {} try { m.mr && m.mr.state !== 'inactive' && m.mr.stop(); } catch (e) {} }
+async function mtStart(){
+  mtStop(); const m = MT = {st: 'starting', max: 0, peak: 0, devs: [], rec: 0};
+  try { m.stream = await micStream(); } catch (e) { if (MT === m){ m.st = 'denied'; render(); } return; }
+  if (MT !== m){ m.stream.getTracks().forEach(t => t.stop()); return; }
+  try { m.devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput' && d.deviceId !== 'default' && d.deviceId !== 'communications'); } catch (e) {}
+  m.cur = (m.stream.getAudioTracks()[0].getSettings() || {}).deviceId || '';
+  const Ctx = window.AudioContext || window.webkitAudioContext; m.ctx = new Ctx(); if (m.ctx.state === 'suspended') m.ctx.resume();
+  const an = m.ctx.createAnalyser(); an.fftSize = 2048; m.ctx.createMediaStreamSource(m.stream).connect(an); const buf = new Float32Array(2048);
+  m.st = 'live'; render();
+  const tick = () => { if (MT !== m) return; an.getFloatTimeDomainData(buf); let e = 0; for (let i = 0; i < buf.length; i++) e += buf[i] * buf[i];
+    const rms = Math.sqrt(e / buf.length); m.peak = Math.max(rms, m.peak * 0.92); m.max = Math.max(m.max, rms);
+    const bar = document.getElementById('mtBar'); if (bar) bar.style.width = Math.min(100, Math.round(Math.sqrt(m.peak / 0.25) * 100)) + '%';
+    const v = document.getElementById('mtVerdict'); if (v){ const t = mtVerdict(m); if (v.dataset.k !== t[0]){ v.dataset.k = t[0]; v.className = 'mtv ' + t[0]; v.textContent = t[1]; } }
+    m.raf = requestAnimationFrame(tick); };
+  tick();
+}
+function mtVerdict(m){
+  if (m.max < 0.004) return ['none', 'تكلّم الآن... لم يصلني صوت بعد. إن تكلّمت ولم يتحرك الشريط، فاختر ميكروفونًا آخر من القائمة.'];
+  if (m.max < 0.03) return ['low', 'يصلني صوتك، لكنه منخفض. اقترب من الميكروفون أو ارفع صوتك قليلًا.'];
+  return ['good', 'ممتاز، صوتك يصل بوضوح. التسميع سيعمل جيدًا.'];
+}
+function mtRecord(){
+  const m = MT; if (!m || !m.stream || m.rec) return; const parts = [];
+  try { m.mr = new MediaRecorder(m.stream); } catch (e) { return; }
+  m.mr.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
+  m.mr.onstop = () => { if (MT !== m) return; m.rec = 0; m.url && URL.revokeObjectURL(m.url); m.url = URL.createObjectURL(new Blob(parts, {type: m.mr.mimeType || 'audio/mp4'})); render(); const a = document.getElementById('mtAudio'); if (a) a.play().catch(() => {}); };
+  m.mr.start(); m.rec = 5; render();
+  const cd = setInterval(() => { if (MT !== m || !m.rec){ clearInterval(cd); return; } m.rec--; const b = document.getElementById('mtRec'); if (b) b.textContent = 'أسجّل الآن... ' + AR(m.rec); if (m.rec <= 0){ clearInterval(cd); try { m.mr.stop(); } catch (e) {} } }, 1000);
+}
+function vMicTest(){
+  const m = MT, back0 = back(mtBack || 'settings');
+  if (!m || m.st === 'starting') return `<main>${back0}<div><h1>اختبار الميكروفون</h1><p class="muted">أجهّز الميكروفون... إذا ظهرت رسالة تطلب الإذن، اختر «السماح».</p></div></main>`;
+  if (m.st === 'denied') return `<main>${back0}<div><h1>اختبار الميكروفون</h1></div><div class="card"><p class="err">لم يُسمح للتطبيق باستخدام الميكروفون. اسمح له من إعدادات المتصفح أو الجوال، ثم ارجع لهذه الشاشة.</p><button class="btn" data-act="micTest">حاول مرة أخرى</button></div></main>`;
+  const opts = m.devs.map(d => `<option value="${esc(d.deviceId)}" ${d.deviceId === m.cur ? 'selected' : ''}>${esc(d.label || 'ميكروفون')}</option>`).join('');
+  const [k, t] = mtVerdict(m);
+  return `<main>${back0}<div><h1>اختبار الميكروفون</h1><p class="muted">تكلّم بصوتك العادي، وانظر إلى الشريط: يجب أن يتحرك مع كلامك.</p></div>
+    ${m.devs.length > 1 ? `<div class="card"><h3>الميكروفون المستخدم</h3><select id="mtSel" class="mtsel">${opts}</select><p class="muted" style="margin:0">إذا لم يتحرك الشريط، جرّب ميكروفونًا آخر من القائمة.</p></div>` : ''}
+    <div class="card"><h3>مستوى الصوت</h3><div class="mtmeter"><i id="mtBar"></i></div><p id="mtVerdict" class="mtv ${k}" data-k="${k}">${t}</p></div>
+    <div class="card"><h3>سجّل واستمع</h3><p class="muted" style="margin:0">سجّل ٥ ثوانٍ واستمع لصوتك لتتأكد أنه واضح.</p>
+      <button class="btn soft" id="mtRec" data-act="mtRec">${m.rec ? 'أسجّل الآن... ' + AR(m.rec) : MIC_SVG + 'سجّل ٥ ثوانٍ واستمع'}</button>${m.url ? `<audio id="mtAudio" controls src="${m.url}"></audio>` : ''}</div>
+    <button class="btn" data-act="mtDone">${mtBack === 'session' ? 'تم، ارجع للتسميع' : 'تم'}</button></main>`;
+}
+let mtBack = null;
 function vRevMenu(){
   const todo = reviewTodo(), tot = Math.max(S.rev.tot || 0, todo.length), done = tot - todo.length, opts = [];
   const desc = list => { const pg = list.filter(x => x.page).length, ch = list.length - pg; return [ch ? countWord(ch, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') : '', pg ? countWord(pg, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') : ''].filter(Boolean).join(' و'); };
@@ -1620,6 +1681,7 @@ function vSettings(){
     <div class="row"><span><b>اسمك</b><small>يظهر في التحية على الشاشة الرئيسية</small></span><input id="nameIn" class="namein" type="text" maxlength="30" placeholder="اكتب اسمك" value="${esc(S.name || '')}" autocomplete="given-name" enterkeyhint="done"></div>
     <div class="row"><span><b>الحفظ</b><small>${S.hifz ? hifzName(S.hifz) + ' · ' + paceName(S.hifz) + ' · التكرار ' + AR(REPS()) : 'لم تبدأ بعد'}</small></span><button class="x" data-act="go" data-v="setupHifz">تعديل</button></div>
     <div class="row"><span><b>المراجعة</b><small>${kn || ksn ? 'تحفظ ' + [kn ? countWord(kn, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : '', ksn ? countWord(ksn, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : ''].filter(Boolean).join(' و') + ' من قبل' + (S.rev.n ? ' · ' + AR(S.rev.n) + ' ' + ({pages:'صفحات', surah:'سور', juz:'أجزاء'}[S.rev.unit]) + ' يوميًا' : '') : 'ما تحفظه في التطبيق فقط'}</small></span><button class="x" data-act="go" data-v="setupReview">تعديل</button></div>
+    <div class="row"><span><b>اختبار الميكروفون</b><small>${S.micLabel ? 'المختار: ' + esc(S.micLabel) : 'تأكد أن صوتك يصل بوضوح قبل التسميع'}</small></span><button class="x" data-act="micTest">اختبر</button></div>
     <div class="row"><span><b>صوت التنبيه عند الخطأ</b><small>نغمة قصيرة أثناء التسميع بالصوت إذا أخطأت في كلمة</small></span><button class="x" data-act="beepTog">${S.beep !== false ? 'يعمل' : 'مغلق'}</button></div>
     <div class="row"><span><b>الورد اليومي</b><small>${S.wird ? wirdName(S.wird) : 'غير محدد'}</small></span><button class="x" data-act="go" data-v="setupWird">تعديل</button></div>
   </div>
@@ -1704,7 +1766,7 @@ function vSession(){
           ${engNote()}
           <button class="beeptog" data-act="beepTog" aria-pressed="${S.beep !== false}">${S.beep !== false ? BELL_SVG + 'صوت التنبيه عند الخطأ: يعمل' : BELL_OFF_SVG + 'صوت التنبيه عند الخطأ: مغلق'}</button>
           <p class="live" id="live" aria-live="polite">${sess.listening ? esc(liveText) || hearMsg() : ''}</p>
-          ${sess.listening && sess.micTip ? `<p class="err">لا يصل أي صوت إلى الميكروفون. اضغط رمز الميكروفون في شريط العنوان أعلى المتصفح، واختر الميكروفون الحقيقي لجهازك.</p>` : ''}
+          ${sess.listening && sess.micTip ? `<div class="err mictip"><span>لا يصلني صوتك. ربما يستخدم الجهاز ميكروفونًا آخر غير الذي تتكلم فيه.</span><button class="btn soft" data-act="micTest">اختبر الميكروفون</button></div>` : ''}
           ${sess.micErr ? `<p class="err">${sess.micErr}</p>` : ''}</div>`;
       } else if (DICT === null){
         h += `<p class="muted">${IN_CLAUDE ? 'التسميع بالصوت يعمل من نسخة التطبيق المستقلة، لأن صفحات Claude لا تسمح بالميكروفون. هنا اقرأ من حفظك ثم قيّم نفسك.' : 'هذا المتصفح لا يدعم التسميع بالصوت. جرّب Chrome أو Safari، أو اقرأ من حفظك ثم قيّم نفسك.'}</p>`;
@@ -2148,7 +2210,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r74';
+const BUILD = 'r75';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2248,6 +2310,9 @@ app.addEventListener('click', e => {
   if (a === 'engDl'){ engFlag('bad', null); if (ENG.st === 'bad') ENG.st = 'none'; engDownload(); return; }
   if (a === 'engDel'){ if (confirmBox === 'engDel'){ confirmBox = null; engDelete(); } else { confirmBox = 'engDel'; render(); } return; }
   if (a === 'heardAll'){ sess.showAll = !sess.showAll; render(); return; }
+  if (a === 'micTest'){ if (view === 'session'){ stopMic(); mtBack = 'session'; } else if (view !== 'mictest') mtBack = view === 'settings' ? 'settings' : view; view = 'mictest'; render(); window.scrollTo(0, 0); mtStart(); return; }
+  if (a === 'mtRec'){ mtRecord(); return; }
+  if (a === 'mtDone'){ mtStop(); const b = mtBack; mtBack = null; if (b === 'session' && sess){ view = 'session'; } else { view = b === 'settings' || !b ? 'settings' : b; } render(); window.scrollTo(0, 0); return; }
   if (a === 'beepTog'){ S.beep = S.beep === false; save(); if (S.beep) { audioUnlock(); beep(); } render(); return; }
   if (a === 'mic'){
     if (REC){ engStop(); return; }
@@ -2317,6 +2382,7 @@ app.addEventListener('click', e => {
   if (a === 'realDay'){ S.dayOffset = 0; save(); render(); return; }
 });
 app.addEventListener('change', e => {
+  if (e.target.id === 'mtSel'){ const id = e.target.value, d = MT && MT.devs.find(x => x.deviceId === id); S.micId = id; S.micLabel = d ? d.label : ''; save(); mtStart(); return; }
   if (e.target.id === 'hdSel'){ hd.n = +e.target.value; render(); }
   if (e.target.id === 'rcSel'){ rc.s = +e.target.value; rc.fa = 1; rc.ta = nAy(rc.s); render(); }
   if (RCF[e.target.id]){ rcRead(e.target); e.target.value = AR(rc[RCF[e.target.id]]); }
