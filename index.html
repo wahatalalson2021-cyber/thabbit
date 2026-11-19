@@ -246,6 +246,7 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .ptrow .on{background:var(--accent);color:#fff}.ptrow .on small{color:#fff;opacity:.85}
 .ptrow .past{opacity:.5}
 .ptsel{max-width:none;width:100%}
+.rowbtns{display:flex;gap:6px}
 #ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
 #ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
 #ptAlert svg{width:44px;height:44px;color:var(--accent)}
@@ -1847,7 +1848,7 @@ function vSettings(){
   <div class="card"><h3>البيانات</h3><p class="muted">التقدّم محفوظ في هذا الجهاز فقط.</p>
   ${confirmBox === 'reset' ? `<div class="confirm"><p>سيُمسح كل التقدّم ولا يمكن استرجاعه.</p><div class="rnav"><button class="btn danger" data-act="resetYes">امسح</button><button class="btn ghost" data-act="cancel">إلغاء</button></div></div>` : '<button class="btn danger" data-act="ask" data-v="reset">مسح كل البيانات</button>'}</div>
   ${IN_CLAUDE || STANDALONE ? '' : installGuide()}
-  <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. مصحف التجويد الملوّن: خطوط مجمع الملك فهد (الإصدار الرابع، ١٤٤١هـ) كما تنشرها مكتبة QUL، للعرض المجاني فقط. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta. محرك التسميع الدقيق: نموذج tarteel-ai/whisper-base-ar-quran من Tarteel AI (رخصة Apache 2.0)، مضغوط ليعمل على الجوال بمكتبة Transformers.js. التلاوات الصوتية: من خدمة Islamic Network (alquran.cloud) للاستخدام التعليمي المجاني، وحقوقها لأصحابها من القرّاء.</p></div>`;
+  <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. مصحف التجويد الملوّن: خطوط مجمع الملك فهد (الإصدار الرابع، ١٤٤١هـ) كما تنشرها مكتبة QUL، للعرض المجاني فقط. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta. محرك التسميع الدقيق: نموذج tarteel-ai/whisper-base-ar-quran من Tarteel AI (رخصة Apache 2.0)، مضغوط ليعمل على الجوال بمكتبة Transformers.js. التلاوات الصوتية: من خدمة Islamic Network (alquran.cloud) للاستخدام التعليمي المجاني، وحقوقها لأصحابها من القرّاء. صوت الأذان: مقطع من تسجيل أذان المغرب في المسجد الحرام (٢٥ فبراير ٢٠١٢) من تسجيل 3omar Faruq، برخصة المشاع الإبداعي CC BY 3.0، عبر ويكيميديا كومنز.</p></div>`;
   return h;
 }
 
@@ -2305,7 +2306,8 @@ function vPtSet(){
     <p class="muted" style="margin-top:10px">أو اختر مدينة:</p><select id="ptCity" class="recsel ptsel"><option value="">— اختر —</option>${PT_CITIES.map((c, i) => `<option value="${i}" ${cur === i || (cur == null && pl && !p.gps && pl.name === c[0]) ? 'selected' : ''}>${c[0]}</option>`).join('')}</select></div>`;
   h += `<div class="card"><h3>طريقة الحساب</h3><select id="ptMeth" class="recsel ptsel">${Object.entries(PT_METHODS).map(([k, m]) => `<option value="${k}" ${pl && pl.m === k ? 'selected' : ''}>${m.n}</option>`).join('')}</select>
     <p class="muted">تُختار تلقائيًّا حسب المدينة، ويمكنك تغييرها. في أم القرى يكون العشاء بعد المغرب بساعة ونصف، وبساعتين في رمضان.</p></div>`;
-  h += `<div class="card setrows"><div class="row"><span><b>تنبيه دخول وقت الصلاة</b><small>يظهر عند دخول الوقت إذا كان التطبيق مفتوحًا</small></span><button class="x" data-act="ptAlert">${p.alert === false ? 'مغلق' : 'يعمل'}</button></div></div>
+  h += `<div class="card setrows"><div class="row"><span><b>تنبيه دخول وقت الصلاة</b><small>يظهر عند دخول الوقت إذا كان التطبيق مفتوحًا</small></span><button class="x" data-act="ptAlert">${p.alert === false ? 'مغلق' : 'يعمل'}</button></div>
+    <div class="row"><span><b>صوت الأذان مع التنبيه</b><small>أول أذان المسجد الحرام (التكبيرات، نصف دقيقة تقريبًا)</small></span><span class="rowbtns"><button class="x" id="adhanTry" data-act="adhanTry">استمع</button><button class="x" data-act="ptSound">${p.sound === false ? 'مغلق' : 'يعمل'}</button></span></div></div>
     <p class="muted">المواقيت تُحسب في جهازك، فتعمل بدون إنترنت.</p>`;
   return h;
 }
@@ -2319,8 +2321,17 @@ function ptTick(){
       if (AU && audEl && !audEl.paused){ audEl.pause(); AU.paused = true; render(); }
       const el = document.createElement('div'); el.id = 'ptAlert'; el.setAttribute('role', 'alertdialog'); el.setAttribute('aria-modal', 'true');
       el.innerHTML = `<div class="ptbox">${MOSQUE_SVG}<p>حان الآن وقت صلاة ${PT_NAMES[k]}</p><b>الصلاة أهم</b><small>${esc(pl.name)} · ${ptFmt(T.mins[k])}</small><button class="btn" id="ptGo">سأذهب للصلاة</button></div>`;
-      document.body.appendChild(el); el.querySelector('#ptGo').onclick = () => el.remove(); return; } }
+      document.body.appendChild(el); el.querySelector('#ptGo').onclick = () => { adhanStop(); el.remove(); };
+      if (!S.pt || S.pt.sound !== false) adhanPlay(); return; } }
 }
+/* The opening of the adhan of al-Masjid al-Haram (the four takbirs, about half a minute): recorded at Maghrib on 25 Feb 2012
+   by 3omar Faruq, CC BY 3.0, via Wikimedia Commons. One sound element, unlocked by the reader's first tap so the iPhone lets it play later. */
+let ptAud = null;
+function adhanEl(){ if (!ptAud){ ptAud = new Audio('adhan.mp3'); ptAud.preload = 'auto'; ptAud.addEventListener('ended', () => { const b = document.getElementById('adhanTry'); if (b) b.textContent = 'استمع'; }); } return ptAud; }
+function adhanPlay(){ try { const a = adhanEl(); a.muted = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {} }
+function adhanStop(){ try { if (ptAud){ ptAud.pause(); ptAud.currentTime = 0; } } catch (e) {} }
+document.addEventListener('pointerdown', function unlock(){ document.removeEventListener('pointerdown', unlock, true);
+  try { const a = adhanEl(); if (!a.paused) return; a.muted = true; a.play().then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); } catch (e) {} }, true);
 setInterval(ptTick, 20000); setTimeout(ptTick, 3000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) ptTick(); });
 const HIDX = new Map();
@@ -2767,7 +2778,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r91';
+const BUILD = 'r92';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2960,6 +2971,8 @@ app.addEventListener('click', e => {
   if (a === 'audSess'){ const g = +v; if (AU && AU.ctx === 'sess' && audG() === g) audToggle(); else audPlay([g], 'sess'); return; }
   if (a === 'recSet'){ S.reciter = v; save(); RD.sheet = ''; if (AU){ const l = AU.list.slice(AU.i), c = AU.ctx; audPlay(l, c); } else render(); return; }
   if (a === 'ptGps'){ ptGps(); return; }
+  if (a === 'ptSound'){ S.pt = Object.assign(S.pt || {}, {sound: S.pt && S.pt.sound === false}); save(); render(); return; }
+  if (a === 'adhanTry'){ const au = adhanEl(); if (!au.paused){ adhanStop(); el.textContent = 'استمع'; } else { adhanPlay(); el.textContent = 'إيقاف'; } return; }
   if (a === 'ptAlert'){ S.pt = Object.assign(S.pt || {}, {alert: S.pt && S.pt.alert === false}); save(); render(); return; }
   if (a === 'bkDl'){ bookDownload(+v); return; }
   if (a === 'bkDel'){ bookDelete(+v); return; }

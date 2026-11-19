@@ -43,3 +43,9 @@ From **quran-meta** v7.0.0 (Hafs lists), MIT License, Copyright (c) 2020 Quran-C
 ## التلاوات الصوتية (تُشغَّل من الإنترنت، لا تُحفظ في المستودع)
 - المصدر: خدمة Islamic Network الصوتية (alquran.cloud)، ملف لكل آية من cdn.islamic.network. الخدمة مجانية وتسمح بالاستماع والتضمين للاستخدام الشخصي والتعليمي.
 - حقوق التسجيلات محفوظة لأصحابها من القرّاء. التطبيق مجاني بلا إعلانات.
+
+## صوت الأذان (adhan.mp3)
+- مقطع من أوله (التكبيرات الأربع، نحو ٣٣ ثانية) من تسجيل «Maghrib Adhan at the Masjid al Haram, Mecca - 25 Feb, 2012».
+- المؤلف: 3omar Faruq. الرخصة: Creative Commons Attribution 3.0 (CC BY 3.0) https://creativecommons.org/licenses/by/3.0
+- المصدر: https://commons.wikimedia.org/wiki/File:Maghrib_Adhan_at_the_Masjid_al_Haram,_Mecca_-_25_Feb,_2012.webm
+- التعديل: اقتُطع أول الأذان، وحُوّل إلى صوت فقط (MP3)، مع تلاشٍ خفيف في البداية والنهاية وضبط مستوى الصوت.
