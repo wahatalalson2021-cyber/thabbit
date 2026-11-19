@@ -695,7 +695,7 @@ function engAudio(x, rate, R1){
   if (rms < R0.noise * 2) R0.noise = R0.noise * 0.95 + rms * 0.05;
   const thr = Math.max(R0.noise * 3, 0.006), loud = rms > thr;
   if (loud){ if (R0.segN && R0.sil >= 0.25) R0.cands.push({k: R0.seg.length, sil: R0.sil, at: R0.segN / rate});   // a pause inside the piece: a possible cut point
-    R0.speech += dur; R0.sil = 0; if (sess && sess.hear !== 'speech'){ sess.hear = 'speech'; engLive(); } } else R0.sil += dur;
+    R0.speech += dur; R0.sil = 0; if (sess) sess.voiceT = Date.now(); if (sess && sess.hear !== 'speech'){ sess.hear = 'speech'; engLive(); } } else R0.sil += dur;
   if (!R0.segN && !loud){ R0.pre.push(y); let pn = R0.pre.reduce((a, b) => a + b.length, 0); const keep = R0.pieces.length || R0.q.length ? 0.7 : 3;   // at the very start keep 3 s: a computer microphone often starts quiet and grows louder
   while (R0.pre.length > 1 && pn - R0.pre[0].length > rate * keep){ pn -= R0.pre[0].length; R0.pre.shift(); } return; }   // keep ~0.7 s before speech starts, so a soft first sound is not lost
   if (!R0.segN){ R0.pre.forEach(b => { R0.seg.push(b); R0.blocks.push(0); R0.segN += b.length; }); R0.pre = []; }
@@ -923,7 +923,7 @@ if (DICT){
     if (view === 'session') render();
   });
   DICT.onPartial(({text}) => {
-    liveText = text;
+    liveText = text; if (text && sess) sess.voiceT = Date.now();
     if (text && sess && sess.listening && sess.hear !== 'speech'){ sess.hear = 'speech'; sess.micTip = false; clearTimeout(sess.hearTimer); }
     if (sess && sess.exp && sess.listening && text !== sess.interim){ sess.interim = text; recompute(false); if (view === 'session'){ render(); return; } }
     const el = document.getElementById('live'); if (el) el.textContent = text || hearMsg();
@@ -1225,7 +1225,8 @@ function hintTarget(){
 setInterval(() => {
   if (view !== 'session' || !sess || !sess.listening || sess.glow || !sess.starts) return;
   const cur = hintCur(), t = hintTarget();
-  if (t && t.st === cur && sess.pT && Date.now() - sess.pT > 4000 && (sess.p || 0) > 0){
+  /* only when he is really silent: no new words AND no voice for 4 s (words appear a little after they are said) */
+  if (t && t.st === cur && sess.pT && Date.now() - Math.max(sess.pT, sess.voiceT || 0) > 4000 && (sess.p || 0) > 0){
     sess.glow = true; const b = document.getElementById('hintBtn'); if (b) b.classList.add('glow');
   }
 }, 1000);
@@ -2503,7 +2504,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r85';
+const BUILD = 'r86';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
