@@ -233,6 +233,26 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .bkpages{display:flex;flex-direction:column;gap:10px;margin-top:10px}
 .bkpg{background:#fff;border:1px solid var(--line);border-radius:6px;overflow:hidden;display:grid;place-items:center;color:var(--muted)}
 .bkpg canvas{display:block}
+.ptcard{margin-top:12px;padding:12px 14px}
+.ptop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ptop b{display:flex;align-items:center;gap:6px;color:var(--accent);font-size:1.02rem}
+.ptop b svg{width:20px;height:20px}
+.ptleft{color:var(--muted);font-size:.85rem}
+.ptcity{margin-inline-start:auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:4px 10px;font:inherit;font-size:.8rem;cursor:pointer}
+.ptrow{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:10px;text-align:center}
+.ptrow span{display:flex;flex-direction:column;gap:2px;padding:6px 0;border-radius:10px;line-height:1.3}
+.ptrow small{font-size:.72rem;color:var(--muted)}
+.ptrow b{font-size:.86rem;font-weight:600}
+.ptrow .on{background:var(--accent);color:#fff}.ptrow .on small{color:#fff;opacity:.85}
+.ptrow .past{opacity:.5}
+.ptsel{max-width:none;width:100%}
+#ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
+#ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
+#ptAlert svg{width:44px;height:44px;color:var(--accent)}
+#ptAlert p{margin:0;font-size:1.15rem}
+#ptAlert b{font-size:2rem;color:var(--accent)}
+#ptAlert small{color:var(--muted)}
+#ptAlert .btn{margin-top:8px;width:100%}
 .tfbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:6px 0 8px}
 .tfbtn svg{width:20px;height:20px}
 .tfbox{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;max-height:34vh;overflow:auto}
@@ -1384,10 +1404,10 @@ function render(){
   else if (view === 'setupReview') h = vSetupReview();
   else if (view === 'setupWird') h = vSetupWird();
   else {
-    h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'lib' ? vLib() : view === 'n40' ? vN40() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
+    h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'lib' ? vLib() : view === 'ptset' ? vPtSet() : view === 'n40' ? vN40() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
     h += '<nav class="tabs" aria-label="الأقسام"><div class="in">' +
       [['home','اليوم'],['lib','المكتبة'],['progress','تقدّمي']].map(([k, l]) =>
-        `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && (view === 'read' || view === 'settings')) || (k === 'lib' && (view === 'n40' || view === 'book')) ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
+        `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && (view === 'read' || view === 'settings' || view === 'ptset')) || (k === 'lib' && (view === 'n40' || view === 'book')) ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
   }
   app.innerHTML = h;
   if (view === 'reader' && RD && RD.status === 'ok'){ layoutPage(); focusSura(); }
@@ -1494,7 +1514,7 @@ function progCard(){
 }
 function vHome(){
   const st = streak(); TPCT = tilePct();
-  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}<button class="gear" data-act="tab" data-v="settings" >${GEAR}<span>الإعدادات</span></button></div><div class="herotxt"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><h1>ماذا تريد اليوم؟</h1><span class="swoosh"></span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button><div class="tiles">`;
+  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}<button class="gear" data-act="tab" data-v="settings" >${GEAR}<span>الإعدادات</span></button></div><div class="herotxt"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><h1>ماذا تريد اليوم؟</h1><span class="swoosh"></span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button>${ptCard()}<div class="tiles">`;
   const rp = R().page;
   h += tile('read', 'قراءة', 'المصحف والفهرس والعلامات', 'go', 'read');
   if (!S.hifz) h += tile('hifz', 'حفظ', 'اختر ما تحفظه ومقداره', 'go', 'setupHifz');
@@ -1819,6 +1839,7 @@ function vSettings(){
     <div class="row"><span><b>المراجعة</b><small>${kn || ksn ? 'تحفظ ' + [kn ? countWord(kn, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : '', ksn ? countWord(ksn, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : ''].filter(Boolean).join(' و') + ' من قبل' + (S.rev.n ? ' · ' + AR(S.rev.n) + ' ' + ({pages:'صفحات', surah:'سور', juz:'أجزاء'}[S.rev.unit]) + ' يوميًا' : '') : 'ما تحفظه في التطبيق فقط'}</small></span><button class="x" data-act="go" data-v="setupReview">تعديل</button></div>
     <div class="row"><span><b>اختبار الميكروفون</b><small>${S.micLabel ? 'المختار: ' + esc(S.micLabel) : 'تأكد أن صوتك يصل بوضوح قبل التسميع'}</small></span><button class="x" data-act="micTest">اختبر</button></div>
     <div class="row"><span><b>صوت التنبيه عند الخطأ</b><small>نغمة قصيرة أثناء التسميع بالصوت إذا أخطأت في كلمة</small></span><button class="x" data-act="beepTog">${S.beep !== false ? 'يعمل' : 'مغلق'}</button></div>
+    <div class="row"><span><b>مواقيت الصلاة</b><small>${(() => { const pl = ptPlace(); return pl ? esc(pl.name) + ' · ' + PT_METHODS[pl.m].n : 'لم تُحدَّد المدينة'; })()}</small></span><button class="x" data-act="go" data-v="ptset">تعديل</button></div>
     <div class="row"><span><b>القارئ</b><small>صوت الشيخ عند الاستماع للآيات</small></span>${recSelect()}</div>
     <div class="row"><span><b>الورد اليومي</b><small>${S.wird ? wirdName(S.wird) : 'غير محدد'}</small></span><button class="x" data-act="go" data-v="setupWird">تعديل</button></div>
   </div>
@@ -2181,6 +2202,127 @@ function audBar(){
     <button data-act="audRep" aria-label="عدد التكرار">×${AR(r)}</button><button data-act="audCont" aria-pressed="${S.acont !== false}">متتابع</button><button data-act="audStop" aria-label="إيقاف">✕</button></div>`;
 }
 function recSelect(){ return `<select id="recSel" class="recsel" aria-label="القارئ">${RECITERS.map(r => `<option value="${r[0]}" ${reciter()[0] === r[0] ? 'selected' : ''}>${r[2]}</option>`).join('')}</select>`; }
+/* Prayer times calculated on the device (praytimes.org method), no internet needed. */
+const PT_METHODS = {
+  umm: {n: 'أم القرى (السعودية)', f: 18.5, i: 90},
+  egypt: {n: 'الهيئة المصرية العامة للمساحة', f: 19.5, i: 17.5},
+  mwl: {n: 'رابطة العالم الإسلامي', f: 18, i: 17},
+  kuwait: {n: 'الكويت', f: 18, i: 17.5},
+  qatar: {n: 'قطر', f: 18, i: 90},
+  uae: {n: 'الإمارات', f: 18.2, i: 18.2},
+  jordan: {n: 'الأردن', f: 18, i: 18},
+  morocco: {n: 'المغرب', f: 19, i: 17}
+};
+function ptCalc(y, mo, d, lat, lng, tz, m, ramadan){
+  const D2R = Math.PI / 180, sin = x => Math.sin(x * D2R), cos = x => Math.cos(x * D2R), tan = x => Math.tan(x * D2R);
+  const asin = x => Math.asin(x) / D2R, acos = x => Math.acos(x) / D2R, atan2 = (a, b) => Math.atan2(a, b) / D2R, acot = x => Math.atan(1 / x) / D2R;
+  const fix = (a, b) => { a = a - b * Math.floor(a / b); return a < 0 ? a + b : a; };
+  if (mo <= 2){ y -= 1; mo += 12; }
+  const A = Math.floor(y / 100), B = 2 - A + Math.floor(A / 4);
+  const jd0 = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (mo + 1)) + d + B - 1524.5 - lng / (15 * 24);
+  const sun = t => { const D = jd0 - 2451545.0 + t, g = fix(357.529 + 0.98560028 * D, 360), q = fix(280.459 + 0.98564736 * D, 360);
+    const L = fix(q + 1.915 * sin(g) + 0.020 * sin(2 * g), 360), e = 23.439 - 0.00000036 * D;
+    const RA = fix(atan2(cos(e) * sin(L), cos(L)) / 15, 24); return {dec: asin(sin(e) * sin(L)), eqt: q / 15 - RA}; };
+  const noon = t => fix(12 - sun(t).eqt, 24);
+  const angleT = (ang, t, ccw) => { const s = sun(t), x = (-sin(ang) - sin(s.dec) * sin(lat)) / (cos(s.dec) * cos(lat)); const v = acos(Math.max(-1, Math.min(1, x))) / 15; return noon(t) + (ccw ? -v : v); };
+  const asrT = t => { const s = sun(t), ang = -acot(1 + tan(Math.abs(lat - s.dec))); return angleT(ang, t, false); };
+  let T = {fajr: 5, sunrise: 6, dhuhr: 12, asr: 13, maghrib: 18, isha: 18};
+  for (let k = 0; k < 2; k++){ const p = x => x / 24;
+    T = {fajr: angleT(m.f, p(T.fajr), true), sunrise: angleT(0.833, p(T.sunrise), true), dhuhr: noon(p(T.dhuhr)), asr: asrT(p(T.asr)), maghrib: angleT(0.833, p(T.maghrib), false), isha: angleT(m.i > 30 ? 0.833 : m.i, p(T.isha), false)}; }
+  const out = {}; for (const k in T) out[k] = T[k] + tz - lng / 15;
+  if (m.i > 30) out.isha = out.maghrib + (ramadan && m === PT_METHODS.umm ? 120 : m.i) / 60;
+  return out;
+}
+
+const PT_NAMES = {fajr: 'الفجر', sunrise: 'الشروق', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء'};
+const PT_KEYS = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
+/* [name, lat, lng, time zone, method] */
+const PT_CITIES = [
+  ['الرياض', 24.7136, 46.6753, 'Asia/Riyadh', 'umm'], ['مكة المكرمة', 21.4225, 39.8262, 'Asia/Riyadh', 'umm'], ['المدينة المنورة', 24.4672, 39.6112, 'Asia/Riyadh', 'umm'],
+  ['جدة', 21.4858, 39.1925, 'Asia/Riyadh', 'umm'], ['الدمام', 26.4207, 50.0888, 'Asia/Riyadh', 'umm'], ['الخبر', 26.2172, 50.1971, 'Asia/Riyadh', 'umm'],
+  ['الأحساء', 25.3833, 49.5867, 'Asia/Riyadh', 'umm'], ['الطائف', 21.2703, 40.4158, 'Asia/Riyadh', 'umm'], ['بريدة', 26.3592, 43.9818, 'Asia/Riyadh', 'umm'],
+  ['حائل', 27.5114, 41.69, 'Asia/Riyadh', 'umm'], ['تبوك', 28.3838, 36.555, 'Asia/Riyadh', 'umm'], ['أبها', 18.2164, 42.5053, 'Asia/Riyadh', 'umm'],
+  ['جازان', 16.8892, 42.5511, 'Asia/Riyadh', 'umm'], ['نجران', 17.5656, 44.2289, 'Asia/Riyadh', 'umm'], ['الجبيل', 27.0046, 49.646, 'Asia/Riyadh', 'umm'],
+  ['ينبع', 24.0895, 38.0618, 'Asia/Riyadh', 'umm'], ['الباحة', 20.0129, 41.4677, 'Asia/Riyadh', 'umm'], ['عرعر', 30.9753, 41.0381, 'Asia/Riyadh', 'umm'],
+  ['القاهرة', 30.0444, 31.2357, 'Africa/Cairo', 'egypt'], ['الإسكندرية', 31.2001, 29.9187, 'Africa/Cairo', 'egypt'],
+  ['دبي', 25.2048, 55.2708, 'Asia/Dubai', 'uae'], ['أبوظبي', 24.4539, 54.3773, 'Asia/Dubai', 'uae'], ['الكويت', 29.3759, 47.9774, 'Asia/Kuwait', 'kuwait'],
+  ['الدوحة', 25.2854, 51.531, 'Asia/Qatar', 'qatar'], ['المنامة', 26.2285, 50.586, 'Asia/Bahrain', 'umm'], ['مسقط', 23.588, 58.3829, 'Asia/Muscat', 'mwl'],
+  ['عمّان', 31.9454, 35.9284, 'Asia/Amman', 'jordan'], ['الدار البيضاء', 33.5731, -7.5898, 'Africa/Casablanca', 'morocco']];
+const devTZ = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } };
+/* Minutes that a time zone is ahead of UTC at a moment. */
+function tzOff(tz, ms){
+  try { const f = new Intl.DateTimeFormat('en-US', {timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric'});
+    const P = {}; f.formatToParts(new Date(ms)).forEach(x => { P[x.type] = +x.value; });
+    return Math.round((Date.UTC(P.year, P.month - 1, P.day, P.hour % 24, P.minute, P.second) - ms) / 60000); } catch (e) { return -new Date(ms).getTimezoneOffset(); }
+}
+/* The reader's place: chosen city, his own location, or a first guess from the phone's time zone. */
+function ptPlace(){
+  const p = S.pt || {};
+  if (p.gps) return {name: 'موقعك الحالي', lat: p.lat, lng: p.lng, tz: p.tz || devTZ(), m: p.m || 'umm'};
+  let i = p.city;
+  if (i == null){ const tz = devTZ(); i = PT_CITIES.findIndex(c => c[3] === tz); if (i < 0) return null; }
+  const c = PT_CITIES[i]; return c ? {name: c[0], lat: c[1], lng: c[2], tz: c[3], m: p.m || c[4], guess: p.city == null} : null;
+}
+function ramadanNow(){ try { return new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {month: 'numeric'}).format(new Date()) === '9'; } catch (e) { return false; } }
+/* Today's times in the place's own clock, as minutes after its midnight, plus "now" on the same clock. */
+function ptToday(pl, ms){
+  const now = ms || Date.now(), off = tzOff(pl.tz, now), loc = new Date(now + off * 60000);
+  const y = loc.getUTCFullYear(), mo = loc.getUTCMonth() + 1, d = loc.getUTCDate();
+  const t = ptCalc(y, mo, d, pl.lat, pl.lng, off / 60, PT_METHODS[pl.m] || PT_METHODS.umm, ramadanNow());
+  const mins = {}; PT_KEYS.forEach(k => { mins[k] = Math.round(t[k] * 60); });
+  return {mins, now: loc.getUTCHours() * 60 + loc.getUTCMinutes(), day: `${y}-${mo}-${d}`};
+}
+const ptFmt = m => { m = ((m % 1440) + 1440) % 1440; const h = Math.floor(m / 60), mm = m % 60; return AR((h % 12) || 12) + ':' + AR(String(mm).padStart(2, '0')) + (h < 12 ? ' ص' : ' م'); };
+function ptLeft(d){ const h = Math.floor(d / 60), m = d % 60; return 'بعد ' + [h ? (h === 1 ? 'ساعة' : h === 2 ? 'ساعتين' : AR(h) + (h <= 10 ? ' ساعات' : ' ساعة')) : '', m ? (m === 1 ? 'دقيقة' : m === 2 ? 'دقيقتين' : AR(m) + (m <= 10 ? ' دقائق' : ' دقيقة')) : ''].filter(Boolean).join(' و') || 'الآن'; }
+function ptNext(T){ for (const k of PT_KEYS) if (k !== 'sunrise' && T.mins[k] > T.now) return {k, d: T.mins[k] - T.now, at: T.mins[k]};
+  return {k: 'fajr', d: T.mins.fajr + 1440 - T.now, at: T.mins.fajr}; }
+const MOSQUE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V11a8 6 0 0 1 16 0v10z"/><path d="M12 3v2M9 21v-4a3 3 0 0 1 6 0v4M2 21h20"/></svg>';
+function ptCardInner(){
+  const pl = ptPlace();
+  if (!pl) return `<div class="ptop"><b>${MOSQUE_SVG}مواقيت الصلاة</b></div><p class="muted">حدّد مدينتك لتظهر مواقيت الصلاة وتنبيه دخول الوقت.</p>
+    <div class="rnav"><button class="btn" data-act="ptGps">استخدم موقعي</button><button class="btn ghost" data-act="go" data-v="ptset">اختر المدينة</button></div>`;
+  const T = ptToday(pl), nx = ptNext(T);
+  return `<div class="ptop"><b>${MOSQUE_SVG}${PT_NAMES[nx.k]} ${ptFmt(nx.at)}</b><span class="ptleft">${ptLeft(nx.d)}</span><button class="ptcity" data-act="go" data-v="ptset">${esc(pl.name)} ▾</button></div>
+    <div class="ptrow">${PT_KEYS.map(k => `<span class="${k === nx.k ? 'on' : T.mins[k] <= T.now ? 'past' : ''}"><small>${PT_NAMES[k]}</small><b>${ptFmt(T.mins[k]).replace(/ [صم]$/, '')}</b></span>`).join('')}</div>`;
+}
+const ptCard = () => `<div class="card ptcard" id="ptCard">${ptCardInner()}</div>`;
+function ptGps(){
+  if (!navigator.geolocation){ alert0('هذا الجهاز لا يسمح بتحديد الموقع. اختر مدينتك من القائمة.'); return; }
+  ptMsg = 'أحدد موقعك...'; render();
+  navigator.geolocation.getCurrentPosition(pos => { S.pt = Object.assign(S.pt || {}, {gps: true, lat: pos.coords.latitude, lng: pos.coords.longitude, tz: devTZ()}); delete S.pt.city;
+    if (!S.pt.m){ const near = PT_CITIES.slice().sort((a, b) => Math.hypot(a[1] - pos.coords.latitude, a[2] - pos.coords.longitude) - Math.hypot(b[1] - pos.coords.latitude, b[2] - pos.coords.longitude))[0]; if (near && near[3] === devTZ()) S.pt.m = near[4]; }
+    save(); ptMsg = ''; render(); },
+    () => { ptMsg = 'لم يُسمح بتحديد الموقع. اختر مدينتك من القائمة.'; render(); }, {timeout: 15000, maximumAge: 3600000});
+}
+let ptMsg = '';
+function alert0(t){ ptMsg = t; render(); }
+function vPtSet(){
+  const pl = ptPlace(), p = S.pt || {}, cur = p.gps ? 'gps' : p.city;
+  let h = back('home') + `<h1>مواقيت الصلاة</h1>`;
+  if (ptMsg) h += `<p class="muted">${esc(ptMsg)}</p>`;
+  if (pl) h += `<div class="card ptcard">${ptCardInner()}</div>`;
+  h += `<div class="card"><h3>المكان</h3><button class="btn ${p.gps ? '' : 'soft'}" data-act="ptGps">${p.gps ? '✓ موقعي الحالي · حدّثه' : 'استخدم موقعي الحالي'}</button>
+    <p class="muted" style="margin-top:10px">أو اختر مدينة:</p><select id="ptCity" class="recsel ptsel"><option value="">— اختر —</option>${PT_CITIES.map((c, i) => `<option value="${i}" ${cur === i || (cur == null && pl && !p.gps && pl.name === c[0]) ? 'selected' : ''}>${c[0]}</option>`).join('')}</select></div>`;
+  h += `<div class="card"><h3>طريقة الحساب</h3><select id="ptMeth" class="recsel ptsel">${Object.entries(PT_METHODS).map(([k, m]) => `<option value="${k}" ${pl && pl.m === k ? 'selected' : ''}>${m.n}</option>`).join('')}</select>
+    <p class="muted">تُختار تلقائيًّا حسب المدينة، ويمكنك تغييرها. في أم القرى يكون العشاء بعد المغرب بساعة ونصف، وبساعتين في رمضان.</p></div>`;
+  h += `<div class="card setrows"><div class="row"><span><b>تنبيه دخول وقت الصلاة</b><small>يظهر عند دخول الوقت إذا كان التطبيق مفتوحًا</small></span><button class="x" data-act="ptAlert">${p.alert === false ? 'مغلق' : 'يعمل'}</button></div></div>
+    <p class="muted">المواقيت تُحسب في جهازك، فتعمل بدون إنترنت.</p>`;
+  return h;
+}
+/* When a prayer's time comes while the app is open: a calm notice, once per prayer per day. Nothing the reader is doing is lost. */
+function ptTick(){
+  const c = document.getElementById('ptCard'); if (c && view === 'home') c.innerHTML = ptCardInner();
+  const pl = ptPlace(); if (!pl || (S.pt && S.pt.alert === false) || document.getElementById('ptAlert')) return;
+  const T = ptToday(pl);
+  for (const k of PT_KEYS){ if (k === 'sunrise') continue; const d = T.now - T.mins[k];
+    if (d >= 0 && d < 15){ const key = T.day + ':' + k; if (S.ptSeen === key) return; S.ptSeen = key; save();
+      if (AU && audEl && !audEl.paused){ audEl.pause(); AU.paused = true; render(); }
+      const el = document.createElement('div'); el.id = 'ptAlert'; el.setAttribute('role', 'alertdialog'); el.setAttribute('aria-modal', 'true');
+      el.innerHTML = `<div class="ptbox">${MOSQUE_SVG}<p>حان الآن وقت صلاة ${PT_NAMES[k]}</p><b>الصلاة أهم</b><small>${esc(pl.name)} · ${ptFmt(T.mins[k])}</small><button class="btn" id="ptGo">سأذهب للصلاة</button></div>`;
+      document.body.appendChild(el); el.querySelector('#ptGo').onclick = () => el.remove(); return; } }
+}
+setInterval(ptTick, 20000); setTimeout(ptTick, 3000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) ptTick(); });
 const HIDX = new Map();
 function heads(){ if (HEADS || !M) return; HEADS = []; M.pages.forEach(pg => pg.forEach(l => { if (l[0] === 1){ HEADS.push(l[1]); HIDX.set(l[1], HEADS.length); } else if (l[0] === 2 && !BSM) BSM = l.slice(1); })); }
 function pageReady(p){
@@ -2625,7 +2767,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r90';
+const BUILD = 'r91';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -2817,6 +2959,8 @@ app.addEventListener('click', e => {
   if (a === 'audCont'){ S.acont = S.acont === false; save(); if (AU && AU.ctx === 'reader'){ const g = audG(); AU.list = audReaderList(g); AU.i = 0; } render(); return; }
   if (a === 'audSess'){ const g = +v; if (AU && AU.ctx === 'sess' && audG() === g) audToggle(); else audPlay([g], 'sess'); return; }
   if (a === 'recSet'){ S.reciter = v; save(); RD.sheet = ''; if (AU){ const l = AU.list.slice(AU.i), c = AU.ctx; audPlay(l, c); } else render(); return; }
+  if (a === 'ptGps'){ ptGps(); return; }
+  if (a === 'ptAlert'){ S.pt = Object.assign(S.pt || {}, {alert: S.pt && S.pt.alert === false}); save(); render(); return; }
   if (a === 'bkDl'){ bookDownload(+v); return; }
   if (a === 'bkDel'){ bookDelete(+v); return; }
   if (a === 'bkOpen'){ bookOpen(+v); return; }
@@ -2842,6 +2986,8 @@ app.addEventListener('click', e => {
   if (a === 'realDay'){ S.dayOffset = 0; save(); render(); return; }
 });
 app.addEventListener('change', e => {
+  if (e.target.id === 'ptCity'){ if (e.target.value === '') return; const i = +e.target.value; S.pt = Object.assign(S.pt || {}, {city: i, gps: false, m: PT_CITIES[i][4]}); save(); ptMsg = ''; render(); return; }
+  if (e.target.id === 'ptMeth'){ const pl = ptPlace(); S.pt = Object.assign(S.pt || {}, pl && !S.pt?.gps && S.pt?.city == null ? {city: PT_CITIES.findIndex(c => c[0] === pl.name)} : {}, {m: e.target.value}); save(); render(); return; }
   if (e.target.id === 'recSel'){ S.reciter = e.target.value; save(); if (AU){ const l = AU.list.slice(AU.i), c = AU.ctx; audPlay(l, c); } else render(); return; }
   if (e.target.id === 'mtSel'){ const id = e.target.value, d = MT && MT.devs.find(x => x.deviceId === id); S.micId = id; S.micLabel = d ? d.label : ''; save(); mtStart(); return; }
   if (e.target.id === 'hdSel'){ hd.n = +e.target.value; render(); }
