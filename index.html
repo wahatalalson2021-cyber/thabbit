@@ -76,7 +76,7 @@ p{margin:0}
 .stat span{font-size:.78rem;color:var(--muted)}
 /* tabs */
 nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center}
-nav.tabs .in{max-width:520px;width:100%;display:grid;grid-template-columns:repeat(4,1fr)}
+nav.tabs .in{max-width:520px;width:100%;display:grid;grid-template-columns:repeat(3,1fr)}
 nav.tabs button{border:0;background:none;padding:12px 2px 14px;font-size:.84rem;white-space:nowrap;color:var(--muted);font-weight:600;border-top:3px solid transparent}
 nav.tabs button[aria-current="page"]{color:var(--accent);border-top-color:var(--accent)}
 /* options */
@@ -342,7 +342,10 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .heroart .lanterns .body{fill:color-mix(in srgb,var(--lamp) 70%,#fff)}
 .heroart .lanterns .flame{fill:var(--glow)}
 .heroart .glow{fill:var(--glow);opacity:.28}
-.herotop{position:relative;display:flex;justify-content:flex-start}
+.herotop{position:relative;display:flex;justify-content:flex-start;align-items:flex-start}
+.gear{margin-inline-start:auto;position:relative;z-index:2;display:flex;align-items:center;gap:6px;height:40px;padding:0 14px 0 12px;border-radius:999px;border:0;background:#fff;color:#0b5a51;font:inherit;font-size:.92rem;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgb(0 0 0 / .25)}
+.gear svg{width:20px;height:20px;flex:none}
+.gear:active{transform:scale(.97)}
 .emblem svg{width:46px;height:54px;display:block;filter:drop-shadow(0 3px 6px rgb(0 0 0 / .15))}
 .emblem .e1{fill:var(--accent)}.emblem .e2{fill:none;stroke:var(--gold);stroke-width:1.5}.emblem .e3{color:var(--gold)}
 .herotxt{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:10px}
@@ -1281,8 +1284,8 @@ function render(){
   else {
     h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'n40' ? vN40() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
     h += '<nav class="tabs" aria-label="الأقسام"><div class="in">' +
-      [['home','اليوم'],['n40','أحاديث'],['progress','تقدّمي'],['settings','الإعدادات']].map(([k, l]) =>
-        `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && view === 'read') ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
+      [['home','اليوم'],['n40','أحاديث'],['progress','تقدّمي']].map(([k, l]) =>
+        `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && (view === 'read' || view === 'settings')) ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
   }
   app.innerHTML = h;
   if (view === 'reader' && RD && RD.status === 'ok'){ layoutPage(); focusSura(); }
@@ -1306,6 +1309,7 @@ const back = (to = 'home') => `<div class="top"><span class="brand">ثبّت</sp
 const seg = (act, opts, cur, cols) => `<div class="seg" style="grid-template-columns:repeat(${cols || opts.length},1fr)" role="group">${opts.map(([v, l]) => `<button data-act="${act}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
 
 /* ---------- home: four choices ---------- */
+const GEAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 const TI = {
   read:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 6c-2-1.5-5-2-8-1.5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5v-13c-3-.5-6 0-8 1.5zM12 6v13"/></svg>',
   hifz:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>',
@@ -1387,7 +1391,7 @@ function progCard(){
 }
 function vHome(){
   const st = streak(); TPCT = tilePct();
-  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}</div><div class="herotxt"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><h1>ماذا تريد اليوم؟</h1><span class="swoosh"></span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button><div class="tiles">`;
+  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}<button class="gear" data-act="tab" data-v="settings" >${GEAR}<span>الإعدادات</span></button></div><div class="herotxt"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><h1>ماذا تريد اليوم؟</h1><span class="swoosh"></span><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button><div class="tiles">`;
   const rp = R().page;
   h += tile('read', 'قراءة', 'المصحف والفهرس والعلامات', 'go', 'read');
   if (!S.hifz) h += tile('hifz', 'حفظ', 'اختر ما تحفظه ومقداره', 'go', 'setupHifz');
@@ -1705,7 +1709,7 @@ function vProgress(){
 /* ---------- settings ---------- */
 function vSettings(){
   const kn = (S.rev.known || []).length, ksn = (S.rev.ksur || []).length;
-  let h = `<h1>الإعدادات</h1>
+  let h = back('home') + `<h1>الإعدادات</h1>
   <div class="card setrows">
     <div class="row"><span><b>اسمك</b><small>يظهر في التحية على الشاشة الرئيسية</small></span><input id="nameIn" class="namein" type="text" maxlength="30" placeholder="اكتب اسمك" value="${esc(S.name || '')}" autocomplete="given-name" enterkeyhint="done"></div>
     <div class="row"><span><b>الحفظ</b><small>${S.hifz ? hifzName(S.hifz) + ' · ' + paceName(S.hifz) + ' · التكرار ' + AR(REPS()) : 'لم تبدأ بعد'}</small></span><button class="x" data-act="go" data-v="setupHifz">تعديل</button></div>
@@ -2330,7 +2334,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r79';
+const BUILD = 'r80';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
