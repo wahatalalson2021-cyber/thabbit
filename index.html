@@ -1581,7 +1581,7 @@ function progCard(){
 }
 function vHome(){
   const st = streak(); TPCT = tilePct();
-  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}<button class="gear" data-act="tab" data-v="settings" >${GEAR}<span>الإعدادات</span></button></div><div class="herotxt"><div class="hrow"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div><h1>ماذا تريد اليوم؟</h1></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button>${ptCard()}${adkCard()}<div class="tiles">`;
+  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}<button class="gear" data-act="tab" data-v="settings" >${GEAR}<span>الإعدادات</span></button></div><div class="herotxt"><div class="hrow"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div><h1>ماذا تريد اليوم؟</h1></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button>${ptCard()}<div class="tiles">`;
   const rp = R().page;
   h += tile('read', 'قراءة', 'المصحف والفهرس والعلامات', 'go', 'read');
   if (!S.hifz) h += tile('hifz', 'حفظ', 'اختر ما تحفظه ومقداره', 'go', 'setupHifz');
@@ -2972,7 +2972,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r96';
+const BUILD = 'r97';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
