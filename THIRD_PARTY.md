@@ -49,3 +49,6 @@ From **quran-meta** v7.0.0 (Hafs lists), MIT License, Copyright (c) 2020 Quran-C
 - المؤلف: 3omar Faruq. الرخصة: Creative Commons Attribution 3.0 (CC BY 3.0) https://creativecommons.org/licenses/by/3.0
 - المصدر: https://commons.wikimedia.org/wiki/File:Maghrib_Adhan_at_the_Masjid_al_Haram,_Mecca_-_25_Feb,_2012.webm
 - التعديل: اقتُطع أول الأذان، وحُوّل إلى صوت فقط (MP3)، مع تلاشٍ خفيف في البداية والنهاية وضبط مستوى الصوت.
+
+## أذكار الصباح والمساء
+النصوص من كتاب «حصن المسلم من أذكار الكتاب والسنة» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله (باب أذكار الصباح والمساء)، مع صيغ المساء كما نصّ عليها الكتاب. النص مأخوذ من hisnmuslim.com ومراجَع على طبعة رئاسة الشؤون الدينية بالمسجد الحرام والمسجد النبوي.
