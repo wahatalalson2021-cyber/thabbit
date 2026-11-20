@@ -247,6 +247,9 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .ptrow .past{opacity:.5}
 .ptsel{max-width:none;width:100%}
 .rowbtns{display:flex;gap:6px}
+[data-act="shareApp"]{display:flex;align-items:center;justify-content:center;gap:8px}
+.okmsg{color:var(--good);font-weight:600;margin:8px 0 0}
+.gh{margin:12px 0 4px;color:var(--accent)}
 .ptcity svg{width:14px;height:14px;vertical-align:-2px;margin-inline-end:4px}
 .ptfoot{display:flex;justify-content:space-between;gap:8px;margin-top:10px}
 .ptfoot .ptcity{margin:0}
@@ -1890,6 +1893,7 @@ function vSettings(){
   <div class="card"><h3>البيانات</h3><p class="muted">التقدّم محفوظ في هذا الجهاز فقط.</p>
   ${confirmBox === 'reset' ? `<div class="confirm"><p>سيُمسح كل التقدّم ولا يمكن استرجاعه.</p><div class="rnav"><button class="btn danger" data-act="resetYes">امسح</button><button class="btn ghost" data-act="cancel">إلغاء</button></div></div>` : '<button class="btn danger" data-act="ask" data-v="reset">مسح كل البيانات</button>'}</div>
   ${IN_CLAUDE || STANDALONE ? '' : installGuide()}
+  ${shareCard()}
   <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. مصحف التجويد الملوّن: خطوط مجمع الملك فهد (الإصدار الرابع، ١٤٤١هـ) كما تنشرها مكتبة QUL، للعرض المجاني فقط. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta. محرك التسميع الدقيق: نموذج tarteel-ai/whisper-base-ar-quran من Tarteel AI (رخصة Apache 2.0)، مضغوط ليعمل على الجوال بمكتبة Transformers.js. التلاوات الصوتية: من خدمة Islamic Network (alquran.cloud) للاستخدام التعليمي المجاني، وحقوقها لأصحابها من القرّاء. صوت الأذان: مقطع من تسجيل أذان المغرب في المسجد الحرام (٢٥ فبراير ٢٠١٢) من تسجيل 3omar Faruq، برخصة المشاع الإبداعي CC BY 3.0، عبر ويكيميديا كومنز.</p></div>`;
   return h;
 }
@@ -2862,6 +2866,33 @@ function installGuide(){
     <ol class="gsteps">${steps}</ol>
     ${IOS ? '<p class="muted">مهم: استخدم Safari العادي، وليس الوضع الخاص (Private)، حتى يُحفظ تقدّمك.</p>' : ''}</div>`;
 }
+/* Share the app with a friend: the link and how to install it, ready to send (WhatsApp, Telegram...). */
+const SHARE_TXT = `تطبيق «ثبّت» لحفظ القرآن الكريم ومراجعته وتسميعه بالصوت، مجاني وبلا إعلانات.
+
+الرابط:
+https://thabbit.learnoschools.com
+
+طريقة التثبيت:
+الآيفون: افتح الرابط في Safari، ثم اضغط زر المشاركة (المربع والسهم)، واختر «إضافة إلى الشاشة الرئيسية» ثم «إضافة».
+الأندرويد: افتح الرابط في Chrome، ثم اضغط ⋮ أعلى الشاشة، واختر «تثبيت التطبيق».
+
+بعد التثبيت افتحه من أيقونته، واسمح له باستخدام الميكروفون عند أول تسميع.`;
+let shareMsg = '', guideBoth = false;
+function shareCard(){
+  const ios = `<ol class="gsteps">${gstep(1, GI.share, 'افتح الرابط في Safari واضغط زر المشاركة', 'المربع الذي فيه سهم، أسفل الشاشة')}${gstep(2, GI.add, 'اختر «إضافة إلى الشاشة الرئيسية»', 'ثم «إضافة»')}</ol>`;
+  const and = `<ol class="gsteps">${gstep(1, GI.vdots, 'افتح الرابط في Chrome واضغط ⋮', 'أعلى الشاشة')}${gstep(2, GI.add, 'اختر «تثبيت التطبيق»', 'أو «إضافة إلى الشاشة الرئيسية»')}</ol>`;
+  return `<div class="card"><h3>شارك «ثبّت» مع غيرك</h3><p class="muted">ترسل الرابط ومعه طريقة التثبيت للآيفون والأندرويد، في رسالة واحدة.</p>
+    <button class="btn" data-act="shareApp">${SHARE_SVG}أرسل التطبيق لصديق</button>${shareMsg ? `<p class="okmsg">${shareMsg}</p>` : ''}
+    <button class="beeptog" data-act="guideBoth" aria-expanded="${guideBoth}">${guideBoth ? 'إخفاء طريقة التثبيت' : 'طريقة التثبيت على الآيفون والأندرويد'}</button>
+    ${guideBoth ? `<h4 class="gh">الآيفون</h4>${ios}<h4 class="gh">الأندرويد</h4>${and}` : ''}</div>`;
+}
+const SHARE_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
+async function shareApp(){
+  try { if (navigator.share){ await navigator.share({title: 'ثبّت لحفظ القرآن', text: SHARE_TXT}); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(SHARE_TXT); shareMsg = '✓ نُسخت الرسالة. الصقها في واتساب أو تيليجرام وأرسلها.'; }
+  catch (e) { shareMsg = 'انسخ الرابط وأرسله: thabbit.learnoschools.com'; }
+  render();
+}
 function installCard(){
   if (IN_CLAUDE || STANDALONE) return '';
   if (location.hash === '#install') return installGuide();
@@ -2874,7 +2905,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r94';
+const BUILD = 'r95';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3067,6 +3098,8 @@ app.addEventListener('click', e => {
   if (a === 'audSess'){ const g = +v; if (AU && AU.ctx === 'sess' && audG() === g) audToggle(); else audPlay([g], 'sess'); return; }
   if (a === 'recSet'){ S.reciter = v; save(); RD.sheet = ''; if (AU){ const l = AU.list.slice(AU.i), c = AU.ctx; audPlay(l, c); } else render(); return; }
   if (a === 'ptGps'){ ptGps(); return; }
+  if (a === 'shareApp'){ shareApp(); return; }
+  if (a === 'guideBoth'){ guideBoth = !guideBoth; render(); return; }
   if (a === 'ptOpen'){ S.ptOpen = !(S.ptOpen === true); save(); const c = document.getElementById('ptCard'); if (c) c.innerHTML = ptCardInner(); else render(); return; }
   if (a === 'qOn'){ qibOn(); return; }
   if (a === 'ptSound'){ S.pt = Object.assign(S.pt || {}, {sound: S.pt && S.pt.sound === false}); save(); render(); return; }
