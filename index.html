@@ -453,7 +453,18 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .tgo svg{width:18px;height:18px}
 .tile .tmain .tline{padding-left:40px}
-.seg3 button{padding:8px 4px;font-size:.92rem}
+.seg3 button{padding:8px 2px;font-size:.88rem}
+.dbas{display:block;text-align:center;color:var(--accent)}
+.rqhow{background:var(--accent-soft);border-color:transparent}
+.rqhow b{color:var(--accent)}
+.rqhow p{margin:4px 0 0;line-height:1.8}
+.rqall{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px}
+.rqall svg,.rqone svg{width:18px;height:18px}
+.rqtop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rqtop b{color:var(--accent)}
+.rqone{display:inline-flex;align-items:center;gap:4px}
+.rqcard.pl{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+#rqMsg{margin:4px 0 0;min-height:1em;text-align:center}
 .dcard{display:flex;flex-direction:column;gap:8px}
 .dq{font-family:var(--f-quran);font-size:1.45rem;line-height:2.2;margin:0}
 .dcard .adt{margin:0}
@@ -1477,6 +1488,7 @@ function render(){
   let h = '';
   if (AU && ((AU.ctx === 'reader' && view !== 'reader') || (AU.ctx === 'sess' && (view !== 'session' || !sess || sess.phase !== 'read')))) audStop(true);
   if (view !== 'mictest' && MT) mtStop();
+  if (RQ.on && (view !== 'dua' || DUA_T !== 'r' || DUA_CH)) rqStop();
   if (view !== 'qibla' && QB.on){ QB.on = false; QB.head = null; QB.ok = false; window.removeEventListener('deviceorientationabsolute', qOnOrient); window.removeEventListener('deviceorientation', qOnOrient); }
   if (view === 'mictest') h = vMicTest();
   else if (view === 'session') h = vSession();
@@ -2746,6 +2758,57 @@ function adkTap(i, el){
   }
 }
 
+
+/* ---------- ruqya: Quran passages (text from Q, audio from the chosen reciter) and authentic prophetic ruqya ---------- */
+const RQ_Q = [[1,1,7,'سورة الفاتحة'],[2,1,5,'أول سورة البقرة'],[2,102,102,'من سورة البقرة'],[2,163,164,'من سورة البقرة'],[2,255,255,'آية الكرسي'],[2,285,286,'خواتيم سورة البقرة'],
+  [3,18,19,'من سورة آل عمران'],[7,54,56,'من سورة الأعراف'],[7,117,122,'من سورة الأعراف'],[10,81,82,'من سورة يونس'],[20,69,69,'من سورة طه'],[23,115,118,'خواتيم سورة المؤمنون'],
+  [37,1,10,'أول سورة الصافات'],[55,33,36,'من سورة الرحمن'],[59,21,24,'خواتيم سورة الحشر'],[112,1,4,'سورة الإخلاص'],[113,1,5,'سورة الفلق'],[114,1,6,'سورة الناس']];
+/* [text, times, source, note] */
+const RQ_S = [
+ ['أَذْهِبِ الْبَأْسَ رَبَّ النَّاسِ، وَاشْفِ أَنْتَ الشَّافِي، لَا شِفَاءَ إِلَّا شِفَاؤُكَ، شِفَاءً لَا يُغَادِرُ سَقَمًا.', 1, 'رواه البخاري ومسلم', ''],
+ ['بِسْمِ اللَّهِ أَرْقِيكَ، مِنْ كُلِّ شَيْءٍ يُؤْذِيكَ، مِنْ شَرِّ كُلِّ نَفْسٍ أَوْ عَيْنِ حَاسِدٍ، اللَّهُ يَشْفِيكَ، بِسْمِ اللَّهِ أَرْقِيكَ.', 1, 'رواه مسلم', ''],
+ ['بِسْمِ اللَّهِ يُبْرِيكَ، وَمِنْ كُلِّ دَاءٍ يَشْفِيكَ، وَمِنْ شَرِّ حَاسِدٍ إِذَا حَسَدَ، وَشَرِّ كُلِّ ذِي عَيْنٍ.', 1, 'رواه مسلم', ''],
+ ['أُعِيذُكَ بِكَلِمَاتِ اللَّهِ التَّامَّةِ، مِنْ كُلِّ شَيْطَانٍ وَهَامَّةٍ، وَمِنْ كُلِّ عَيْنٍ لَامَّةٍ.', 1, 'رواه البخاري', 'ولنفسك تقول: أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّةِ...'],
+ ['بِسْمِ اللَّهِ.', 3, 'رواه مسلم', 'تضع يدك على موضع الألم'],
+ ['أَعُوذُ بِاللَّهِ وَقُدْرَتِهِ مِنْ شَرِّ مَا أَجِدُ وَأُحَاذِرُ.', 7, 'رواه مسلم', 'ويدك على موضع الألم'],
+ ['أَسْأَلُ اللَّهَ الْعَظِيمَ، رَبَّ الْعَرْشِ الْعَظِيمِ، أَنْ يَشْفِيَكَ.', 7, 'رواه أبو داود والترمذي', 'يقولها عند زيارة المريض']];
+const BASMALA_LINE = () => Q[0][1][0];
+function rqText(s, a1, a2){
+  const pre = s !== 1 && a1 === 1 ? `<span class="dbas">${BASMALA_LINE()}</span>` : '';
+  let out = []; for (let a = a1; a <= a2; a++) out.push(Q[s - 1][1][a - 1] + ' ﴿' + AR(a) + '﴾');
+  return pre + out.join(' ');
+}
+const RQ = {on: false, list: [], i: 0, el: null, part: -1, all: false};
+function rqGids(k){ const [s, a1, a2] = RQ_Q[k], g = []; for (let a = a1; a <= a2; a++) g.push([k, GBASE[s - 1] + a]); return g; }
+function rqStop(){ if (RQ.el){ try { RQ.el.pause(); } catch (e) {} RQ.el.src = ''; } RQ.on = false; RQ.part = -1; RQ.err = false; rqMark(); }
+function rqMark(){
+  document.querySelectorAll('.rqcard').forEach(c => c.classList.toggle('pl', RQ.on && +c.dataset.k === RQ.part));
+  document.querySelectorAll('[data-act="rqPlay"]').forEach(b => { const k = b.dataset.v, on = RQ.on && (k === 'all' ? RQ.all : !RQ.all && +k === RQ.part);
+    b.innerHTML = (on ? PAUSE_SVG : PLAY_SVG) + (k === 'all' ? (on ? 'إيقاف' : 'استمع للرقية كاملة') : (on ? 'إيقاف' : 'استمع')); });
+  const m = document.getElementById('rqMsg'); if (m) m.textContent = RQ.err ? 'تعذّر التشغيل. الاستماع يحتاج إلى إنترنت.' : RQ.on ? 'القارئ: ' + reciter()[2] : '';
+}
+function rqStart(v){
+  if (RQ.on && ((v === 'all' && RQ.all) || (v !== 'all' && !RQ.all && +v === RQ.part))){ rqStop(); return; }
+  rqStop();
+  RQ.all = v === 'all'; RQ.list = RQ.all ? RQ_Q.flatMap((_, k) => rqGids(k)) : rqGids(+v); RQ.i = 0; RQ.on = true;
+  if (!RQ.el){ RQ.el = new Audio(); RQ.el.addEventListener('ended', () => { RQ.i++; rqPlayCur(); }); RQ.el.addEventListener('error', () => { if (RQ.on && RQ.el.src){ RQ.err = true; RQ.on = false; RQ.part = -1; rqMark(); } }); }
+  rqPlayCur();
+}
+function rqPlayCur(){
+  if (!RQ.on) return;
+  if (RQ.i >= RQ.list.length){ rqStop(); return; }
+  const [k, g] = RQ.list[RQ.i];
+  if (k !== RQ.part){ RQ.part = k; rqMark(); const c = document.querySelector(`.rqcard[data-k="${k}"]`); if (c && RQ.all){ const y = c.getBoundingClientRect().top + scrollY - 80; window.scrollTo({top: y, behavior: 'smooth'}); } }
+  RQ.el.src = audUrl(g); RQ.el.play().catch(() => { RQ.err = true; RQ.on = false; RQ.part = -1; rqMark(); });
+}
+function vRuqya(){
+  let h = `<div class="card rqhow"><b>طريقة الرقية</b><p>اقرأ على نفسك أو على المريض، وانفث نفثًا خفيفًا، وامسح بيدك موضع الألم. ويجوز تكرار القراءة ما شئت.</p></div>
+    <button class="btn rqall" data-act="rqPlay" data-v="all">${PLAY_SVG}استمع للرقية كاملة</button><p class="muted adksrc" id="rqMsg"></p>
+    <h3 class="duacat">من القرآن الكريم</h3>`;
+  h += RQ_Q.map(([s, a1, a2, title], k) => `<div class="card dcard rqcard" data-k="${k}"><div class="rqtop"><b>${title}</b><button class="x rqone" data-act="rqPlay" data-v="${k}">${PLAY_SVG}استمع</button></div><p class="dq">${rqText(s, a1, a2)}</p><p class="dsrc">سورة ${Q[s - 1][0]}، ${a1 === a2 ? 'الآية ' + AR(a1) : 'الآيات ' + AR(a1) + '-' + AR(a2)}</p></div>`).join('');
+  h += `<h3 class="duacat">من السنة النبوية</h3>` + RQ_S.map(([x, n, src, note]) => `<div class="card dcard"><p class="adt">${x}</p><p class="dsrc">${n > 1 ? `<b>${AR(n)} ${n <= 10 ? 'مرات' : 'مرة'}</b> · ` : ''}${note ? note + ' · ' : ''}${src}</p></div>`).join('');
+  return h;
+}
 /* ---------- du'a: from the Quran (text taken from Q), from the Sunnah, and Hisn al-Muslim by occasion ---------- */
 /* Quran: [sura, first ayah, last ayah, first word index, words kept of the last ayah or null] */
 const DUA_Q = [[2,127,127,7,null],[2,128,128,0,null],[2,201,201,3,null],[2,250,250,5,null],[2,286,286,12,null],[3,8,9,0,null],[3,16,16,2,null],[3,38,38,5,null],[3,53,53,0,null],[3,147,147,6,null],[3,173,173,13,null],[3,191,191,12,null],[3,192,194,0,null],[7,23,23,1,null],[7,126,126,10,null],[9,129,129,3,null],[10,85,86,4,null],[11,47,47,1,null],[12,101,101,9,null],[14,40,41,0,null],[17,24,24,7,null],[17,80,80,0,null],[18,10,10,6,null],[20,25,28,1,null],[20,114,114,13,null],[21,83,83,4,null],[21,87,87,14,null],[21,89,89,4,null],[23,97,98,0,null],[23,109,109,6,null],[23,118,118,0,null],[25,65,65,2,null],[25,74,74,2,null],[26,83,85,0,null],[27,19,19,5,null],[28,16,16,1,7],[28,24,24,7,null],[46,15,15,21,null],[59,10,10,5,null],[60,4,4,45,null],[60,5,5,0,null],[66,8,8,34,null],[71,28,28,0,null]];
@@ -2786,9 +2849,10 @@ function vDua(){
     h += `<p class="muted adksrc">من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p>`;
     return h;
   }
-  let h = `<div><h1>الأدعية</h1></div><div class="seg seg3" role="tablist">${[['q', 'من القرآن'], ['s', 'من السنة'], ['m', 'المناسبات']].map(([k, l]) => `<button role="tab" data-act="duaTab" data-v="${k}" aria-selected="${DUA_T === k}">${l}</button>`).join('')}</div>`;
+  let h = `<div><h1>الأدعية</h1></div><div class="seg seg3" role="tablist">${[['q', 'القرآن'], ['s', 'السنة'], ['m', 'المناسبات'], ['r', 'الرقية']].map(([k, l]) => `<button role="tab" data-act="duaTab" data-v="${k}" aria-selected="${DUA_T === k}">${l}</button>`).join('')}</div>`;
   if (DUA_T === 'q') h += `<p class="muted adkhint">أدعية جاءت في القرآن الكريم.</p>` + DUA_Q.map(d => `<div class="card dcard"><p class="dq">${duaQText(d)}</p><p class="dsrc">${duaRef(d)}</p></div>`).join('');
   else if (DUA_T === 's') h += `<p class="muted adkhint">من الأدعية الجامعة الصحيحة عن النبي ﷺ.</p>` + DUA_S.map(([x, src]) => `<div class="card dcard"><p class="adt">${x}</p><p class="dsrc">${src}</p></div>`).join('');
+  else if (DUA_T === 'r') h += vRuqya();
   else h += `<label class="sbox duaq">${SEARCH_SVG}<input id="duaQ" type="search" value="${esc(duaQuery)}" placeholder="ابحث: السفر، المطر، الكرب..." autocomplete="off" enterkeyhint="search" aria-label="ابحث في الأدعية"></label><div id="duaRes">${duaChRows()}</div><p class="muted adksrc">من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p>`;
   return h;
 }
@@ -3087,7 +3151,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r99';
+const BUILD = 'r100';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3133,7 +3197,8 @@ app.addEventListener('click', e => {
   if (a === 'n40Open'){ const n = Math.max(1, Math.min(42, +v)); n40Cur = n; S.n40 = Object.assign(S.n40 || {}, {last: n}); save(); view = 'n40h'; loadN40(); render(); window.scrollTo(0, 0); return; }
   if (a === 'n40Size'){ const c = (S.n40 && S.n40.size) || 1; S.n40 = Object.assign(S.n40 || {}, {size: Math.max(0.8, Math.min(1.8, Math.round((c + 0.15 * +v) * 100) / 100))}); save(); render(); return; }
   if (a === 'n40Retry'){ N40 = null; loadN40(); render(); return; }
-  if (a === 'duaTab'){ DUA_T = v; render(); window.scrollTo(0, 0); return; }
+  if (a === 'rqPlay'){ rqStart(v); return; }
+  if (a === 'duaTab'){ if (RQ.on) rqStop(); DUA_T = v; render(); window.scrollTo(0, 0); return; }
   if (a === 'duaCh'){ DUA_CH = v.split('.').map(Number); render(); window.scrollTo(0, 0); return; }
   if (a === 'duaBack'){ DUA_CH = null; render(); window.scrollTo(0, 0); return; }
   if (a === 'adkGo'){ ADK_FROM = view === 'lib' ? 'lib' : 'home'; ADK_T = v === 'lib' ? adkNow() : v; view = 'adhkar'; render(); window.scrollTo(0, 0); return; }
