@@ -453,6 +453,14 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .tgo svg{width:18px;height:18px}
 .tile .tmain .tline{padding-left:40px}
+.guide h3{display:flex;align-items:center;gap:8px;color:var(--accent)}
+.guide h3 svg{width:22px;height:22px}
+.gitem{border-top:1px solid var(--line)}
+.ghead{all:unset;box-sizing:border-box;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:space-between;padding:10px 2px;font-weight:600}
+.gitem.open .ghead{color:var(--accent)}
+.gchev{color:var(--muted);font-size:.8rem}
+.gitem ol{list-style:arabic-indic;margin:0 0 12px;padding-inline-start:22px;display:flex;flex-direction:column;gap:6px;line-height:1.75;color:var(--ink)}
+.gitem li::marker{color:var(--accent);font-weight:700}
 .adkcard{margin-top:0}
 .adkcard .ptop b svg,.adkcard .ptcity svg{color:var(--gold)}
 .adkok{color:var(--good)!important;font-weight:600}
@@ -1910,6 +1918,7 @@ function vSettings(){
     <div class="row"><span><b>القارئ</b><small>صوت الشيخ عند الاستماع للآيات</small></span>${recSelect()}</div>
     <div class="row"><span><b>الورد اليومي</b><small>${S.wird ? wirdName(S.wird) : 'غير محدد'}</small></span><button class="x" data-act="go" data-v="setupWird">تعديل</button></div>
   </div>
+  ${guideCard()}
   ${engCard()}
   <div class="card"><h3>البيانات</h3><p class="muted">التقدّم محفوظ في هذا الجهاز فقط.</p>
   ${confirmBox === 'reset' ? `<div class="confirm"><p>سيُمسح كل التقدّم ولا يمكن استرجاعه.</p><div class="rnav"><button class="btn danger" data-act="resetYes">امسح</button><button class="btn ghost" data-act="cancel">إلغاء</button></div></div>` : '<button class="btn danger" data-act="ask" data-v="reset">مسح كل البيانات</button>'}</div>
@@ -2944,6 +2953,52 @@ https://thabbit.learnoschools.com
 الأندرويد: افتح الرابط في Chrome، ثم اضغط ⋮ أعلى الشاشة، واختر «تثبيت التطبيق».
 
 بعد التثبيت افتحه من أيقونته، واسمح له باستخدام الميكروفون عند أول تسميع.`;
+
+/* ---------- user guide (settings) ---------- */
+const GUIDE = [
+ ['القراءة', ['من الشاشة الرئيسية اضغط «قراءة»، ثم «افتح المصحف» أو اختر سورة أو جزءًا.',
+   'اضغط على أي آية لتظهر لك: «استمع»، و«التفسير»، و«ضع علامة»، و«سمّع هذه الآية».',
+   'الكلمات التي تحتها نقاط لها معنى، اضغطها ليظهر معناها.',
+   'من زر «الخط والألوان» أسفل المصحف: تكبير الخط، ومصحف التجويد الملوّن، وتشغيل معاني الكلمات.',
+   'علاماتك تجدها من زر «العلامات» أسفل المصحف.']],
+ ['الاستماع لقارئ', ['اضغط على آية ثم «استمع».',
+   'في الشريط الذي يظهر: إيقاف مؤقت، وعدد تكرار الآية (×١، ×٣...)، و«متتابع» ليكمل الآيات التالية.',
+   'لتغيير القارئ اضغط اسمه في الشريط، أو من الإعدادات.',
+   'الاستماع يحتاج إلى إنترنت.']],
+ ['الحفظ', ['اضغط «حفظ» واختر ما تحفظه (سورة أو ربع أو جزء أو القرآن كاملًا)، ومقدار الحفظ اليومي، وعدد تكرار كل آية.',
+   'في كل مقطع اقرأ الآية أو استمع لها، واضغط بعد كل تكرار حتى يكتمل العدد.',
+   'ثم اضغط «جاهز، اختبرني»: تختفي الآيات وتقرؤها من حفظك.',
+   'كل ما تحفظه يدخل مراجعتك تلقائيًا قبل أن يُنسى.']],
+ ['التسميع بالصوت', ['حمّل «محرك التسميع» مرة واحدة من الشاشة الرئيسية، ليكون التسميع أدق ويعمل بدون إنترنت.',
+   'اضغط «سمّع بصوتك» واقرأ بصوت مسموع، فتظهر الكلمات وأنت تقرأ.',
+   'الأحمر خطأ. البرتقالي تنبيه فقط ولا يُحسب خطأ، مثل أن تصحّح نفسك.',
+   'إذا نسيت بداية الآية اضغط «ذكّرني ببداية الآية»، ويضيء الزر وحده إذا توقفت عن القراءة.',
+   'إذا لم يصل صوتك جرّب «اختبار الميكروفون» في الإعدادات.']],
+ ['المراجعة', ['اضغط «مراجعة» وحدّد ما تحفظه من قبل، وكم تراجع كل يوم.',
+   'اضغط الجزء أو السورة مرة: «أحفظه». مرة ثانية: «حفظي فيه ضعيف»، فيأتي أولًا في مراجعتك.',
+   'الآيات التي تخطئ فيها تُجمع في «مواضع الضعف»، وتخرج منها إذا سمّعتها مرتين بلا خطأ.']],
+ ['الورد اليومي', ['اضغط «ورد يومي» وحدّد المقدار: صفحات، أو أجزاء، أو ختمة في مدة تختارها، ومن أين تبدأ.',
+   'اضغط على مربع الورد ليفتح المصحف على ورد اليوم، والتطبيق يتابع ما قرأته.']],
+ ['مواقيت الصلاة والقبلة', ['اضغط شريط المواقيت في الشاشة الرئيسية ليظهر جدول اليوم كاملًا.',
+   'المدينة وطريقة الحساب من الإعدادات، «مواقيت الصلاة»، أو اضغط «استخدم موقعي».',
+   'عند دخول وقت الصلاة يظهر تنبيه مع صوت الأذان، إذا كان التطبيق مفتوحًا.',
+   'زر «القبلة»: امسك الجوال مستويًا وأدِره حتى يتجه السهم إلى الكعبة.']],
+ ['الأذكار', ['من زر «الأذكار» أسفل الشاشة.',
+   'تفتح أذكار الصباح من الفجر إلى العصر، وأذكار المساء بعد العصر. ويمكنك التبديل بينهما من الأعلى.',
+   'اضغط على الذكر بعد كل قراءة ليُحسب، ويبدأ العدّ من جديد كل يوم.']],
+ ['المكتبة', ['الأربعون النووية تُقرأ داخل التطبيق، ومعها البحث.',
+   'كتب الحج والعمرة تُفتح من موقع رئاسة الشؤون الدينية، وبعضها تستطيع تحميله لتقرأه بدون إنترنت.']],
+ ['الاستخدام بدون إنترنت', ['حمّل المصحف مرة واحدة من الشاشة الرئيسية، فتعمل القراءة والمعاني والتفسير بدون إنترنت.',
+   'حمّل محرك التسميع ليعمل التسميع بدون إنترنت.',
+   'مواقيت الصلاة والقبلة والأذكار تعمل بدون إنترنت.',
+   'الاستماع للقرّاء وفتح الكتب غير المحمّلة يحتاج إلى إنترنت.']],
+ ['تقدّمك وبياناتك', ['من «تقدّمي» أسفل الشاشة ترى ما حفظته، وأيامك المتتالية، ومواضع الضعف.',
+   'تقدّمك محفوظ في هذا الجوال فقط. إذا مسحت بيانات المتصفح أو غيّرت الجوال يبدأ من جديد.']]];
+let guideOpen = -1;
+function guideCard(){
+  return `<div class="card guide"><h3>${BOOK_SVG}دليل الاستخدام</h3><p class="muted">اضغط على أي موضوع لترى طريقته.</p>
+    ${GUIDE.map(([t, st], i) => `<div class="gitem${guideOpen === i ? ' open' : ''}"><button class="ghead" data-act="guideOpen" data-v="${i}" aria-expanded="${guideOpen === i}"><span>${t}</span><span class="gchev">${guideOpen === i ? '▴' : '▾'}</span></button>${guideOpen === i ? `<ol>${st.map(x => `<li>${x}</li>`).join('')}</ol>` : ''}</div>`).join('')}</div>`;
+}
 let shareMsg = '', guideBoth = false;
 function shareCard(){
   const ios = `<ol class="gsteps">${gstep(1, GI.share, 'افتح الرابط في Safari واضغط زر المشاركة', 'المربع الذي فيه سهم، أسفل الشاشة')}${gstep(2, GI.add, 'اختر «إضافة إلى الشاشة الرئيسية»', 'ثم «إضافة»')}</ol>`;
@@ -2972,7 +3027,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r97';
+const BUILD = 'r98';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3170,6 +3225,7 @@ app.addEventListener('click', e => {
   if (a === 'recSet'){ S.reciter = v; save(); RD.sheet = ''; if (AU){ const l = AU.list.slice(AU.i), c = AU.ctx; audPlay(l, c); } else render(); return; }
   if (a === 'ptGps'){ ptGps(); return; }
   if (a === 'shareApp'){ shareApp(); return; }
+  if (a === 'guideOpen'){ guideOpen = guideOpen === +v ? -1 : +v; render(); const g = document.querySelector('.gitem.open'); if (g && g.getBoundingClientRect().top < 60) g.scrollIntoView({block: 'start'}); return; }
   if (a === 'guideBoth'){ guideBoth = !guideBoth; render(); return; }
   if (a === 'ptOpen'){ S.ptOpen = !(S.ptOpen === true); save(); const c = document.getElementById('ptCard'); if (c) c.innerHTML = ptCardInner(); else render(); return; }
   if (a === 'qOn'){ qibOn(); return; }
