@@ -456,6 +456,8 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .tgo svg{width:18px;height:18px}
 .tile .tmain .tline{padding-left:40px}
+.n40play{display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 10px}
+.n40play svg{width:18px;height:18px}
 .rlisten{display:grid;place-items:center;width:38px;height:38px;padding:0;border-radius:50%}
 .rlisten svg{width:17px;height:17px}
 .seg3 button{padding:8px 2px;font-size:.88rem}
@@ -1501,6 +1503,7 @@ function render(){
   let h = '';
   if (AU && ((AU.ctx === 'reader' && view !== 'reader') || (AU.ctx === 'sess' && (view !== 'session' || !sess || sess.phase !== 'read')))) audStop(true);
   if (view !== 'mictest' && MT) mtStop();
+  if ((HA.on || HA.err) && (view !== 'n40h' || HA.n !== n40Cur)){ haStop(); HA.err = false; }
   if (view === 'session' || view === 'mictest') wakeOn(); else if (wlWant) wakeOff();
   if (RQ.on && (view !== 'dua' || DUA_T !== 'r' || DUA_CH)) rqStop();
   if (view !== 'qibla' && QB.on){ QB.on = false; QB.head = null; QB.ok = false; window.removeEventListener('deviceorientationabsolute', qOnOrient); window.removeEventListener('deviceorientation', qOnOrient); }
@@ -3016,15 +3019,40 @@ function n40Results(){
   return `<p class="scount">${countWord(found.length, 'حديث واحد', 'حديثان', 'أحاديث', 'حديثًا')}${tot > found.length ? ' · ' + countWord(tot, 'موضع واحد', 'موضعان', 'مواضع', 'موضعًا') : ''}</p><div class="card n40list">${found.map(f => n40Row(f[0], f[1])).join('')}</div>`;
 }
 function n40Para(t){ return t.split('\n').map(p => p.trim()).filter(Boolean).map(p => `<p>${p}</p>`).join(''); }
+/* Listening to the Forty: Hamad al-Duraihim's reading from IslamHouse.com (one file), played from each hadith's start to the next one's. */
+const N40A_URL = 'https://d1.islamhouse.com/data/ar/ih_sounds/chain_01/Almtoon_Al3lmeeh/AlArb3un_AlNuweh/ar_AlArb3un_AlNuweh_Duraihim.mp3';
+const N40A_T = [71.35, 129.33, 330.67, 377.95, 484.65, 524.21, 608.03, 646.69, 696.45, 743.13, 817.39, 860.39, 890.67, 926.31, 969.3, 1014.05, 1045.09, 1089.89, 1136.73, 1251.59, 1284.69, 1319.87, 1379.07, 1444.49, 1622.83, 1721.77, 1782.25, 1863.31, 1939.97, 2092.87, 2142.71, 2192.65, 2240.99, 2281.01, 2317.13, 2387.07, 2476.71, 2548.73, 2613.45, 2644.47, 2689.43, 2721.93, 2779.93];
+const HA = {el: null, n: 0, on: false, paused: false, load: false, err: false};
+function haBtn(){
+  const me = HA.n === n40Cur && (HA.on || HA.err);
+  const lbl = !me ? 'استمع للحديث' : HA.err ? 'تعذّر التشغيل، تأكد من الإنترنت' : HA.load ? 'جاري التحميل...' : HA.paused ? 'تابع الاستماع' : 'إيقاف مؤقت';
+  return `${me && HA.on && !HA.paused && !HA.load ? PAUSE_SVG : PLAY_SVG}${lbl}`;
+}
+function haMark(){ const b = document.getElementById('haBtn'); if (b) b.innerHTML = haBtn(); }
+function haStop(){ if (HA.el){ try { HA.el.pause(); } catch (e) {} } HA.on = false; HA.paused = false; HA.load = false; HA.n = 0; }
+function haToggle(){
+  const n = n40Cur;
+  if (HA.on && HA.n === n){ if (HA.paused){ HA.el.play().catch(() => {}); HA.paused = false; } else { HA.el.pause(); HA.paused = true; } haMark(); return; }
+  if (!HA.el){
+    HA.el = new Audio(); HA.el.preload = 'auto';
+    HA.el.addEventListener('timeupdate', () => { if (HA.on && HA.el.currentTime >= N40A_T[HA.n] - 0.05){ haStop(); haMark(); } });
+    HA.el.addEventListener('playing', () => { if (HA.load){ HA.load = false; haMark(); } });
+    HA.el.addEventListener('error', () => { if (HA.on){ HA.on = false; HA.err = true; HA.load = false; haMark(); } });
+  }
+  HA.n = n; HA.on = true; HA.paused = false; HA.err = false; HA.load = true; haMark();
+  const go = () => { try { HA.el.currentTime = N40A_T[n - 1]; } catch (e) {} HA.el.play().catch(() => { HA.on = false; HA.err = true; HA.load = false; haMark(); }); };
+  if (HA.el.src !== N40A_URL){ HA.el.src = N40A_URL; HA.el.addEventListener('loadedmetadata', go, {once: true}); HA.el.load(); } else if (HA.el.readyState >= 1) go(); else HA.el.addEventListener('loadedmetadata', go, {once: true});
+}
 function vN40h(){
   let h = `<main><div class="top"><span class="brand">ثبّت</span><button class="x" data-act="tab" data-v="n40">رجوع</button></div>`;
   if (!N40) return h + n40Wait() + '</main>';
   const x = N40.h[n40Cur - 1], sz = (S.n40 && S.n40.size) || 1;
   h += `<div class="n40head"><span class="n40pos">${AR(x.n)} من ٤٢</span><h1>${x.title}</h1><div class="n40size"><button class="x" data-act="n40Size" data-v="-1" aria-label="تصغير الخط">أ-</button><button class="x" data-act="n40Size" data-v="1" aria-label="تكبير الخط">أ+</button></div></div>
+    <button class="btn soft n40play" id="haBtn" data-act="n40Play">${haBtn()}</button>
     <article class="card n40text" style="font-size:${(1.32 * sz).toFixed(2)}rem">${n40Para(x.body)}${x.extra ? n40Para(x.extra) : ''}</article>
     <div class="n40tak"><b>التخريج</b><span>${x.tak}</span></div>
     <div class="rnav n40nav"><button class="btn soft" data-act="n40Open" data-v="${x.n + 1}" ${x.n >= 42 ? 'disabled' : ''}>الحديث التالي</button><button class="btn ghost" data-act="n40Open" data-v="${x.n - 1}" ${x.n <= 1 ? 'disabled' : ''}>السابق</button></div>
-    <p class="muted n40foot">${N40.source}</p>`;
+    <p class="muted n40foot">${N40.source}</p><p class="muted n40foot">التلاوة الصوتية: قراءة الأستاذ حمد الدريهم، من موقع دار الإسلام IslamHouse.com، والاستماع يحتاج إلى إنترنت.</p>`;
   return h + '</main>';
 }
 function vRead(){
@@ -3143,12 +3171,12 @@ const GUIDE = [
  ['الأذكار', ['من زر «الأذكار» أسفل الشاشة.',
    'تفتح أذكار الصباح من الفجر إلى العصر، وأذكار المساء بعد العصر. ويمكنك التبديل بينهما من الأعلى.',
    'اضغط على الذكر بعد كل قراءة ليُحسب، ويبدأ العدّ من جديد كل يوم.']],
- ['المكتبة', ['الأربعون النووية تُقرأ داخل التطبيق، ومعها البحث.',
+ ['المكتبة', ['الأربعون النووية تُقرأ داخل التطبيق، ومعها البحث، وزر «استمع للحديث» بصوت قارئ.',
    'كتب الحج والعمرة تُفتح من موقع رئاسة الشؤون الدينية، وبعضها تستطيع تحميله لتقرأه بدون إنترنت.']],
  ['الاستخدام بدون إنترنت', ['حمّل المصحف مرة واحدة من الشاشة الرئيسية، فتعمل القراءة والمعاني والتفسير بدون إنترنت.',
    'حمّل محرك التسميع ليعمل التسميع بدون إنترنت.',
    'مواقيت الصلاة والقبلة والأذكار تعمل بدون إنترنت.',
-   'الاستماع للقرّاء وفتح الكتب غير المحمّلة يحتاج إلى إنترنت.']],
+   'الاستماع للقرّاء وللأحاديث، وفتح الكتب غير المحمّلة، يحتاج إلى إنترنت.']],
  ['تقدّمك وبياناتك', ['من «تقدّمي» أسفل الشاشة ترى ما حفظته، وأيامك المتتالية، ومواضع الضعف.',
    'تقدّمك محفوظ في هذا الجوال فقط. إذا مسحت بيانات المتصفح أو غيّرت الجوال يبدأ من جديد.']]];
 let guideOpen = -1;
@@ -3184,7 +3212,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r106';
+const BUILD = 'r107';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3229,6 +3257,7 @@ app.addEventListener('click', e => {
   if (a === 'tab'){ if (v === 'dua' && view === 'dua') DUA_CH = null; if (v === 'adhkar'){ ADK_FROM = 'tab'; if (view !== 'adhkar') ADK_T = adkNow(); } view = v; confirmBox = null; render(); window.scrollTo(0, 0); return; }
   if (a === 'n40Open'){ const n = Math.max(1, Math.min(42, +v)); n40Cur = n; S.n40 = Object.assign(S.n40 || {}, {last: n}); save(); view = 'n40h'; loadN40(); render(); window.scrollTo(0, 0); return; }
   if (a === 'n40Size'){ const c = (S.n40 && S.n40.size) || 1; S.n40 = Object.assign(S.n40 || {}, {size: Math.max(0.8, Math.min(1.8, Math.round((c + 0.15 * +v) * 100) / 100))}); save(); render(); return; }
+  if (a === 'n40Play'){ haToggle(); return; }
   if (a === 'n40Retry'){ N40 = null; loadN40(); render(); return; }
   if (a === 'rqPlay'){ rqStart(v); return; }
   if (a === 'duaTab'){ if (RQ.on) rqStop(); DUA_T = v; render(); window.scrollTo(0, 0); return; }

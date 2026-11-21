@@ -61,3 +61,6 @@ From **quran-meta** v7.0.0 (Hafs lists), MIT License, Copyright (c) 2020 Quran-C
 
 ## خط المصحف في التسميع والأدعية
 Amiri Quran من مشروع Amiri، برخصة SIL Open Font License 1.1 (fonts/OFL-amiri.txt).
+
+## التلاوة الصوتية للأربعين النووية
+قراءة الأستاذ حمد الدريهم، من موقع دار الإسلام IslamHouse.com. تُشغَّل من موقعهم مباشرة ولا تُنسخ في التطبيق.
