@@ -1981,7 +1981,7 @@ function buildExp(ay){
   tajweedVariants(sess.exp); sess.cls = new Map();
 }
 /* A fresh recitation of the first k ayat (k = 0: the whole passage). Cumulative memorizing: ayah 1, then 1-2 together, then 1-3... */
-function startRecite(k){
+function testFrom(k){
   if (REC){ REC.dead = true; engClose(); }
   if (sess.listening && DICT) { try { DICT.stop().catch(() => {}); } catch (e) {} }
   audStop(true);
@@ -3181,7 +3181,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r104';
+const BUILD = 'r105';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3292,13 +3292,13 @@ app.addEventListener('click', e => {
   if (a === 'quit'){ confirmBox = null; stopMic(); sess = null; if (retReader && RD){ retReader = false; openReader(RD.page, RD.back); return; } if (retMist){ retMist = false; view = 'mist'; render(); return; } view = 'home'; render(); return; }
   if (a === 'rep'){ const n = (sess.reps[v] || 0) + 1; sess.reps[v] = n; keepProgress(); const ay = chunkAyat(itemChunk(sess.queue[sess.pos])); const ri = sess.ri || 0; if (n === REPS() && ay.length > 1){ render(); setTimeout(() => { if (!sess || (sess.ri || 0) !== ri || sess.phase !== 'read') return;
       if (ri === 0){ audStop(true); sess.ri = 1; render(); window.scrollTo(0, 0); }
-      else startRecite(ri + 1 >= ay.length ? 0 : ri + 1); }, 450); return; } render(); return; }
+      else testFrom(ri + 1 >= ay.length ? 0 : ri + 1); }, 450); return; } render(); return; }
   if (a === 'cumNext'){ audStop(true); const k = sess.cum; sess.cum = 0; sess.phase = 'read'; sess.ri = k; keepProgress(); render(); window.scrollTo(0, 0); return; }
-  if (a === 'cumAgain'){ startRecite(sess.cum); return; }
+  if (a === 'cumAgain'){ testFrom(sess.cum); return; }
   if (a === 'ri'){ audStop(true); sess.ri = +v; keepProgress(); render(); window.scrollTo(0, 0); return; }
   if (a === 'hifzToday'){ if (hasNewLeft()){ S.inprog = null; save(); startSession([{type:'new', idx:S.nextNew}]); } return; }
   if (a === 'hifzResume'){ const ip = inprog(); if (ip){ startSession([{type:'new', idx:ip.idx}]); sess.reps = Object.assign({}, ip.reps); sess.ri = ip.ri || 0; render(); } return; }
-  if (a === 'toTest'){ startRecite(0); return; }
+  if (a === 'toTest'){ testFrom(0); return; }
   if (a === 'peek'){ const i = +v; if (sess.reveal >= sess.total && sess.ws[i]){ sess.why = sess.why === i ? null : i; render(); return; } if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
   if (a === 'copyReport'){
     const t = sess.queue[sess.pos], c = itemChunk(t), [s1, a1] = gidToSA(c.r[0][0]), [s2, a2] = gidToSA(c.r[c.r.length - 1][1]);
