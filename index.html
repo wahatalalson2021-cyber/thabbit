@@ -1499,7 +1499,10 @@ let view = 'home';
 let sess = null, confirmBox = null;
 let hd = null, rvd = null, wd = null;
 const app = document.getElementById('app');
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* The Quran text marks open tanween with older code points (U+0657, U+065E, U+0656) that the Quran font lacks or draws wrongly
+   (U+065E broke words like بَصِيرٞ apart). Shown with the standard open-tanween characters instead; matching still uses the original. */
+const uth = s => String(s).replace(/[\u0657\u065E\u0656]/g, c => c === '\u0657' ? '\u08F0' : c === '\u065E' ? '\u08F1' : '\u08F2');
+const esc = s => uth(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const countWord = (n, one, two, few, many) => n === 1 ? one : n === 2 ? two : AR(n) + ' ' + (n <= 10 ? few : many);
 const pagesWord = n => n === 1 ? 'صفحة' : n === 2 ? 'صفحتان' : n <= 10 ? 'صفحات' : 'صفحة';
 
@@ -2859,7 +2862,7 @@ const BASMALA_LINE = () => Q[0][1][0];
 function rqText(s, a1, a2){
   const pre = s !== 1 && a1 === 1 ? `<span class="dbas">${BASMALA_LINE()}</span>` : '';
   let out = []; for (let a = a1; a <= a2; a++) out.push(Q[s - 1][1][a - 1] + ' ﴿' + AR(a) + '﴾');
-  return pre + out.join(' ');
+  return pre + uth(out.join(' '));
 }
 const RQ = {on: false, list: [], i: 0, el: null, part: -1, all: false};
 function rqGids(k){ const [s, a1, a2] = RQ_Q[k], g = []; for (let a = a1; a <= a2; a++) g.push([k, GBASE[s - 1] + a]); return g; }
@@ -2911,7 +2914,7 @@ function duaQText(d){
     if (cut) w = w.slice(0, end - (a === a1 ? k : 0));
     out.push(w.join(' ') + (cut ? '' : ' ﴿' + AR(a) + '﴾'));
   }
-  return out.join(' ');
+  return uth(out.join(' '));
 }
 const duaRef = d => 'سورة ' + Q[d[0] - 1][0] + '، ' + (d[1] === d[2] ? 'الآية ' + AR(d[1]) : 'الآيات ' + AR(d[1]) + '-' + AR(d[2]));
 const deTash = s => s.replace(/[ً-ٰٟـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
@@ -3302,7 +3305,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r110';
+const BUILD = 'r111';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
