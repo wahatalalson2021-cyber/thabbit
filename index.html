@@ -511,6 +511,12 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .adkc b{font-size:1.15rem;color:var(--accent)}
 .adkc small{font-size:.62rem;color:var(--muted)}
 .adkc.full{background:var(--good)}.adkc.full .in{background:var(--good);color:#fff;font-size:1.4rem;font-weight:700}
+.adkw{position:relative}
+.adkw .adf > small{margin-inline-end:52px}
+.adkplay{position:absolute;left:88px;bottom:24px;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--accent);display:grid;place-items:center;cursor:pointer;padding:0}
+.adkplay svg{width:18px;height:18px}
+.adkw.pl .adk{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.adkw.pl .adkplay{background:var(--accent);color:#fff;border-color:var(--accent)}
 .adk.done{opacity:.55;border-color:color-mix(in srgb,var(--good) 45%,var(--line))}
 .adksrc{font-size:.8rem;margin:10px 0 0}
 /* compact home: everything for today visible on the first screen */
@@ -1503,6 +1509,7 @@ function render(){
   let h = '';
   if (AU && ((AU.ctx === 'reader' && view !== 'reader') || (AU.ctx === 'sess' && (view !== 'session' || !sess || sess.phase !== 'read')))) audStop(true);
   if (view !== 'mictest' && MT) mtStop();
+  if (AK.on && view !== 'adhkar') akStop();
   if ((HA.on || HA.err) && (view !== 'n40h' || HA.n !== n40Cur)){ haStop(); HA.err = false; }
   if (view === 'session' || view === 'mictest') wakeOn(); else if (wlWant) wakeOff();
   if (RQ.on && (view !== 'dua' || DUA_T !== 'r' || DUA_CH)) rqStop();
@@ -2769,13 +2776,40 @@ function adkCard(){
   return `<div class="card ptcard adkcard"><div class="ptop ptstrip"><button class="ptmain" data-act="adkGo" data-v="${k}"><b>${k === 'm' ? SUN_SVG : MOON_SVG}أذكار ${k === 'm' ? 'الصباح' : 'المساء'}</b><span class="ptleft ${n ? '' : 'adkok'}">${n ? (n === tot ? AR(tot) + ' ذكرًا' : 'بقي ' + AR(n)) : '✓ أتممتها'}</span><span class="ptchev">‹</span></button><button class="ptcity" data-act="adkGo" data-v="${o}">${o === 'm' ? SUN_SVG : MOON_SVG}${o === 'm' ? 'الصباح' : 'المساء'}</button></div></div>`;
 }
 function adkRing(c, n){ return `<span class="adkc ${c >= n ? 'full' : ''}" style="--deg:${Math.min(c, n) * 360 / n}deg"><span class="in">${c >= n ? '✓' : c ? `<b>${AR(c)}</b><small>من ${AR(n)}</small>` : `<b>${AR(n)}</b><small>${n > 2 && n <= 10 ? 'مرات' : 'مرة'}</small>`}</span></span>`; }
+/* Listening to the adkhar: the recordings published with Hisn al-Muslim on hisnmuslim.com (one file per dhikr, ids 75-98). */
+const AK = {on: false, all: false, list: [], i: 0, el: null, err: false};
+const akUrl = i => 'https://www.hisnmuslim.com/audio/ar/' + (75 + i) + '.mp3';
+function akMark(){
+  document.querySelectorAll('.adkw').forEach(w => w.classList.toggle('pl', AK.on && AK.list[AK.i] === +w.dataset.i));
+  document.querySelectorAll('[data-act="akPlay"]').forEach(b => { const v = b.dataset.v;
+    if (v === 'all') b.innerHTML = AK.on && AK.all ? PAUSE_SVG + 'إيقاف' : PLAY_SVG + (AK.err ? 'تعذّر التشغيل، تأكد من الإنترنت' : 'استمع للأذكار متتابعة');
+    else b.innerHTML = AK.on && !AK.all && AK.list[AK.i] === +v ? PAUSE_SVG : PLAY_SVG; });
+}
+function akStop(){ if (AK.el){ try { AK.el.pause(); } catch (e) {} } AK.on = false; akMark(); }
+function akPlay(v){
+  if (AK.on && ((v === 'all' && AK.all) || (v !== 'all' && !AK.all && AK.list[AK.i] === +v))){ akStop(); return; }
+  if (AK.el) try { AK.el.pause(); } catch (e) {}
+  const k = ADK_T || adkNow();
+  AK.all = v === 'all'; AK.list = AK.all ? adkList(k).map(([i]) => i) : [+v]; AK.i = 0; AK.on = true; AK.err = false;
+  if (!AK.el){ AK.el = new Audio(); AK.el.addEventListener('ended', () => { AK.i++; akCur(); }); AK.el.addEventListener('error', () => { if (AK.on && AK.el.src){ AK.on = false; AK.err = true; akMark(); } }); }
+  akCur();
+}
+function akCur(){
+  if (!AK.on) return;
+  if (AK.i >= AK.list.length){ akStop(); return; }
+  akMark();
+  const w = document.querySelector(`.adkw[data-i="${AK.list[AK.i]}"]`);
+  if (w && AK.all){ const y = w.getBoundingClientRect().top + scrollY - 80; window.scrollTo({top: y, behavior: 'smooth'}); }
+  AK.el.src = akUrl(AK.list[AK.i]); AK.el.play().catch(() => { AK.on = false; AK.err = true; akMark(); });
+}
 function vAdhkar(){
   const k = ADK_T || adkNow(), st = adkState()[k], L = adkList(k), left = adkLeft(k);
   let h = (ADK_FROM === 'tab' ? '' : back(ADK_FROM)) + `<div><h1>أذكار ${k === 'm' ? 'الصباح' : 'المساء'}</h1></div>
     <div class="seg" role="tablist"><button role="tab" data-act="adkTab" data-v="m" aria-selected="${k === 'm'}">${SUN_SVG}الصباح</button><button role="tab" data-act="adkTab" data-v="e" aria-selected="${k === 'e'}">${MOON_SVG}المساء</button></div>
+    <button class="btn soft rqall" data-act="akPlay" data-v="all">${AK.on && AK.all ? PAUSE_SVG + 'إيقاف' : PLAY_SVG + 'استمع للأذكار متتابعة'}</button>
     <p class="muted adkhint" id="adkProg">${left ? `اضغط على الذكر بعد كل قراءة ليُحسب. بقي ${AR(left)} من ${AR(L.length)}` : 'أتممت الأذكار، تقبّل الله منك'}</p>`;
   h += L.map(([i, x]) => { const c = st[i] || 0, n = x[2];
-    return `<button class="card adk ${c >= n ? 'done' : ''}" data-act="adk" data-v="${i}"><span class="adt">${esc(x[k === 'm' ? 0 : 1])}</span><span class="adf"><small>${x[4] ? `<b>${x[4]}</b><br>` : ''}${x[3]}</small>${adkRing(c, n)}</span></button>`; }).join('');
+    return `<div class="adkw${AK.on && AK.list[AK.i] === i ? ' pl' : ''}" data-i="${i}"><button class="card adk ${c >= n ? 'done' : ''}" data-act="adk" data-v="${i}"><span class="adt">${esc(x[k === 'm' ? 0 : 1])}</span><span class="adf"><small>${x[4] ? `<b>${x[4]}</b><br>` : ''}${x[3]}</small>${adkRing(c, n)}</span></button><button class="adkplay" data-act="akPlay" data-v="${i}" aria-label="استمع لهذا الذكر">${AK.on && !AK.all && AK.list[AK.i] === i ? PAUSE_SVG : PLAY_SVG}</button></div>`; }).join('');
   h += `<div class="card"><button class="btn ghost" data-act="adkReset" data-v="${k}">ابدأ العدّ من جديد</button><p class="muted adksrc">النصوص من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله، باب أذكار الصباح والمساء. يُعاد العدّ تلقائيًا كل يوم.</p></div>`;
   return h;
 }
@@ -2788,7 +2822,7 @@ function adkTap(i, el){
   const left = adkLeft(k), p = document.getElementById('adkProg');
   if (p) p.textContent = left ? `اضغط على الذكر بعد كل قراءة ليُحسب. بقي ${AR(left)} من ${AR(adkList(k).length)}` : 'أتممت الأذكار، تقبّل الله منك';
   if (st[i] >= n){ el.classList.add('done');
-    let nx = el.nextElementSibling; while (nx && !(nx.classList.contains('adk') && !nx.classList.contains('done'))) nx = nx.nextElementSibling;
+    const all = [...document.querySelectorAll('.adk')], nx = all.slice(all.indexOf(el) + 1).find(e => !e.classList.contains('done'));
     if (nx) setTimeout(() => { const y = nx.getBoundingClientRect().top + scrollY - 80; window.scrollTo({top: y, behavior: 'smooth'}); }, 250);
     else if (!left) setTimeout(() => toast('أتممت أذكار ' + (k === 'm' ? 'الصباح' : 'المساء') + '، تقبّل الله منك'), 300);
   }
@@ -3212,7 +3246,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r107';
+const BUILD = 'r108';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3264,8 +3298,9 @@ app.addEventListener('click', e => {
   if (a === 'duaCh'){ DUA_CH = v.split('.').map(Number); render(); window.scrollTo(0, 0); return; }
   if (a === 'duaBack'){ DUA_CH = null; render(); window.scrollTo(0, 0); return; }
   if (a === 'adkGo'){ ADK_FROM = view === 'lib' ? 'lib' : 'home'; ADK_T = v === 'lib' ? adkNow() : v; view = 'adhkar'; render(); window.scrollTo(0, 0); return; }
-  if (a === 'adkTab'){ ADK_T = v; render(); window.scrollTo(0, 0); return; }
+  if (a === 'adkTab'){ if (AK.on) akStop(); ADK_T = v; render(); window.scrollTo(0, 0); return; }
   if (a === 'adk'){ adkTap(+v, el); return; }
+  if (a === 'akPlay'){ akPlay(v); return; }
   if (a === 'adkReset'){ adkState()[v] = {}; save(); render(); window.scrollTo(0, 0); return; }
   if (a === 'go'){ go(v); return; }
   if (a === 'goHifz'){ go('setupHifz'); return; }
