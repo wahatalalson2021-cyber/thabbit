@@ -2311,8 +2311,16 @@ function audPlay(list, ctx){
   AU = {list, i: 0, done: 0, ctx, load: true, paused: false, err: false};
   audLoad();
 }
+/* Back-to-back recitation (ayah by ayah): fetch the next file while the current one plays, so the next ayah starts at once instead of after a pause to download it. */
+const WARMED = new Set(); let warmEl = null;
+function warm(url){
+  if (!url || WARMED.has(url)) return; WARMED.add(url);
+  try { fetch(url, {mode: 'no-cors', cache: 'force-cache'}).catch(() => {}); } catch (e) {}
+  try { if (!warmEl){ warmEl = new Audio(); warmEl.muted = true; warmEl.preload = 'auto'; } warmEl.src = url; warmEl.load(); } catch (e) {}
+}
 function audLoad(){
   audEl.src = audUrl(AU.list[AU.i]);
+  if (AU.list[AU.i + 1]) warm(audUrl(AU.list[AU.i + 1]));
   audEl.play().catch(() => { if (AU){ AU.paused = true; AU.load = false; render(); } });
   if (AU.ctx === 'reader' && view === 'reader' && RD){ const p = gPage(AU.list[AU.i]); if (p !== RD.page){ goPage(p); return; } }
   render();
@@ -2805,7 +2813,7 @@ function akCur(){
   akMark();
   const w = document.querySelector(`.adkw[data-i="${AK.list[AK.i]}"]`);
   if (w && AK.all){ const y = w.getBoundingClientRect().top + scrollY - 80; window.scrollTo({top: y, behavior: 'smooth'}); }
-  AK.el.src = akUrl(AK.list[AK.i]); AK.el.play().catch(() => { AK.on = false; AK.err = true; akMark(); });
+  AK.el.src = akUrl(AK.list[AK.i]); if (AK.list[AK.i + 1] != null) warm(akUrl(AK.list[AK.i + 1])); AK.el.play().catch(() => { AK.on = false; AK.err = true; akMark(); });
 }
 function vAdhkar(){
   const k = ADK_T || adkNow(), st = adkState()[k], L = adkList(k), left = adkLeft(k);
@@ -2875,7 +2883,7 @@ function rqPlayCur(){
   if (RQ.i >= RQ.list.length){ rqStop(); return; }
   const [k, g] = RQ.list[RQ.i];
   if (k !== RQ.part){ RQ.part = k; rqMark(); const c = document.querySelector(`.rqcard[data-k="${k}"]`); if (c && RQ.all){ const y = c.getBoundingClientRect().top + scrollY - 80; window.scrollTo({top: y, behavior: 'smooth'}); } }
-  RQ.el.src = audUrl(g); RQ.el.play().catch(() => { RQ.err = true; RQ.on = false; RQ.part = -1; rqMark(); });
+  RQ.el.src = audUrl(g); if (RQ.list[RQ.i + 1]) warm(audUrl(RQ.list[RQ.i + 1][1])); RQ.el.play().catch(() => { RQ.err = true; RQ.on = false; RQ.part = -1; rqMark(); });
 }
 function vRuqya(){
   let h = `<div class="card rqhow"><b>طريقة الرقية</b><p>اقرأ على نفسك أو على المريض، وانفث نفثًا خفيفًا، وامسح بيدك موضع الألم. ويجوز تكرار القراءة ما شئت.</p></div>
@@ -2955,7 +2963,7 @@ function dpCur(){
   const [k, u] = DP.list[DP.i], prev = DP.i ? DP.list[DP.i - 1][0] : null;
   dpMark();
   if (DP.all && k !== prev){ const c = document.querySelector(`[data-dk="${k}"]`); if (c){ const y = c.getBoundingClientRect().top + scrollY - 80; window.scrollTo({top: y, behavior: 'smooth'}); } }
-  DP.el.src = u; DP.el.play().catch(() => { DP.on = false; DP.err = true; dpMark(); });
+  DP.el.src = u; if (DP.list[DP.i + 1]) warm(DP.list[DP.i + 1][1]); DP.el.play().catch(() => { DP.on = false; DP.err = true; dpMark(); });
 }
 const dpAll = l => `<button class="btn soft rqall" data-act="dpPlay" data-v="all" data-l="${l}">${DP.on && DP.all ? PAUSE_SVG + 'إيقاف' : PLAY_SVG + l}</button>`;
 function vDua(){
@@ -3294,7 +3302,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r109';
+const BUILD = 'r110';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
