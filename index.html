@@ -101,6 +101,7 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .w{border-radius:6px;transition:background .15s,color .15s}
 .w.hid{color:transparent;background:linear-gradient(var(--mask),var(--mask)) 0 58%/100% 1em no-repeat;cursor:pointer;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .w.hint{color:var(--warn)}
+.cumbtns{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .w.hid.flash{color:var(--warn);background:none;transition:color .2s}
 .w.soft{color:#c98a1a;text-decoration:underline dotted #c98a1a;text-underline-offset:10px}
 .w.why{background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:6px}
@@ -1970,6 +1971,28 @@ function startSession(queue){
   sess = {queue, pos:0};
   initStep(); view = 'session'; render(); window.scrollTo(0, 0);
 }
+/* The words the recitation is matched against: the whole passage, or (cumulative memorizing) its first ayat. */
+function buildExp(ay){
+  sess.exp = []; sess.bounds = new Set(); sess.muq = new Map();
+  ay.forEach(x => { if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length);
+    const first = baseNorm(x.txt.split(' ')[0].replace(HAR, ''));
+    if ((x.a === 1 || (x.s === 42 && x.a === 2)) && MUQ.has(first)) sess.muq.set(sess.exp.length, first);
+    x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
+  tajweedVariants(sess.exp); sess.cls = new Map();
+}
+/* A fresh recitation of the first k ayat (k = 0: the whole passage). Cumulative memorizing: ayah 1, then 1-2 together, then 1-3... */
+function startRecite(k){
+  if (REC){ REC.dead = true; engClose(); }
+  if (sess.listening && DICT) { try { DICT.stop().catch(() => {}); } catch (e) {} }
+  audStop(true);
+  const all = chunkAyat(itemChunk(sess.queue[sess.pos]));
+  sess.cum = k && k < all.length ? k : 0; sess.phase = 'test';
+  buildExp(sess.cum ? all.slice(0, sess.cum) : all);
+  sess.reveal = 1; sess.shown = new Set(); sess.peeked = new Set(); sess.glow = false; sess.pT = Date.now(); sess.starts = null; sess.flashT = 0; sess.flashing = false;
+  sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false; SRLOG.length = 0; sess.engine = null; sess.draining = false; sess.engWait = false; sess.engAsk = false;
+  render(); window.scrollTo(0, 0);
+  if (sess.micOnce) setTimeout(() => { const b = document.querySelector('.mic[data-act="mic"]'); if (b && view === 'session' && sess && !sess.listening) b.click(); }, 350);
+}
 function initStep(){
   /* A recording still finishing from the previous page must not write into this one (and must not block the mic button). */
   if (REC){ REC.dead = true; engClose(); }
@@ -1979,13 +2002,8 @@ function initStep(){
   sess.reveal = t.type === 'new' ? 1 : 2;
   sess.shown = new Set(); sess.glow = false; sess.pT = Date.now(); sess.starts = null; sess.flashT = 0; sess.flashing = false;
   sess.peeked = new Set();
-  { const ay = chunkAyat(itemChunk(t)); sess.exp = []; sess.bounds = new Set();
-    sess.muq = new Map();
-    ay.forEach(x => { if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length);
-      const first = baseNorm(x.txt.split(' ')[0].replace(HAR, ''));
-      if ((x.a === 1 || (x.s === 42 && x.a === 2)) && MUQ.has(first)) sess.muq.set(sess.exp.length, first);
-      x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
-    tajweedVariants(sess.exp); sess.cls = new Map(); }
+  buildExp(chunkAyat(itemChunk(t)));
+  sess.cum = 0;
   sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false; SRLOG.length = 0; sess.engine = null; sess.draining = false; sess.engWait = false; sess.engAsk = false;
 }
 function chunkAyat(c){ const out = []; segs(c).forEach((sg, si) => { for (let a = sg.a; a <= sg.b; a++) out.push({s:sg.s, a, txt:Q[sg.s - 1][1][a - 1], head: a === sg.a && (si > 0 || a === 1)}); }); return out; }
@@ -2004,7 +2022,7 @@ function vSession(){
     const ay = chunkAyat(c), ri = Math.min(sess.ri || 0, ay.length - 1), x = ay[ri], key = x.s + ':' + x.a, r = sess.reps[key] || 0, full = r >= R0;
     const allDone = ay.every(y => (sess.reps[y.s + ':' + y.a] || 0) >= R0);
     h = h.replace('<span class="chip">' + kind + '</span>', `<span class="kindtxt">${kind} · الآية ${AR(ri + 1)} من ${AR(ay.length)}</span>`);
-    h += `<p class="muted">اقرأ الآية بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'} تنتقل للآية التالية تلقائيًا.</p>`;
+    h += `<p class="muted">اقرأ الآية بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'} ${ri === 0 && ay.length > 1 ? 'تنتقل للآية التالية تلقائيًا.' : ay.length > 1 ? `تُسمّع الآيات ${AR(ay[0].a)} إلى ${AR(x.a)} معًا مرة واحدة.` : 'تنتقل للتسميع.'}</p>`;
     h += `<div class="dots" aria-hidden="true">${ay.map((y, yi) => `<i class="${(sess.reps[y.s + ':' + y.a] || 0) >= R0 ? 'ok' : yi === ri ? 'on' : ''}"></i>`).join('')}</div>`;
     h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus"><div class="t">${esc(x.txt)} <span class="num">﴿${AR(x.a)}﴾</span></div></div>`;
     { const g = saToG(x.s, x.a), on = AU && AU.ctx === 'sess' && audG() === g, r = aRep();
@@ -2019,7 +2037,8 @@ function vSession(){
   } else {
     let k = 0, words = '';
     const starts = [];
-    chunkAyat(c).forEach((x, xi) => {
+    const tay = sess.cum ? chunkAyat(c).slice(0, sess.cum) : chunkAyat(c);
+    tay.forEach((x, xi) => {
       if (x.head || xi === 0){ const hh = headHtml(x, multi); if (hh) words += (words ? '</div>' : '') + hh + '<div class="mushaf">'; else if (!words) words = '<div class="mushaf">'; }
       starts.push(k);
       words += x.txt.split(' ').map(w => {
@@ -2031,9 +2050,9 @@ function vSession(){
       }).join(' ') + ` <span class="num">﴿${AR(x.a)}﴾</span> `;
     });
     words += '</div>';
-    sess.total = k; sess.starts = starts; sess.ayNums = chunkAyat(c).map(x => x.a);
+    sess.total = k; sess.starts = starts; sess.ayNums = tay.map(x => x.a);
     const allShown = sess.reveal >= k;
-    h += `<p class="muted">${t.type === 'new' ? 'الآيات مخفية الآن. اقرأها من حفظك بصوت مسموع، واكشف الكلمة إذا توقفت.' : 'اقرأ من حفظك بصوت مسموع من أوله. أول كلمتين ظاهرتان لتبدأ.'}</p>${words}`;
+    h += `<p class="muted">${sess.cum ? `سمّع الآيات ${AR(tay[0].a)} إلى ${AR(tay[tay.length - 1].a)} معًا من حفظك، بصوت مسموع.` : t.type === 'new' ? 'الآيات مخفية الآن. اقرأها من حفظك بصوت مسموع، واكشف الكلمة إذا توقفت.' : 'اقرأ من حفظك بصوت مسموع من أوله. أول كلمتين ظاهرتان لتبدأ.'}</p>${words}`;
     if (!allShown){
       h += `<div class="dock">`;
       if (sess.engAsk) h += engAskBox();
@@ -2058,12 +2077,14 @@ function vSession(){
       const S3 = sug === 3 ? 'sug' : '', S2 = sug === 2 ? 'sug' : '', S1 = sug === 1 ? 'sug' : '';
       if (sess.usedMic){
         h += `<div class="result"><span class="chip">${AR(okN)} كلمة صحيحة</span>${misses ? `<span class="chip warn" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)">${AR(misses)} خطأ أو تجاوز (بالأحمر)</span>` : ''}${softs ? `<span class="chip soft">${AR(softs)} لم تُسمع بوضوح</span>` : ''}${hints ? `<span class="chip warn">${AR(hints)} مساعدة</span>` : ''}${unreached ? `<span class="chip warn">${AR(unreached)} لم تُقرأ</span>` : ''}</div>
-          <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} الاقتراح مُعلَّم، والقرار لك.${misses || softs ? ' اضغط أي كلمة ملونة لترى ماذا سمع التطبيق.' : ''}</p>${whyBox()}
+          <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} ${sess.cum ? '' : 'الاقتراح مُعلَّم، والقرار لك.'}${misses || softs ? ' اضغط أي كلمة ملونة لترى ماذا سمع التطبيق.' : ''}</p>${whyBox()}
           <button class="beeptog" data-act="heardAll">${sess.showAll ? 'إخفاء النص المسموع' : 'اعرض كل ما سمعه التطبيق'}</button>${sess.showAll ? `<div class="whybox"><small>هذا ما كتبته خدمة التعرّف على الكلام من صوتك:</small><span>${esc((sess.finalText || '').trim()) || '—'}</span><button class="btn soft" data-act="copyReport">انسخ التقرير لإرساله</button></div>` : ''}`;
       } else {
-        h += `<p class="muted">${hints ? 'احتجت إلى ' + AR(hints) + ' ' + (hints === 1 ? 'كلمة' : hints === 2 ? 'كلمتين' : 'كلمات') + ' مساعدة (باللون البرتقالي).' : 'قارن قراءتك بالنص أعلاه.'} كيف كان حفظك؟</p>`;
+        h += `<p class="muted">${hints ? 'احتجت إلى ' + AR(hints) + ' ' + (hints === 1 ? 'كلمة' : hints === 2 ? 'كلمتين' : 'كلمات') + ' مساعدة (باللون البرتقالي).' : 'قارن قراءتك بالنص أعلاه.'}${sess.cum ? '' : ' كيف كان حفظك؟'}</p>`;
       }
-      if (t.type === 'new'){
+      if (sess.cum){
+        h += `<div class="cumbtns"><button class="btn" data-act="cumNext">احفظ الآية التالية</button><button class="btn ghost" data-act="cumAgain">أعِد الآيات معًا</button></div>`;
+      } else if (t.type === 'new'){
         h += `<div class="grade"><button class="g3 ${S3}" data-act="gnew" data-v="3">حفظته<small>بلا أخطاء</small></button><button class="g2 ${S2}" data-act="gnew" data-v="2">بتردد<small>أخطاء قليلة</small></button><button class="g1 ${S1}" data-act="gnew" data-v="1">ليس بعد<small>أعد القراءة</small></button></div>`;
       } else {
         h += `<div class="grade"><button class="g3 ${S3}" data-act="grev" data-v="3">ثابت<small>بلا أخطاء</small></button><button class="g2 ${S2}" data-act="grev" data-v="2">بتردد<small>أخطاء قليلة</small></button><button class="g1 ${S1}" data-act="grev" data-v="1">نسيته<small>نعيده قريبًا</small></button></div>`;
@@ -3160,7 +3181,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r103';
+const BUILD = 'r104';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3269,11 +3290,15 @@ app.addEventListener('click', e => {
   if (a === 'revGo'){ const todo = reviewTodo(); if (todo.length) startSession(todo.map(x => Object.assign({}, x))); return; }
   if (a === 'practice'){ startSession([{type:'practice', idx:+v}]); return; }
   if (a === 'quit'){ confirmBox = null; stopMic(); sess = null; if (retReader && RD){ retReader = false; openReader(RD.page, RD.back); return; } if (retMist){ retMist = false; view = 'mist'; render(); return; } view = 'home'; render(); return; }
-  if (a === 'rep'){ const n = (sess.reps[v] || 0) + 1; sess.reps[v] = n; keepProgress(); const ay = chunkAyat(itemChunk(sess.queue[sess.pos])); const ri = sess.ri || 0; if (n === REPS() && ri < ay.length - 1){ render(); setTimeout(() => { if (sess && (sess.ri || 0) === ri){ audStop(true); sess.ri = ri + 1; render(); window.scrollTo(0, 0); } }, 450); return; } render(); return; }
+  if (a === 'rep'){ const n = (sess.reps[v] || 0) + 1; sess.reps[v] = n; keepProgress(); const ay = chunkAyat(itemChunk(sess.queue[sess.pos])); const ri = sess.ri || 0; if (n === REPS() && ay.length > 1){ render(); setTimeout(() => { if (!sess || (sess.ri || 0) !== ri || sess.phase !== 'read') return;
+      if (ri === 0){ audStop(true); sess.ri = 1; render(); window.scrollTo(0, 0); }
+      else startRecite(ri + 1 >= ay.length ? 0 : ri + 1); }, 450); return; } render(); return; }
+  if (a === 'cumNext'){ audStop(true); const k = sess.cum; sess.cum = 0; sess.phase = 'read'; sess.ri = k; keepProgress(); render(); window.scrollTo(0, 0); return; }
+  if (a === 'cumAgain'){ startRecite(sess.cum); return; }
   if (a === 'ri'){ audStop(true); sess.ri = +v; keepProgress(); render(); window.scrollTo(0, 0); return; }
   if (a === 'hifzToday'){ if (hasNewLeft()){ S.inprog = null; save(); startSession([{type:'new', idx:S.nextNew}]); } return; }
   if (a === 'hifzResume'){ const ip = inprog(); if (ip){ startSession([{type:'new', idx:ip.idx}]); sess.reps = Object.assign({}, ip.reps); sess.ri = ip.ri || 0; render(); } return; }
-  if (a === 'toTest'){ sess.phase = 'test'; render(); window.scrollTo(0, 0); return; }
+  if (a === 'toTest'){ startRecite(0); return; }
   if (a === 'peek'){ const i = +v; if (sess.reveal >= sess.total && sess.ws[i]){ sess.why = sess.why === i ? null : i; render(); return; } if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
   if (a === 'copyReport'){
     const t = sess.queue[sess.pos], c = itemChunk(t), [s1, a1] = gidToSA(c.r[0][0]), [s2, a2] = gidToSA(c.r[c.r.length - 1][1]);
@@ -3294,7 +3319,7 @@ app.addEventListener('click', e => {
   if (a === 'mtRec'){ mtRecord(); return; }
   if (a === 'mtDone'){ mtStop(); const b = mtBack; mtBack = null; if (b === 'session' && sess){ view = 'session'; } else { view = b === 'settings' || !b ? 'settings' : b; } render(); window.scrollTo(0, 0); return; }
   if (a === 'beepTog'){ S.beep = S.beep === false; save(); if (S.beep) { audioUnlock(); beep(); } render(); return; }
-  if (a === 'mic'){ audStop(true);
+  if (a === 'mic'){ audStop(true); if (!sess.listening && !REC) sess.micOnce = true;
     if (REC){ engStop(); return; }
     if (sess.draining) return;
     if (!sess.listening && dictState === 'idle'){
