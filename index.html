@@ -1484,10 +1484,17 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 const countWord = (n, one, two, few, many) => n === 1 ? one : n === 2 ? two : AR(n) + ' ' + (n <= 10 ? few : many);
 const pagesWord = n => n === 1 ? 'صفحة' : n === 2 ? 'صفحتان' : n <= 10 ? 'صفحات' : 'صفحة';
 
+
+/* Keep the screen on during recitation sessions: a locked phone stops the microphone. */
+let WL = null, wlWant = false;
+async function wakeOn(){ wlWant = true; if (WL || !('wakeLock' in navigator) || document.hidden) return; try { WL = await navigator.wakeLock.request('screen'); WL.addEventListener('release', () => { WL = null; }); if (!wlWant) wakeOff(); } catch (e) { WL = null; } }
+function wakeOff(){ wlWant = false; if (WL){ const w = WL; WL = null; w.release().catch(() => {}); } }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && wlWant) wakeOn(); });
 function render(){
   let h = '';
   if (AU && ((AU.ctx === 'reader' && view !== 'reader') || (AU.ctx === 'sess' && (view !== 'session' || !sess || sess.phase !== 'read')))) audStop(true);
   if (view !== 'mictest' && MT) mtStop();
+  if (view === 'session' || view === 'mictest') wakeOn(); else if (wlWant) wakeOff();
   if (RQ.on && (view !== 'dua' || DUA_T !== 'r' || DUA_CH)) rqStop();
   if (view !== 'qibla' && QB.on){ QB.on = false; QB.head = null; QB.ok = false; window.removeEventListener('deviceorientationabsolute', qOnOrient); window.removeEventListener('deviceorientation', qOnOrient); }
   if (view === 'mictest') h = vMicTest();
@@ -3151,7 +3158,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r100';
+const BUILD = 'r101';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
