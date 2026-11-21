@@ -1,7 +1,7 @@
 /* Offline support: always try the network first (so updates arrive at once), fall back to the saved copy when offline. */
-const CACHE = 'thabbit-v4';
+const CACHE = 'thabbit-v5';
 const MCACHE = 'thabbit-mushaf-v1';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './fonts/amiri-quran.woff2'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE && k !== MCACHE && k !== 'thabbit-books' && !k.startsWith('transformers')).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

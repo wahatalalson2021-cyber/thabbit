@@ -58,3 +58,6 @@ From **quran-meta** v7.0.0 (Hafs lists), MIT License, Copyright (c) 2020 Quran-C
 - أدعية المناسبات: من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله، والنص مأخوذ من hisnmuslim.com.
 - أدعية السنة: أحاديث صحيحة مع ذكر من رواها.
 - الرقية: آيات من بيانات المصحف في التطبيق، وأحاديث صحيحة مع ذكر من رواها. الصوت من Islamic Network.
+
+## خط المصحف في التسميع والأدعية
+Amiri Quran من مشروع Amiri، برخصة SIL Open Font License 1.1 (fonts/OFL-amiri.txt).

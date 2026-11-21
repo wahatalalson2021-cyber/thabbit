@@ -13,9 +13,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* Layout idea: one narrow phone column, a calm daily "ورد" card stack, mushaf-style text for the ayat, tabs at the bottom. */
+@font-face{font-family:'Amiri Quran';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/amiri-quran.woff2) format('woff2')}
 :root{
   --bg:#eef3f1; --surface:#ffffff; --ink:#14201e; --muted:#5a6b67; --line:#d6e0dd;
   --accent:#0d6a60; --accent-ink:#ffffff; --accent-soft:#dcece8; --mask:#c9d7d3;
@@ -3158,7 +3159,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r101';
+const BUILD = 'r102';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
