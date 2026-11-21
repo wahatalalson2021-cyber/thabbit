@@ -154,7 +154,7 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 @media (orientation: landscape) and (max-height: 600px){ .app:has(.reader), .reader, .rsheet{max-width:none} .rhead{position:static} }
 .rhead{position:sticky;top:0;z-index:5;background:var(--accent);color:var(--accent-ink);border-radius:0 0 18px 18px;padding:10px 10px 12px;overflow:hidden;box-shadow:0 3px 12px rgb(0 0 0 / .15)}
 .rdeco{position:absolute;left:0;right:0;bottom:0;width:100%;height:100%;opacity:.13;color:var(--accent-ink);pointer-events:none}
-.rrow{position:relative;display:grid;grid-template-columns:auto 1fr auto 1fr;gap:8px;align-items:center}
+.rrow{position:relative;display:grid;grid-template-columns:auto 1fr auto 1fr auto;gap:8px;align-items:center}
 .rb{background:none;border:0;color:inherit;font-weight:700;padding:6px 2px;white-space:nowrap}
 .pill{background:color-mix(in srgb,var(--accent-ink) 16%,transparent);border:1px solid color-mix(in srgb,var(--accent-ink) 40%,transparent);color:inherit;border-radius:10px;padding:7px 8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rpg{font-family:var(--f-quran);font-size:1.45rem;min-width:2.2em;text-align:center;line-height:1}
@@ -456,6 +456,8 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .tgo svg{width:18px;height:18px}
 .tile .tmain .tline{padding-left:40px}
+.rlisten{display:grid;place-items:center;width:38px;height:38px;padding:0;border-radius:50%}
+.rlisten svg{width:17px;height:17px}
 .seg3 button{padding:8px 2px;font-size:.88rem}
 .dbas{display:block;text-align:center;color:var(--accent)}
 .rqhow{background:var(--accent-soft);border-color:transparent}
@@ -2660,6 +2662,7 @@ function vReader(){
       <button class="pill" data-act="rdJump" data-v="juz">الجزء ${AR(juzOf(p))}</button>
       <span class="rpg" aria-label="رقم الصفحة">${AR(p)}</span>
       <button class="pill" data-act="rdJump" data-v="sura">${sname}</button>
+      <button class="pill rlisten" data-act="rdListen" aria-label="استمع للسورة">${AU && AU.ctx === 'reader' && !AU.paused && !AU.err ? PAUSE_SVG : PLAY_SVG}</button>
     </div></header>
     <div class="mframe"><div class="mpaper" id="mpaper">${body}<div class="mnum">${AR(p)}</div></div></div>
     ${fin ? '<button class="btn" data-act="rdFinish">أتممت الختمة</button>' : ''}${kl}
@@ -3181,7 +3184,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r105';
+const BUILD = 'r106';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3380,6 +3383,14 @@ app.addEventListener('click', e => {
     if (RD.sel === +v && (w == null || RD.selW === w)){ RD.sel = null; RD.selW = null; } else { RD.sel = +v; RD.selW = w; } render(); return; }
   if (a === 'audAyah'){ RD.sel = null; RD.selW = null; RD.sheet = ''; audPlay(audReaderList(+v), 'reader'); return; }
   if (a === 'audTog'){ audToggle(); return; }
+  /* Listen to the surah from the reader: from its first ayah if it was chosen from the index, otherwise from the top of this page, to the end of the surah. */
+  if (a === 'rdListen'){
+    if (AU && AU.ctx === 'reader'){ audToggle(); render(); return; }
+    const p = RD.page, fs = RD.fs && gPage(GBASE[RD.fs - 1] + 1) === p ? RD.fs : 0;
+    const g = fs ? GBASE[fs - 1] + 1 : PSTART[p], s = gidToSA(g)[0], list = [];
+    for (let x = g; x <= GBASE[s]; x++) list.push(x);
+    RD.sel = null; RD.selW = null; RD.sheet = ''; audPlay(list, 'reader'); return;
+  }
   if (a === 'audStop'){ audStop(); return; }
   if (a === 'audRep'){ S.arep = AREPS[(AREPS.indexOf(aRep()) + 1) % AREPS.length]; save(); if (AU) AU.done = Math.min(AU.done, aRep() - 1); render(); return; }
   if (a === 'audCont'){ S.acont = S.acont === false; save(); if (AU && AU.ctx === 'reader'){ const g = audG(); AU.list = audReaderList(g); AU.i = 0; } render(); return; }
