@@ -1513,7 +1513,10 @@ let hd = null, rvd = null, wd = null;
 const app = document.getElementById('app');
 /* The Quran text marks open tanween with older code points (U+0657, U+065E, U+0656) that the Quran font lacks or draws wrongly
    (U+065E broke words like بَصِيرٞ apart). Shown with the standard open-tanween characters instead; matching still uses the original. */
-const uth = s => String(s).replace(/[\u0657\u065E\u0656]/g, c => c === '\u0657' ? '\u08F0' : c === '\u065E' ? '\u08F1' : '\u08F2');
+/* After a letter that does not join to the next (ر، ز، د، ذ، و، ا), the data puts a tatweel to carry the small alif (ٱلرَّـٰحِمِينَ);
+   the tatweel then shows as a loose stroke. The small alif is placed on the letter itself, as in the printed mushaf. */
+const uth = s => String(s).replace(/([\u0627\u0623\u0625\u0622\u0671\u062F\u0630\u0631\u0632\u0648\u0624][\u064B-\u0652\u06E1-\u06ED]*)\u0640(?=\u0670)/g, '$1')
+  .replace(/[\u0657\u065E\u0656]/g, c => c === '\u0657' ? '\u08F0' : c === '\u065E' ? '\u08F1' : '\u08F2');
 const esc = s => uth(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const countWord = (n, one, two, few, many) => n === 1 ? one : n === 2 ? two : AR(n) + ' ' + (n <= 10 ? few : many);
 const pagesWord = n => n === 1 ? 'صفحة' : n === 2 ? 'صفحتان' : n <= 10 ? 'صفحات' : 'صفحة';
@@ -3353,7 +3356,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r116';
+const BUILD = 'r117';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
