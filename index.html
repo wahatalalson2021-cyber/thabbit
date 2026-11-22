@@ -1710,6 +1710,20 @@ function vHome(){
 
 const HOME_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>';
 function inprog(){ const ip = S.inprog; return ip && S.chunks[ip.idx] && !S.learned[ip.idx] && Object.values(ip.reps || {}).some(n => n > 0) ? ip : null; }
+/* Memorizing unit: one ayah, or several very short ayat of the same surah together (e.g. Al-Kawthar, Al-Ikhlas),
+   so short surahs are not cut into fragments of two or three words. */
+const U_AY = 8, U_MAX = 16;
+function memUnits(ay){
+  const out = []; let cur = null;
+  const wc = x => x.txt.split(' ').length, tot = {};
+  ay.forEach(x => tot[x.s] = (tot[x.s] || 0) + wc(x));
+  /* a whole very short surah (about 30 words or less, e.g. Al-Asr, An-Nas) stays one piece */
+  if (Object.keys(tot).length === 1 && tot[ay[0].s] <= 30 && ay.length === Q[ay[0].s - 1][1].length) return [{s: 0, e: ay.length - 1, w: tot[ay[0].s], short: true}];
+  ay.forEach((x, i) => { const n = x.txt.split(' ').length;
+    if (cur && n <= U_AY && cur.short && ay[cur.s].s === x.s && cur.w + n <= U_MAX){ cur.e = i; cur.w += n; }
+    else { cur = {s: i, e: i, w: n, short: n <= U_AY}; out.push(cur); } });
+  return out;
+}
 function keepProgress(){ const t = sess && sess.queue[sess.pos]; if (t && t.type === 'new'){ S.inprog = {idx:t.idx, reps:sess.reps, ri:sess.ri || 0}; save(); } }
 function toast(msg){
   const old = document.querySelector('.toast'); if (old) old.remove();
@@ -2088,20 +2102,21 @@ function vSession(){
   let h = `<main><div class="sess-top"><button class="x homebtn" data-act="quit">${HOME_SVG}الرئيسية</button><div class="steps">${steps}</div></div>${confirmBox === 'quit' ? `<div class="confirm"><p>هل تريد الخروج؟ ${t.type === 'new' ? 'تكرارك في هذا المقطع لن يُحفظ، وتستطيع العودة إليه من شاشة «اليوم».' : 'ما أنهيته من مراجعات محفوظ، والباقي ينتظرك.'}</p><div class="rnav"><button class="btn" data-act="cancel">أكمل</button><button class="btn danger" data-act="quit">خروج</button></div></div>` : ''}
     <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>${sess.banner ? `<div class="okbanner">✓ ${sess.banner}</div>` : ''}`;
   if (sess.phase === 'read'){
-    const ay = chunkAyat(c), ri = Math.min(sess.ri || 0, ay.length - 1), x = ay[ri], key = x.s + ':' + x.a, r = sess.reps[key] || 0, full = r >= R0;
-    const allDone = ay.every(y => (sess.reps[y.s + ':' + y.a] || 0) >= R0);
-    h = h.replace('<span class="chip">' + kind + '</span>', `<span class="kindtxt">${kind} · الآية ${AR(ri + 1)} من ${AR(ay.length)}</span>`);
-    h += `<p class="muted">اقرأ الآية بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'} ${ri === 0 && ay.length > 1 ? 'تنتقل للآية التالية تلقائيًا.' : ay.length > 1 ? `تُسمّع الآيات ${AR(ay[0].a)} إلى ${AR(x.a)} معًا مرة واحدة.` : 'تنتقل للتسميع.'}</p>`;
-    h += `<div class="dots" aria-hidden="true">${ay.map((y, yi) => `<i class="${(sess.reps[y.s + ':' + y.a] || 0) >= R0 ? 'ok' : yi === ri ? 'on' : ''}"></i>`).join('')}</div>`;
-    h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus"><div class="t">${esc(x.txt)} <span class="num">﴿${AR(x.a)}﴾</span></div></div>`;
-    { const g = saToG(x.s, x.a), on = AU && AU.ctx === 'sess' && audG() === g, r = aRep();
-      const lbl = !on ? 'استمع للآية' : AU.err ? 'تعذّر التشغيل، أعد المحاولة' : AU.load ? 'جاري التحميل...' : AU.paused ? 'تابع الاستماع' : (r > 1 ? `يستمع ${AR(AU.done + 1)} من ${AR(r)}` : 'إيقاف مؤقت');
-      h += `<div class="aurow"><button class="btn soft" data-act="audSess" data-v="${g}">${on && !AU.paused && !AU.err ? PAUSE_SVG : PLAY_SVG}${lbl}</button><button class="btn ghost repb" data-act="audRep">كرّر ×${AR(r)}</button></div>
+    const ay = chunkAyat(c), U = memUnits(ay), ri = Math.min(sess.ri || 0, U.length - 1), u = U[ri], x = ay[u.s], xe = ay[u.e], uay = ay.slice(u.s, u.e + 1), many = u.e > u.s;
+    const ukey = y => y.s + ':' + y.a, key = ukey(x), r = sess.reps[key] || 0, full = r >= R0;
+    const allDone = U.every(v => (sess.reps[ukey(ay[v.s])] || 0) >= R0), one = many ? 'الآيات' : 'الآية';
+    h = h.replace('<span class="chip">' + kind + '</span>', `<span class="kindtxt">${kind} · ${many ? 'الآيات ' + AR(x.a) + '-' + AR(xe.a) : 'الآية ' + AR(u.s + 1) + ' من ' + AR(ay.length)}</span>`);
+    h += `<p class="muted">اقرأ ${many ? 'هذه الآيات معًا' : 'الآية'} بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'} ${ri === 0 && U.length > 1 ? 'تنتقل لما بعدها تلقائيًا.' : U.length > 1 ? `تُسمّع الآيات ${AR(ay[0].a)} إلى ${AR(xe.a)} معًا مرة واحدة.` : 'تنتقل للتسميع.'}</p>`;
+    if (U.length > 1) h += `<div class="dots" aria-hidden="true">${U.map((v, vi) => `<i class="${(sess.reps[ukey(ay[v.s])] || 0) >= R0 ? 'ok' : vi === ri ? 'on' : ''}"></i>`).join('')}</div>`;
+    h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus"><div class="t">${uay.map(y => `${esc(y.txt)} <span class="num">﴿${AR(y.a)}﴾</span>`).join(' ')}</div></div>`;
+    { const gs = uay.map(y => saToG(y.s, y.a)), g = gs[0], on = AU && AU.ctx === 'sess' && gs.includes(audG()), r = aRep();
+      const lbl = !on ? 'استمع ل' + (many ? 'لآيات' : 'لآية') : AU.err ? 'تعذّر التشغيل، أعد المحاولة' : AU.load ? 'جاري التحميل...' : AU.paused ? 'تابع الاستماع' : (r > 1 ? `يستمع ${AR(AU.done + 1)} من ${AR(r)}` : 'إيقاف مؤقت');
+      h += `<div class="aurow"><button class="btn soft" data-act="audSess" data-v="${gs.join(',')}">${on && !AU.paused && !AU.err ? PAUSE_SVG : PLAY_SVG}${lbl}</button><button class="btn ghost repb" data-act="audRep">كرّر ×${AR(r)}</button></div>
         <span class="aunote">القارئ: ${recSelect()}</span>`; }
     h += `<div class="dock"><button class="bigrep ${full ? 'full' : ''}" data-act="rep" data-v="${key}" style="--deg:${Math.min(r, R0) * 360 / R0}deg"><span class="in">${r ? `<b>${AR(r)}</b><small>من ${AR(R0)}</small>` : `<b class="go">ابدأ</b><small>${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'}</small>`}</span></button>
-      <p class="muted" style="text-align:center">${full ? 'أتممت تكرار هذه الآية' : 'اضغط بعد كل تكرار'}</p>`;
-    h += `<div class="rnav"><button class="btn ghost" data-act="ri" data-v="${ri - 1}" ${ri === 0 ? 'disabled' : ''}>الآية السابقة</button><button class="btn ghost" data-act="ri" data-v="${ri + 1}" ${ri >= ay.length - 1 ? 'disabled' : ''}>الآية التالية</button></div>`;
-    if (allDone || ri === ay.length - 1) h += `<button class="btn" data-act="toTest">${allDone ? 'اختبر نفسك الآن' : 'جاهز، اختبرني'}</button>`;
+      <p class="muted" style="text-align:center">${full ? 'أتممت تكرار ' + (many ? 'هذه الآيات' : 'هذه الآية') : 'اضغط بعد كل تكرار'}</p>`;
+    h += `<div class="rnav"><button class="btn ghost" data-act="ri" data-v="${ri - 1}" ${ri === 0 ? 'disabled' : ''}>السابق</button><button class="btn ghost" data-act="ri" data-v="${ri + 1}" ${ri >= U.length - 1 ? 'disabled' : ''}>التالي</button></div>`;
+    if (allDone || ri === U.length - 1) h += `<button class="btn" data-act="toTest">${allDone ? 'اختبر نفسك الآن' : 'جاهز، اختبرني'}</button>`;
     h += `</div>`;
   } else {
     let k = 0, words = '';
@@ -3375,7 +3390,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r119';
+const BUILD = 'r120';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3489,10 +3504,10 @@ app.addEventListener('click', e => {
   if (a === 'revGo'){ const todo = reviewTodo(); if (todo.length) startSession(todo.map(x => Object.assign({}, x))); return; }
   if (a === 'practice'){ startSession([{type:'practice', idx:+v}]); return; }
   if (a === 'quit'){ confirmBox = null; stopMic(); sess = null; if (retReader && RD){ retReader = false; openReader(RD.page, RD.back); return; } if (retMist){ retMist = false; view = 'mist'; render(); return; } view = 'home'; render(); return; }
-  if (a === 'rep'){ const n = (sess.reps[v] || 0) + 1; sess.reps[v] = n; keepProgress(); const ay = chunkAyat(itemChunk(sess.queue[sess.pos])); const ri = sess.ri || 0; if (n === REPS() && ay.length > 1){ render(); setTimeout(() => { if (!sess || (sess.ri || 0) !== ri || sess.phase !== 'read') return;
+  if (a === 'rep'){ const n = (sess.reps[v] || 0) + 1; sess.reps[v] = n; keepProgress(); const ay = chunkAyat(itemChunk(sess.queue[sess.pos])), U = memUnits(ay); const ri = Math.min(sess.ri || 0, U.length - 1); if (n === REPS() && U.length > 1){ render(); setTimeout(() => { if (!sess || Math.min(sess.ri || 0, U.length - 1) !== ri || sess.phase !== 'read') return;
       if (ri === 0){ audStop(true); sess.ri = 1; render(); window.scrollTo(0, 0); }
-      else testFrom(ri + 1 >= ay.length ? 0 : ri + 1); }, 450); return; } render(); return; }
-  if (a === 'cumNext'){ audStop(true); const k = sess.cum; sess.cum = 0; sess.phase = 'read'; sess.ri = k; keepProgress(); render(); window.scrollTo(0, 0); return; }
+      else testFrom(ri + 1 >= U.length ? 0 : U[ri].e + 1); }, 450); return; } render(); return; }
+  if (a === 'cumNext'){ audStop(true); const k = sess.cum, U = memUnits(chunkAyat(itemChunk(sess.queue[sess.pos]))); sess.cum = 0; sess.phase = 'read'; sess.ri = Math.max(0, U.findIndex(u => u.s === k)); keepProgress(); render(); window.scrollTo(0, 0); return; }
   if (a === 'cumAgain'){ testFrom(sess.cum); return; }
   if (a === 'ri'){ audStop(true); sess.ri = +v; keepProgress(); render(); window.scrollTo(0, 0); return; }
   if ((a === 'hifzToday' || a === 'hifzResume') && strictLeft()){ go('hifzMenu'); return; }
@@ -3591,7 +3606,7 @@ app.addEventListener('click', e => {
   if (a === 'audStop'){ audStop(); return; }
   if (a === 'audRep'){ S.arep = AREPS[(AREPS.indexOf(aRep()) + 1) % AREPS.length]; save(); if (AU) AU.done = Math.min(AU.done, aRep() - 1); render(); return; }
   if (a === 'audCont'){ S.acont = S.acont === false; save(); if (AU && AU.ctx === 'reader'){ const g = audG(); AU.list = audReaderList(g); AU.i = 0; } render(); return; }
-  if (a === 'audSess'){ const g = +v; if (AU && AU.ctx === 'sess' && audG() === g) audToggle(); else audPlay([g], 'sess'); return; }
+  if (a === 'audSess'){ const gs = String(v).split(',').map(Number); if (AU && AU.ctx === 'sess' && gs.includes(audG())) audToggle(); else audPlay(gs, 'sess'); return; }
   if (a === 'recSet'){ S.reciter = v; save(); RD.sheet = ''; if (AU){ const l = AU.list.slice(AU.i), c = AU.ctx; audPlay(l, c); } else render(); return; }
   if (a === 'ptGps'){ ptGps(); return; }
   if (a === 'shareApp'){ shareApp(); return; }
