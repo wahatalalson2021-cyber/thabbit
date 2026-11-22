@@ -3329,6 +3329,7 @@ const GUIDE = [
    'الاستماع يحتاج إلى إنترنت.']],
  ['الحفظ', ['اضغط «حفظ» واختر ما تحفظه (سورة أو ربع أو جزء أو القرآن كاملًا)، ومقدار الحفظ اليومي، وعدد تكرار كل آية.',
    'في كل مقطع اقرأ الآية أو استمع لها، واضغط بعد كل تكرار حتى يكتمل العدد.',
+   'الآيات القصيرة المتتالية تُحفظ معًا قطعة واحدة، والسورة القصيرة جدًا (مثل الإخلاص والكوثر والعصر) تُحفظ كاملة مرة واحدة.',
    'ثم اضغط «جاهز، اختبرني»: تختفي الآيات وتقرؤها من حفظك.',
    'كل ما تحفظه يدخل مراجعتك تلقائيًا قبل أن يُنسى.',
    'إن فعّلت «الخطة المنظمة» لا يُفتح مقطع الحفظ الجديد إلا بعد أن تنهي مراجعة اليوم.']],
@@ -3390,7 +3391,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r120';
+const BUILD = 'r121';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
