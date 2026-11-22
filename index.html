@@ -456,6 +456,9 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .tgo svg{width:18px;height:18px}
 .tile .tmain .tline{padding-left:40px}
+.lockcard b{display:flex;align-items:center;gap:8px;color:var(--accent)}
+.lockcard .btn{display:flex;align-items:center;justify-content:center;gap:8px}
+.lockcard .btn svg{width:20px;height:20px}
 .khatmcard{margin-top:6px}
 /* the green band of the home screen, carried to every other page (top bar with the name and the back button) */
 main > .top{margin:-20px -16px 0;padding:14px 16px 18px;min-height:64px;border-radius:0 0 24px 24px;background-color:#0b5a51;background-image:radial-gradient(120% 90% at 85% 0%,#137a6d 0%,transparent 60%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='-28 -28 56 56'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.07' stroke-width='1.2'%3E%3Crect x='-12' y='-12' width='24' height='24'/%3E%3Crect x='-12' y='-12' width='24' height='24' transform='rotate(45)'/%3E%3C/g%3E%3C/svg%3E")}
@@ -1681,6 +1684,7 @@ function vHome(){
   h += tile('read', 'قراءة', 'المصحف والفهرس والعلامات', 'go', 'read');
   if (!S.hifz) h += tile('hifz', 'حفظ', 'اختر ما تحفظه ومقداره', 'go', 'setupHifz');
   else if (!hasNewLeft()) h += tile('hifz', 'حفظ', 'أتممت ' + hifzName(S.hifz) + '. اختر هدفًا جديدًا', 'go', 'hifzMenu', true);
+  else if (strictLeft()) h += tile('hifz', 'حفظ', 'يُفتح بعد مراجعة اليوم', 'go', 'hifzMenu', false, 'goHifz');
   else if (inprog()) h += tile('hifz', 'حفظ', 'أكمل من حيث توقفت: ' + cShort(S.chunks[S.inprog.idx]), 'go', 'hifzMenu', false, 'goHifz');
   else if (newDoneToday()) h += tile('hifz', 'حفظ', 'حفظت ورد اليوم · اضغط لمقطع إضافي', 'go', 'hifzMenu', true, 'goHifz');
   else h += tile('hifz', 'حفظ', 'اليوم: ' + cShort(S.chunks[S.nextNew]), 'go', 'hifzMenu', false, 'goHifz');
@@ -1845,11 +1849,16 @@ function vRevMenu(){
   const r = S.rev, kn = (r.known || []).length, ksn = (r.ksur || []).length, wn = weakPages().length;
   return `<main>${back()}<div><h1>المراجعة</h1>${(kn || ksn) && r.n ? `<p class="muted">خطتك الحالية: تحفظ ${[kn ? countWord(kn, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : '', ksn ? countWord(ksn, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : ''].filter(Boolean).join(' و')}${wn ? ' (فيها ' + countWord(wn, 'صفحة واحدة ضعيفة', 'صفحتان ضعيفتان', 'صفحات ضعيفة', 'صفحة ضعيفة') + ')' : ''} · تراجع ${r.unit === 'surah' ? countWord(r.n, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : r.unit === 'juz' ? countWord(r.n, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : countWord(r.n, 'صفحة واحدة', 'صفحتين', 'صفحات', 'صفحة')} يوميًا</p>` : ''}</div><div class="btns">${opts.join('')}</div></main>`;
 }
+const LOCK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+/* Organized plan (optional): new memorization opens only after today's review is done. Returns how many review items are left, or 0. */
+function strictLeft(){ if (!S.strict) return 0; try { return reviewTodo().length; } catch (e) { return 0; } }
 function vHifzMenu(){
-  const ip = inprog(), opts = [];
-  if (ip){ const c = S.chunks[ip.idx], n = chunkAyat(c).length;
+  const ip = inprog(), opts = [], lk = strictLeft();
+  if (lk){
+    opts.push(`<div class="card lockcard"><b>${LOCK_SVG}الحفظ الجديد بعد مراجعة اليوم</b><p class="muted">أنت على الخطة المنظمة: راجع ما حفظته أولًا، ثم يُفتح لك مقطع اليوم. بقي ${countWord(lk, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا')} في مراجعة اليوم.</p><button class="btn" data-act="revGo">${TI.rev}ابدأ مراجعة اليوم</button></div>`);
+  } else if (ip){ const c = S.chunks[ip.idx], n = chunkAyat(c).length;
     opts.push(`<button class="opt big" data-act="hifzResume"><span class="tic">${TI.hifz}</span><span><b>أكمل من حيث توقفت</b><span class="muted" style="display:block">${cLabel(c)} · ${(r => r <= 1 ? 'بقيت آية واحدة' : r === 2 ? 'بقيت آيتان' : 'بقيت ' + countWord(r, '', '', 'آيات', 'آية'))(n - Math.min(ip.ri || 0, n - 1))}</span></span></button>`); }
-  if (hasNewLeft()){ const c = S.chunks[S.nextNew], done = newDoneToday();
+  if (!lk && hasNewLeft()){ const c = S.chunks[S.nextNew], done = newDoneToday();
     opts.push(`<button class="opt big" data-act="hifzToday"><span class="tic">${done ? '+' : '١'}</span><span><b>${done ? 'احفظ المقطع التالي' : ip && ip.idx === S.nextNew ? 'أعد مقطع اليوم من أوله' : 'حفظ اليوم'}</b><span class="muted" style="display:block">${cLabel(c)}${done ? ' · أنهيت ورد اليوم، هذا مقطع إضافي' : ''}</span></span></button>`); }
   opts.push(`<button class="opt big" data-act="go" data-v="setupHifz"><span class="tic">+</span><span><b>حفظ جديد</b><span class="muted" style="display:block">اختر سورة أو ربعًا أو جزءًا آخر، ومقداره اليومي</span></span></button>`);
   return `<main>${back()}<div><h1>الحفظ</h1>${S.hifz ? `<p class="muted">خطتك الحالية: ${hifzName(S.hifz)} · ${paceName(S.hifz)}</p>` : ''}</div><div class="btns">${opts.join('')}</div></main>`;
@@ -1915,6 +1924,7 @@ function vSetupHifz(){
       ${d.stype === 'juz' ? `<button class="opt" data-act="hdRev" aria-pressed="${d.rev}"><span class="dot"></span><span><b>ابدأ من آخر الجزء</b><span class="muted" style="display:block">من السور القصيرة إلى الطويلة، كما يحفظ أغلب الناس جزء عمّ</span></span></button>` : ''}</div>
     <div class="card"><h3>كم تحفظ يوميًا؟</h3>${seg('hdPtype', [['ayah','آيات'],['page','صفحة'],['quarter','ربع حزب'],['days','خلال مدة']], d.ptype)}${sub}</div>
     <div class="card"><h3>كم مرة تكرر الآية؟</h3>${seg('hdReps', [[7,'٧ مرات'],[11,'١١ مرة'],[19,'١٩ مرة']], d.reps)}</div>
+    <div class="card"><button class="opt" data-act="strictTog" aria-pressed="${!!S.strict}"><span class="dot"></span><span><b>خطة منظمة: المراجعة قبل الجديد</b><span class="muted" style="display:block">لا يُفتح مقطع الحفظ الجديد كل يوم إلا بعد أن تنهي مراجعة ما حفظته. يمكنك تغييرها من الإعدادات.</span></span></button></div>
     <div class="card"><h3>خطتك</h3><p>${AR(ayat)} آية في ${AR(chunks.length)} يومًا تقريبًا.</p><p class="muted">كل يوم مقطع جديد، وما تحفظه يدخل في مراجعتك تلقائيًا في وقته.</p></div>
     ${busy && confirmBox !== 'hd' ? '<button class="btn" data-act="ask" data-v="hd">ابدأ الخطة</button>' : busy ? `<div class="confirm"><p>ستبدأ خطة جديدة. ما حفظته من قبل يبقى في مراجعتك ولا يضيع.</p><div class="rnav"><button class="btn" data-act="hdSave">ابدأ الخطة الجديدة</button><button class="btn ghost" data-act="cancel">تراجع</button></div></div>` : '<button class="btn" data-act="hdSave">ابدأ الخطة</button>'}
   </main>`;
@@ -1998,6 +2008,7 @@ function vSettings(){
   <div class="card setrows">
     <div class="row"><span><b>اسمك</b><small>يظهر في التحية على الشاشة الرئيسية</small></span><input id="nameIn" class="namein" type="text" maxlength="30" placeholder="اكتب اسمك" value="${esc(S.name || '')}" autocomplete="given-name" enterkeyhint="done"></div>
     <div class="row"><span><b>الحفظ</b><small>${S.hifz ? hifzName(S.hifz) + ' · ' + paceName(S.hifz) + ' · التكرار ' + AR(REPS()) : 'لم تبدأ بعد'}</small></span><button class="x" data-act="go" data-v="setupHifz">تعديل</button></div>
+    <div class="row"><span><b>الخطة المنظمة</b><small>لا يُفتح الحفظ الجديد إلا بعد إتمام مراجعة اليوم</small></span><button class="x" data-act="strictTog">${S.strict ? 'مفعّلة' : 'مغلقة'}</button></div>
     <div class="row"><span><b>المراجعة</b><small>${kn || ksn ? 'تحفظ ' + [kn ? countWord(kn, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : '', ksn ? countWord(ksn, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : ''].filter(Boolean).join(' و') + ' من قبل' + (S.rev.n ? ' · ' + AR(S.rev.n) + ' ' + ({pages:'صفحات', surah:'سور', juz:'أجزاء'}[S.rev.unit]) + ' يوميًا' : '') : 'ما تحفظه في التطبيق فقط'}</small></span><button class="x" data-act="go" data-v="setupReview">تعديل</button></div>
     <div class="row"><span><b>اختبار الميكروفون</b><small>${S.micLabel ? 'المختار: ' + esc(S.micLabel) : 'تأكد أن صوتك يصل بوضوح قبل التسميع'}</small></span><button class="x" data-act="micTest">اختبر</button></div>
     <div class="row"><span><b>صوت التنبيه عند الخطأ</b><small>نغمة قصيرة أثناء التسميع بالصوت إذا أخطأت في كلمة</small></span><button class="x" data-act="beepTog">${S.beep !== false ? 'يعمل' : 'مغلق'}</button></div>
@@ -3297,7 +3308,8 @@ const GUIDE = [
  ['الحفظ', ['اضغط «حفظ» واختر ما تحفظه (سورة أو ربع أو جزء أو القرآن كاملًا)، ومقدار الحفظ اليومي، وعدد تكرار كل آية.',
    'في كل مقطع اقرأ الآية أو استمع لها، واضغط بعد كل تكرار حتى يكتمل العدد.',
    'ثم اضغط «جاهز، اختبرني»: تختفي الآيات وتقرؤها من حفظك.',
-   'كل ما تحفظه يدخل مراجعتك تلقائيًا قبل أن يُنسى.']],
+   'كل ما تحفظه يدخل مراجعتك تلقائيًا قبل أن يُنسى.',
+   'إن فعّلت «الخطة المنظمة» لا يُفتح مقطع الحفظ الجديد إلا بعد أن تنهي مراجعة اليوم.']],
  ['التسميع بالصوت', ['حمّل «محرك التسميع» مرة واحدة من الشاشة الرئيسية، ليكون التسميع أدق ويعمل بدون إنترنت.',
    'اضغط «سمّع بصوتك» واقرأ بصوت مسموع، فتظهر الكلمات وأنت تقرأ.',
    'الأحمر خطأ. البرتقالي تنبيه فقط ولا يُحسب خطأ، مثل أن تصحّح نفسك.',
@@ -3356,7 +3368,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r117';
+const BUILD = 'r118';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3415,6 +3427,7 @@ app.addEventListener('click', e => {
   if (a === 'akPlay'){ akPlay(v); return; }
   if (a === 'adkReset'){ adkState()[v] = {}; save(); render(); window.scrollTo(0, 0); return; }
   if (a === 'go'){ go(v); return; }
+  if (a === 'strictTog'){ S.strict = !S.strict; save(); render(); return; }
   if (a === 'goHifz'){ go('setupHifz'); return; }
   if (a === 'goReview'){ go('setupReview'); return; }
   if (a === 'goWird'){ go('setupWird'); return; }
@@ -3475,6 +3488,7 @@ app.addEventListener('click', e => {
   if (a === 'cumNext'){ audStop(true); const k = sess.cum; sess.cum = 0; sess.phase = 'read'; sess.ri = k; keepProgress(); render(); window.scrollTo(0, 0); return; }
   if (a === 'cumAgain'){ testFrom(sess.cum); return; }
   if (a === 'ri'){ audStop(true); sess.ri = +v; keepProgress(); render(); window.scrollTo(0, 0); return; }
+  if ((a === 'hifzToday' || a === 'hifzResume') && strictLeft()){ go('hifzMenu'); return; }
   if (a === 'hifzToday'){ if (hasNewLeft()){ S.inprog = null; save(); startSession([{type:'new', idx:S.nextNew}]); } return; }
   if (a === 'hifzResume'){ const ip = inprog(); if (ip){ startSession([{type:'new', idx:ip.idx}]); sess.reps = Object.assign({}, ip.reps); sess.ri = ip.ri || 0; render(); } return; }
   if (a === 'toTest'){ testFrom(0); return; }
