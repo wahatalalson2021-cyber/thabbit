@@ -648,6 +648,7 @@ const pageChunk = p => ({r:[[PSTART[p], PSTART[p + 1] - 1]], page:p});
 function compress(gs){ const r = []; for (const g of gs){ const last = r[r.length - 1]; if (last && last[1] === g - 1) last[1] = g; else r.push([g, g]); } return {r}; }
 
 function scopeRange(sc){
+  if (sc.type === 'all') return [1, GBASE[114]];
   if (sc.type === 'surah') return [GBASE[sc.n - 1] + 1, GBASE[sc.n]];
   if (sc.type === 'quarter') return [QSTART[sc.n], QSTART[sc.n + 1] - 1];
   return [JSTART[sc.n], JSTART[sc.n + 1] - 1];
@@ -680,7 +681,7 @@ function hifzName(h){
   if (!h) return '';
   if (h.name) return h.name;
   const sc = h.scope;
-  return sc.type === 'surah' ? sName(sc.n) : sc.type === 'quarter' ? quarterName(sc.n) : 'الجزء ' + AR(sc.n);
+  return sc.type === 'all' ? 'القرآن كاملًا' : sc.type === 'surah' ? sName(sc.n) : sc.type === 'quarter' ? quarterName(sc.n) : 'الجزء ' + AR(sc.n);
 }
 function paceName(h){
   const p = h.pace, n = p.n || 1;
@@ -1905,27 +1906,33 @@ function newHd(){
   return h ? {stype:h.scope.type, n:h.scope.n, ptype:h.pace.type, pn:h.pace.n || 1, rev:!!h.rev, reps:h.reps || 7}
     : {stype:'juz', n:30, ptype:'ayah', pn:3, rev:true, reps: (S.hifz && S.hifz.reps) || 7};
 }
-const hdToHifz = d => ({scope:{type:d.stype, n:d.n}, pace:{type:d.ptype, n: d.ptype === 'page' || d.ptype === 'quarter' ? 1 : d.pn}, rev: d.stype === 'juz' && d.rev, reps:d.reps});
+const hdToHifz = d => ({scope:{type:d.stype, n:d.n}, pace:{type:d.ptype, n: d.ptype === 'page' || d.ptype === 'quarter' ? 1 : d.pn}, rev: (d.stype === 'juz' || d.stype === 'all') && d.rev, reps:d.reps});
+/* Days in plain words for long plans: about a year and 8 months. */
+function durName(n){ const m = Math.round(n / 30.4); if (m < 12) return 'حوالي ' + countWord(m, 'شهر', 'شهرين', 'أشهر', 'شهرًا');
+  const y = Math.floor(m / 12), r = m % 12, ys = y === 1 ? 'سنة' : y === 2 ? 'سنتين' : AR(y) + (y <= 10 ? ' سنوات' : ' سنة');
+  return 'حوالي ' + ys + (r ? ' و' + (r === 1 ? 'شهر' : r === 2 ? 'شهرين' : AR(r) + (r <= 10 ? ' أشهر' : ' شهرًا')) : ''); }
 function vSetupHifz(){
   const d = hd;
   let list;
   if (d.stype === 'surah') list = Q.map((q, i) => `<option value="${i + 1}" ${d.n === i + 1 ? 'selected' : ''}>${AR(i + 1)}. ${q[0]} (${AR(q[1].length)} آية)</option>`).join('');
   else if (d.stype === 'quarter') list = Array.from({length:240}, (_, i) => `<option value="${i + 1}" ${d.n === i + 1 ? 'selected' : ''}>${quarterName(i + 1)} · من ${quarterStartLabel(i + 1)}</option>`).join('');
+  else if (d.stype === 'all') list = '';
   else list = Array.from({length:30}, (_, i) => `<option value="${i + 1}" ${d.n === i + 1 ? 'selected' : ''}>الجزء ${AR(i + 1)} · من سورة ${Q[gidToSA(JSTART[i + 1])[0] - 1][0]}</option>`).join('');
   const chunks = planChunks(hdToHifz(d)), ayat = chunks.reduce((n, c) => n + nAyat(c), 0);
   let sub = '';
   if (d.ptype === 'ayah') sub = seg('hdPn', [[1,'آية'],[2,'آيتان'],[3,'٣ آيات'],[5,'٥ آيات']], d.pn);
-  if (d.ptype === 'days') sub = seg('hdPn', [[7,'أسبوع'],[15,'١٥ يومًا'],[30,'شهر'],[60,'شهران'],[90,'٣ أشهر']], d.pn, 5);
+  if (d.ptype === 'days') sub = d.stype === 'all' ? seg('hdPn', [[365,'سنة'],[548,'سنة ونصف'],[730,'سنتان'],[1095,'٣ سنوات']], d.pn, 4) : seg('hdPn', [[7,'أسبوع'],[15,'١٥ يومًا'],[30,'شهر'],[60,'شهران'],[90,'٣ أشهر']], d.pn, 5);
   const busy = Object.keys(S.learned).length;
   return `<main>${back()}
     <div><h1>خطة الحفظ</h1><p class="muted">اختر ما تحفظه، ومقدار الحفظ اليومي، وعدد تكرار كل آية.</p></div>
-    <div class="card"><h3>ماذا تحفظ؟</h3>${seg('hdType', [['surah','سورة'],['quarter','ربع حزب'],['juz','جزء']], d.stype)}
-      <label class="muted" for="hdSel">اختر ${d.stype === 'surah' ? 'السورة' : d.stype === 'quarter' ? 'الربع' : 'الجزء'}</label><select id="hdSel">${list}</select>
+    <div class="card"><h3>ماذا تحفظ؟</h3>${seg('hdType', [['surah','سورة'],['quarter','ربع حزب'],['juz','جزء'],['all','المصحف']], d.stype)}
+      ${d.stype === 'all' ? '' : `<label class="muted" for="hdSel">اختر ${d.stype === 'surah' ? 'السورة' : d.stype === 'quarter' ? 'الربع' : 'الجزء'}</label><select id="hdSel">${list}</select>`}
+      ${d.stype === 'all' ? `<button class="opt" data-act="hdRev" aria-pressed="${d.rev}"><span class="dot"></span><span><b>ابدأ من آخر المصحف</b><span class="muted" style="display:block">من سورة الناس وجزء عمّ إلى سورة البقرة، وهي الطريقة الأيسر لأغلب الناس. وإن ألغيتها تبدأ من سورة الفاتحة.</span></span></button>` : ''}
       ${d.stype === 'juz' ? `<button class="opt" data-act="hdRev" aria-pressed="${d.rev}"><span class="dot"></span><span><b>ابدأ من آخر الجزء</b><span class="muted" style="display:block">من السور القصيرة إلى الطويلة، كما يحفظ أغلب الناس جزء عمّ</span></span></button>` : ''}</div>
     <div class="card"><h3>كم تحفظ يوميًا؟</h3>${seg('hdPtype', [['ayah','آيات'],['page','صفحة'],['quarter','ربع حزب'],['days','خلال مدة']], d.ptype)}${sub}</div>
     <div class="card"><h3>كم مرة تكرر الآية؟</h3>${seg('hdReps', [[7,'٧ مرات'],[11,'١١ مرة'],[19,'١٩ مرة']], d.reps)}</div>
     <div class="card"><button class="opt" data-act="strictTog" aria-pressed="${!!S.strict}"><span class="dot"></span><span><b>خطة منظمة: المراجعة قبل الجديد</b><span class="muted" style="display:block">لا يُفتح مقطع الحفظ الجديد كل يوم إلا بعد أن تنهي مراجعة ما حفظته. يمكنك تغييرها من الإعدادات.</span></span></button></div>
-    <div class="card"><h3>خطتك</h3><p>${AR(ayat)} آية في ${AR(chunks.length)} يومًا تقريبًا.</p><p class="muted">كل يوم مقطع جديد، وما تحفظه يدخل في مراجعتك تلقائيًا في وقته.</p></div>
+    <div class="card"><h3>خطتك</h3><p>${AR(ayat)} آية في ${AR(chunks.length)} يومًا تقريبًا${chunks.length > 60 ? ' (' + durName(chunks.length) + ')' : ''}.</p><p class="muted">كل يوم مقطع جديد، وما تحفظه يدخل في مراجعتك تلقائيًا في وقته.</p></div>
     ${busy && confirmBox !== 'hd' ? '<button class="btn" data-act="ask" data-v="hd">ابدأ الخطة</button>' : busy ? `<div class="confirm"><p>ستبدأ خطة جديدة. ما حفظته من قبل يبقى في مراجعتك ولا يضيع.</p><div class="rnav"><button class="btn" data-act="hdSave">ابدأ الخطة الجديدة</button><button class="btn ghost" data-act="cancel">تراجع</button></div></div>` : '<button class="btn" data-act="hdSave">ابدأ الخطة</button>'}
   </main>`;
 }
@@ -3368,7 +3375,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r118';
+const BUILD = 'r119';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3432,9 +3439,9 @@ app.addEventListener('click', e => {
   if (a === 'goReview'){ go('setupReview'); return; }
   if (a === 'goWird'){ go('setupWird'); return; }
   /* memorization setup */
-  if (a === 'hdType'){ hd.stype = v; hd.n = v === 'juz' ? 30 : 1; hd.rev = v === 'juz'; render(); return; }
+  if (a === 'hdType'){ hd.stype = v; hd.n = v === 'juz' ? 30 : 1; hd.rev = v === 'juz' || v === 'all'; if (v === 'all' && hd.ptype === 'ayah' && hd.pn < 5) hd.ptype = 'page', hd.pn = 1; if (hd.ptype === 'days') hd.pn = v === 'all' ? 730 : 30; render(); return; }
   if (a === 'hdRev'){ hd.rev = !hd.rev; render(); return; }
-  if (a === 'hdPtype'){ hd.ptype = v; hd.pn = v === 'days' ? 30 : v === 'ayah' ? 3 : 1; render(); return; }
+  if (a === 'hdPtype'){ hd.ptype = v; hd.pn = v === 'days' ? (hd.stype === 'all' ? 730 : 30) : v === 'ayah' ? 3 : 1; render(); return; }
   if (a === 'hdPn'){ hd.pn = +v; render(); return; }
   if (a === 'hdReps'){ hd.reps = +v; render(); return; }
   if (a === 'hdSave'){ saveHifz(); confirmBox = null; if (S.chunks.length){ startSession([{type:'new', idx:0}]); sess.banner = `بدأت خطتك: ${hifzName(S.hifz)} · ${paceName(S.hifz)}. هذا أول مقطع.`; render(); } else { view = 'home'; render(); } window.scrollTo(0, 0); return; }
