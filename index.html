@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ثبّت لحفظ القرآن</title>
+<title>سابق لحفظ القرآن</title>
 <meta name="theme-color" content="#0d6a60">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="ثبّت">
+<meta name="apple-mobile-web-app-title" content="سابق">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1560,7 +1560,7 @@ function focusSura(){
   const head = document.querySelector('.rhead'), y = el.getBoundingClientRect().top + window.scrollY - (head ? head.offsetHeight : 0) - 12;
   window.scrollTo(0, Math.max(0, y)); el.classList.add('flash');
 }
-const back = (to = 'home') => `<div class="top"><span class="brand">ثبّت</span><button class="x" data-act="tab" data-v="${to}">رجوع</button></div>`;
+const back = (to = 'home') => `<div class="top"><span class="brand">سابق</span><button class="x" data-act="tab" data-v="${to}">رجوع</button></div>`;
 const seg = (act, opts, cur, cols) => `<div class="seg" style="grid-template-columns:repeat(${cols || opts.length},1fr)" role="group">${opts.map(([v, l]) => `<button data-act="${act}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
 
 /* ---------- home: four choices ---------- */
@@ -2972,7 +2972,7 @@ const dpAll = l => `<button class="btn soft rqall" data-act="dpPlay" data-v="all
 function vDua(){
   if (DUA_CH){
     const [ci, j] = DUA_CH, [cat, chs] = DUA_H[ci], [title, its] = chs[j];
-    let h = `<div class="top"><span class="brand">ثبّت</span><button class="x" data-act="duaBack">رجوع</button></div><div><small class="muted">${cat}</small><h1 class="duah1">${esc(title)}</h1></div>`;
+    let h = `<div class="top"><span class="brand">سابق</span><button class="x" data-act="duaBack">رجوع</button></div><div><small class="muted">${cat}</small><h1 class="duah1">${esc(title)}</h1></div>`;
     h += dpAll(its.length > 1 ? 'استمع لأدعية الموضوع متتابعة' : 'استمع');
     h += its.map(([x, r], n) => { const key = `h:${ci}.${j}.${n}`; return `<div class="card dcard" data-dk="${key}"><p class="adt">${esc(x)}</p><div class="dsrc"><span>${r > 1 ? `<b>${AR(r)} ${r <= 10 ? 'مرات' : 'مرة'}</b>` : ''}</span>${dpBtn(key)}</div></div>`; }).join('');
     h += `<p class="muted adksrc">من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p>`;
@@ -3049,7 +3049,7 @@ async function pdfLib(){
 }
 function vBook(){
   const b = HAJJ_BOOKS[BK.i];
-  return `<main class="bookv"><div class="top"><span class="brand">ثبّت</span><button class="x" data-act="tab" data-v="lib">رجوع</button></div>
+  return `<main class="bookv"><div class="top"><span class="brand">سابق</span><button class="x" data-act="tab" data-v="lib">رجوع</button></div>
     <h2>${b[1]}</h2><p class="muted">${b[2]}</p>
     <div id="bkPages" class="bkpages">${BK.err ? '<p class="err">تعذّر فتح الكتاب على هذا الجهاز.</p>' : BK.doc ? '' : '<p class="muted">جاري فتح الكتاب...</p>'}</div></main>`;
 }
@@ -3137,7 +3137,7 @@ function haToggle(){
   if (HA.el.src !== N40A_URL){ HA.el.src = N40A_URL; HA.el.addEventListener('loadedmetadata', go, {once: true}); HA.el.load(); } else if (HA.el.readyState >= 1) go(); else HA.el.addEventListener('loadedmetadata', go, {once: true});
 }
 function vN40h(){
-  let h = `<main><div class="top"><span class="brand">ثبّت</span><button class="x" data-act="tab" data-v="n40">رجوع</button></div>`;
+  let h = `<main><div class="top"><span class="brand">سابق</span><button class="x" data-act="tab" data-v="n40">رجوع</button></div>`;
   if (!N40) return h + n40Wait() + '</main>';
   const x = N40.h[n40Cur - 1], sz = (S.n40 && S.n40.size) || 1;
   h += `<div class="n40head"><span class="n40pos">${AR(x.n)} من ٤٢</span><h1>${x.title}</h1><div class="n40size"><button class="x" data-act="n40Size" data-v="-1" aria-label="تصغير الخط">أ-</button><button class="x" data-act="n40Size" data-v="1" aria-label="تكبير الخط">أ+</button></div></div>
@@ -3203,13 +3203,13 @@ function installGuide(){
   const appIcon = '<img src="apple-touch-icon.png" alt="" width="26" height="26" style="border-radius:6px">';
   let steps, title;
   if (IOS){
-    title = 'تثبيت «ثبّت» على الآيفون';
+    title = 'تثبيت «سابق» على الآيفون';
     steps = gstep(1, GI.share, 'اضغط زر المشاركة', 'في Safari، أسفل الشاشة. إذا لم يظهر فاضغط أولًا زر ••• أو ☰') +
       gstep(2, GI.add, 'اختر «إضافة إلى الشاشة الرئيسية»', 'انزل في القائمة قليلًا حتى تجده') +
       gstep(3, GI.ok, 'اضغط «إضافة»', 'أعلى يمين الشاشة') +
       gstep(4, appIcon, 'افتح التطبيق من أيقونته', 'وابدأ الحفظ والقراءة منها دائمًا');
   } else {
-    title = 'تثبيت «ثبّت» على جوالك';
+    title = 'تثبيت «سابق» على جوالك';
     steps = gstep(1, GI.vdots, 'افتح الرابط في Chrome', 'إذا فتحته من واتساب: اضغط ⋮ ثم «فتح في Chrome»') +
       gstep(2, GI.vdots, 'اضغط ⋮ أعلى الشاشة', '') +
       gstep(3, GI.add, 'اختر «تثبيت التطبيق»', 'أو «إضافة إلى الشاشة الرئيسية»') +
@@ -3221,7 +3221,7 @@ function installGuide(){
     ${IOS ? '<p class="muted">مهم: استخدم Safari العادي، وليس الوضع الخاص (Private)، حتى يُحفظ تقدّمك.</p>' : ''}</div>`;
 }
 /* Share the app with a friend: the link and how to install it, ready to send (WhatsApp, Telegram...). */
-const SHARE_TXT = `تطبيق «ثبّت» لحفظ القرآن الكريم ومراجعته وتسميعه بالصوت، مجاني وبلا إعلانات.
+const SHARE_TXT = `تطبيق «سابق» لحفظ القرآن الكريم ومراجعته وتسميعه بالصوت، مجاني وبلا إعلانات.
 
 الرابط:
 https://thabbit.learnoschools.com
@@ -3281,14 +3281,14 @@ let shareMsg = '', guideBoth = false;
 function shareCard(){
   const ios = `<ol class="gsteps">${gstep(1, GI.share, 'افتح الرابط في Safari واضغط زر المشاركة', 'المربع الذي فيه سهم، أسفل الشاشة')}${gstep(2, GI.add, 'اختر «إضافة إلى الشاشة الرئيسية»', 'ثم «إضافة»')}</ol>`;
   const and = `<ol class="gsteps">${gstep(1, GI.vdots, 'افتح الرابط في Chrome واضغط ⋮', 'أعلى الشاشة')}${gstep(2, GI.add, 'اختر «تثبيت التطبيق»', 'أو «إضافة إلى الشاشة الرئيسية»')}</ol>`;
-  return `<div class="card"><h3>شارك «ثبّت» مع غيرك</h3><p class="muted">ترسل الرابط ومعه طريقة التثبيت للآيفون والأندرويد، في رسالة واحدة.</p>
+  return `<div class="card"><h3>شارك «سابق» مع غيرك</h3><p class="muted">ترسل الرابط ومعه طريقة التثبيت للآيفون والأندرويد، في رسالة واحدة.</p>
     <button class="btn" data-act="shareApp">${SHARE_SVG}أرسل التطبيق لصديق</button>${shareMsg ? `<p class="okmsg">${shareMsg}</p>` : ''}
     <button class="beeptog" data-act="guideBoth" aria-expanded="${guideBoth}">${guideBoth ? 'إخفاء طريقة التثبيت' : 'طريقة التثبيت على الآيفون والأندرويد'}</button>
     ${guideBoth ? `<h4 class="gh">الآيفون</h4>${ios}<h4 class="gh">الأندرويد</h4>${and}` : ''}</div>`;
 }
 const SHARE_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
 async function shareApp(){
-  try { if (navigator.share){ await navigator.share({title: 'ثبّت لحفظ القرآن', text: SHARE_TXT}); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { if (navigator.share){ await navigator.share({title: 'سابق لحفظ القرآن', text: SHARE_TXT}); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
   try { await navigator.clipboard.writeText(SHARE_TXT); shareMsg = '✓ نُسخت الرسالة. الصقها في واتساب أو تيليجرام وأرسلها.'; }
   catch (e) { shareMsg = 'انسخ الرابط وأرسله: thabbit.learnoschools.com'; }
   render();
@@ -3305,7 +3305,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r111';
+const BUILD = 'r112';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3429,7 +3429,7 @@ app.addEventListener('click', e => {
   if (a === 'peek'){ const i = +v; if (sess.reveal >= sess.total && sess.ws[i]){ sess.why = sess.why === i ? null : i; render(); return; } if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
   if (a === 'copyReport'){
     const t = sess.queue[sess.pos], c = itemChunk(t), [s1, a1] = gidToSA(c.r[0][0]), [s2, a2] = gidToSA(c.r[c.r.length - 1][1]);
-    const rep = ['تقرير تسميع - ثبّت', 'المقطع: ' + Q[s1 - 1][0] + ' ' + a1 + ' إلى ' + Q[s2 - 1][0] + ' ' + a2, 'الجهاز: ' + navigator.userAgent, 'المحرك: ' + (sess.engine === 'model' ? 'المحرك الدقيق (نموذج القرآن)' : 'خدمة الجوال') + ' · حالة المحرك: ' + ENG.st,
+    const rep = ['تقرير تسميع - سابق', 'المقطع: ' + Q[s1 - 1][0] + ' ' + a1 + ' إلى ' + Q[s2 - 1][0] + ' ' + a2, 'الجهاز: ' + navigator.userAgent, 'المحرك: ' + (sess.engine === 'model' ? 'المحرك الدقيق (نموذج القرآن)' : 'خدمة الجوال') + ' · حالة المحرك: ' + ENG.st,
       'الكلمات الحمراء: ' + chunkAyat(c).flatMap(x => x.txt.split(' ')).filter((_, i) => sess.ws[i] === 'miss').join('، '),
       'النص المسموع: ' + (sess.finalText || '').trim(), ...(sess.engine === 'model' && ENGLOG.length ? ['سجل المحرك:', ...ENGLOG] : []), 'الدفعات:', ...SRLOG.map((run, i) => '#' + (i + 1) + '\n' + run.join('\n'))].join('\n');
     const done = () => toast('نُسخ التقرير. الصقه في المحادثة مع Claude.');
@@ -3570,7 +3570,7 @@ function splash(){
   if (navigator.webdriver) return;   // automated tests
   const el = document.createElement('div'); el.className = 'splash';
   const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 450); };
-  const plain = () => { el.classList.remove('pic'); el.innerHTML = `<div class="spin">${EMBLEM}<h1>ثبّت</h1><p>لحفظ القرآن الكريم</p><span class="gdiv"></span>
+  const plain = () => { el.classList.remove('pic'); el.innerHTML = `<div class="spin">${EMBLEM}<h1>سابق</h1><p>لحفظ القرآن الكريم</p><span class="gdiv"></span>
     <button class="spbtn" type="button">اللهم اغفر لصاحب هذا العمل</button></div>`; el.querySelector('.spbtn').addEventListener('click', close); };
   el.classList.add('pic');
   el.innerHTML = `<img class="spblur" src="splash.jpg" alt=""><img class="spmain" src="splash.jpg" alt=""><button class="sphit" type="button" aria-label="اللهم اغفر لصاحب هذا العمل"></button>`;
