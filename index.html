@@ -456,6 +456,7 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .tgo svg{width:18px;height:18px}
 .tile .tmain .tline{padding-left:40px}
+.khatmcard{margin-top:6px}
 /* the green band of the home screen, carried to every other page (top bar with the name and the back button) */
 main > .top{margin:-20px -16px 0;padding:14px 16px 18px;min-height:64px;border-radius:0 0 24px 24px;background-color:#0b5a51;background-image:radial-gradient(120% 90% at 85% 0%,#137a6d 0%,transparent 60%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='-28 -28 56 56'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.07' stroke-width='1.2'%3E%3Crect x='-12' y='-12' width='24' height='24'/%3E%3Crect x='-12' y='-12' width='24' height='24' transform='rotate(45)'/%3E%3C/g%3E%3C/svg%3E")}
 main > .top{flex-wrap:wrap;row-gap:12px;justify-content:center;position:relative;text-align:center}
@@ -1540,7 +1541,7 @@ function render(){
   let h = '';
   if (AU && ((AU.ctx === 'reader' && view !== 'reader') || (AU.ctx === 'sess' && (view !== 'session' || !sess || sess.phase !== 'read')))) audStop(true);
   if (view !== 'mictest' && MT) mtStop();
-  if (DP.on && (view !== 'dua' || DP.ctx !== dpCtx())) dpStop();
+  if (DP.on && ((view !== 'dua' && view !== 'khatm') || DP.ctx !== dpCtx())) dpStop();
   if (AK.on && view !== 'adhkar') akStop();
   if ((HA.on || HA.err) && (view !== 'n40h' || HA.n !== n40Cur)){ haStop(); HA.err = false; }
   if (view === 'session' || view === 'mictest') wakeOn(); else if (wlWant) wakeOff();
@@ -1560,10 +1561,10 @@ function render(){
   else if (view === 'setupReview') h = vSetupReview();
   else if (view === 'setupWird') h = vSetupWird();
   else {
-    h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'lib' ? vLib() : view === 'ptset' ? vPtSet() : view === 'adhkar' ? vAdhkar() : view === 'dua' ? vDua() : view === 'qibla' ? vQibla() : view === 'n40' ? vN40() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
+    h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'lib' ? vLib() : view === 'ptset' ? vPtSet() : view === 'adhkar' ? vAdhkar() : view === 'dua' ? vDua() : view === 'khatm' ? vKhatm() : view === 'qibla' ? vQibla() : view === 'n40' ? vN40() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
     h += '<nav class="tabs" aria-label="الأقسام"><div class="in">' +
       [['home','اليوم'],['adhkar','الأذكار'],['dua','الأدعية'],['lib','المكتبة'],['progress','تقدّمي']].map(([k, l]) =>
-        `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && (view === 'read' || view === 'settings' || view === 'ptset' || view === 'qibla')) || (k === 'lib' && (view === 'n40' || view === 'book')) ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
+        `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && (view === 'read' || view === 'settings' || view === 'ptset' || view === 'qibla')) || (k === 'lib' && (view === 'n40' || view === 'book')) || (k === 'dua' && view === 'khatm') ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
   }
   app.innerHTML = h;
   bandTitle();
@@ -2961,7 +2962,7 @@ const DUA_S_AU = {5: 59, 6: 57, 14: 137, 17: 136, 20: 123};
 const RQ_S_AU = {3: 146, 4: 243, 5: 243, 6: 148};
 const hisnUrl = id => 'https://www.hisnmuslim.com/audio/ar/' + id + '.mp3';
 const DP = {on: false, all: false, list: [], i: 0, el: null, err: false, ctx: '', key: ''};
-const dpCtx = () => DUA_T + (DUA_CH ? DUA_CH.join('.') : '');
+const dpCtx = () => view === 'khatm' ? 'khatm' : DUA_T + (DUA_CH ? DUA_CH.join('.') : '');
 function dpUrls(key){
   const [kind, v] = key.split(':');
   if (kind === 'q'){ const [s, a1, a2] = DUA_Q[+v], out = []; for (let a = a1; a <= a2; a++) out.push(audUrl(GBASE[s - 1] + a)); return out; }
@@ -2997,6 +2998,24 @@ function dpCur(){
   DP.el.src = u; if (DP.list[DP.i + 1]) warm(DP.list[DP.i + 1][1]); DP.el.play().catch(() => { DP.on = false; DP.err = true; dpMark(); });
 }
 const dpAll = l => `<button class="btn soft rqall" data-act="dpPlay" data-v="all" data-l="${l}">${DP.on && DP.all ? PAUSE_SVG + 'إيقاف' : PLAY_SVG + l}</button>`;
+/* Du'a at completing the Quran: no specific du'a is established; Anas gathered his family and made du'a. Authentic du'a suited to the occasion, then the well-known one printed at the end of many mushafs, with its status stated. */
+const KHATM = [['q', 0], ['h', 120], ['q', 5], ['q', 24], ['s', 3], ['s', 1], ['s', 2], ['s', 10], ['q', 32], ['q', 2]];
+const KHATM_FAMOUS = 'اللَّهُمَّ ارْحَمْنِي بِالْقُرْآنِ، وَاجْعَلْهُ لِي إِمَامًا وَنُورًا وَهُدًى وَرَحْمَةً، اللَّهُمَّ ذَكِّرْنِي مِنْهُ مَا نَسِيتُ، وَعَلِّمْنِي مِنْهُ مَا جَهِلْتُ، وَارْزُقْنِي تِلَاوَتَهُ آنَاءَ اللَّيْلِ وَأَطْرَافَ النَّهَارِ، وَاجْعَلْهُ لِي حُجَّةً يَا رَبَّ الْعَالَمِينَ.';
+let KH_FROM = 'dua';
+function hisnKey(id){ for (let ci = 0; ci < DUA_H.length; ci++) for (let j = 0; j < DUA_H[ci][1].length; j++){ const n = DUA_H[ci][1][j][1].findIndex(x => x[2] === id); if (n >= 0) return [ci, j, n]; } return null; }
+function vKhatm(){
+  let h = back(KH_FROM) + `<h1>دعاء ختم القرآن</h1>
+    <div class="card rqhow"><b>قبل أن تدعو</b><p>لم يثبت عن النبي ﷺ دعاء مخصوص لختم القرآن، فادعُ بما شئت من الخير. وكان أنس بن مالك رضي الله عنه إذا ختم القرآن جمع أهله ودعا.</p></div>
+    ${dpAll('استمع للأدعية متتابعة')}<h3 class="duacat">أدعية صحيحة تناسب الختمة</h3>`;
+  h += KHATM.map(([k, v]) => {
+    if (k === 'q'){ const d = DUA_Q[v]; return `<div class="card dcard" data-dk="q:${v}"><p class="dq">${duaQText(d)}</p><div class="dsrc"><span>${duaRef(d)}</span>${dpBtn('q:' + v)}</div></div>`; }
+    if (k === 's'){ const [x, src] = DUA_S[v]; return `<div class="card dcard" data-dk="s:${v}"><p class="adt">${x}</p><div class="dsrc"><span>${src}</span>${dpBtn('s:' + v)}</div></div>`; }
+    const pos = hisnKey(v); if (!pos) return ''; const key = 'h:' + pos.join('.'), x = DUA_H[pos[0]][1][pos[1]][1][pos[2]][0];
+    return `<div class="card dcard" data-dk="${key}"><p class="adt">${esc(x)}</p><div class="dsrc"><span>رواه أحمد، وفيه: «أن تجعل القرآن ربيع قلبي»</span>${dpBtn(key)}</div></div>`;
+  }).join('');
+  h += `<h3 class="duacat">الدعاء المشهور في آخر المصاحف</h3><div class="card dcard"><p class="adt">${KHATM_FAMOUS}</p><div class="dsrc"><span>يُطبع في آخر كثير من المصاحف ويُنسب لشيخ الإسلام ابن تيمية، ونسبته إليه غير ثابتة. والدعاء به لا بأس به، كما قال الشيخ ابن باز رحمه الله.</span></div></div>`;
+  return h;
+}
 function vDua(){
   if (DUA_CH){
     const [ci, j] = DUA_CH, [cat, chs] = DUA_H[ci], [title, its] = chs[j];
@@ -3010,7 +3029,7 @@ function vDua(){
   if (DUA_T === 'q') h += dpAll('استمع للأدعية متتابعة') + `<p class="muted adkhint">أدعية جاءت في القرآن الكريم. القارئ: ${reciter()[2]}. إذا كان الدعاء جزءًا من آية، تُسمع الآية كاملة.</p>` + DUA_Q.map((d, k) => `<div class="card dcard" data-dk="q:${k}"><p class="dq">${duaQText(d)}</p><div class="dsrc"><span>${duaRef(d)}</span>${dpBtn('q:' + k)}</div></div>`).join('');
   else if (DUA_T === 's') h += `<p class="muted adkhint">من الأدعية الجامعة الصحيحة عن النبي ﷺ.</p>` + DUA_S.map(([x, src], k) => `<div class="card dcard" data-dk="s:${k}"><p class="adt">${x}</p><div class="dsrc"><span>${src}</span>${dpBtn('s:' + k)}</div></div>`).join('');
   else if (DUA_T === 'r') h += vRuqya();
-  else h += `<label class="sbox duaq">${SEARCH_SVG}<input id="duaQ" type="search" value="${esc(duaQuery)}" placeholder="ابحث: السفر، المطر، الكرب..." autocomplete="off" enterkeyhint="search" aria-label="ابحث في الأدعية"></label><div id="duaRes">${duaChRows()}</div><p class="muted adksrc">من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p>`;
+  else h += `<label class="sbox duaq">${SEARCH_SVG}<input id="duaQ" type="search" value="${esc(duaQuery)}" placeholder="ابحث: السفر، المطر، الكرب..." autocomplete="off" enterkeyhint="search" aria-label="ابحث في الأدعية"></label><button class="card libcard khatmcard" data-act="khatmGo" data-v="dua"><span class="libic">${BOOK_SVG}</span><span class="libt"><b>دعاء ختم القرآن</b><small>ما يُدعى به عند إتمام الختمة</small></span><span class="tgo">${CHEV}</span></button><div id="duaRes">${duaChRows()}</div><p class="muted adksrc">من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p>`;
   return h;
 }
 const HAJJ_BOOKS = [
@@ -3334,7 +3353,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r115';
+const BUILD = 'r116';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3383,6 +3402,7 @@ app.addEventListener('click', e => {
   if (a === 'n40Retry'){ N40 = null; loadN40(); render(); return; }
   if (a === 'rqPlay'){ rqStart(v); return; }
   if (a === 'dpPlay'){ dpPlay(v); return; }
+  if (a === 'khatmGo'){ KH_FROM = v || 'dua'; view = 'khatm'; render(); window.scrollTo(0, 0); return; }
   if (a === 'duaTab'){ if (RQ.on) rqStop(); DUA_T = v; render(); window.scrollTo(0, 0); return; }
   if (a === 'duaCh'){ DUA_CH = v.split('.').map(Number); render(); window.scrollTo(0, 0); return; }
   if (a === 'duaBack'){ DUA_CH = null; render(); window.scrollTo(0, 0); return; }
@@ -3567,7 +3587,7 @@ app.addEventListener('click', e => {
   if (a === 'rdUnsel'){ RD.sel = null; RD.selW = null; render(); return; }
   if (a === 'rdMark'){ const r = R(), i = r.marks.findIndex(m => m.g === RD.sel); if (i >= 0) r.marks.splice(i, 1); else r.marks.unshift({g:RD.sel, p:RD.page}); save(); render(); return; }
   if (a === 'rdRecite'){ const g = RD.sel; retReader = true; startSession([{type:'practice', chunk:{r:[[g, g]]}}]); return; }
-  if (a === 'rdFinish'){ if (S.wird){ S.wird.pos = 605; markDay(); save(); } view = 'home'; render(); window.scrollTo(0, 0); return; }
+  if (a === 'rdFinish'){ if (S.wird){ S.wird.pos = 605; markDay(); save(); } KH_FROM = 'home'; view = 'khatm'; render(); window.scrollTo(0, 0); return; }
   if (a === 'rdTab'){ rdTab = v; render(); return; }
   if (a === 'rdJump'){ rdTab = v; view = 'read'; render(); const el2 = document.querySelector('.tabs3'); if (el2) el2.scrollIntoView({block:'start'}); return; }
   if (a === 'rdSheet'){ RD.sel = null; RD.sheet = RD.sheet === v ? '' : v; render(); return; }
