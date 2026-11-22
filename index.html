@@ -456,6 +456,8 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .tgo svg{width:18px;height:18px}
 .tile .tmain .tline{padding-left:40px}
+.tagv{font-family:var(--f-quran);font-size:1.45rem;line-height:2;color:var(--accent);text-align:center;margin:0}
+.sptag{font-family:var(--f-quran);font-size:1.2rem;margin:6px 0 0;opacity:.95}
 .n40play{display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 10px}
 .n40play svg{width:18px;height:18px}
 .rlisten{display:grid;place-items:center;width:38px;height:38px;padding:0;border-radius:50%}
@@ -1560,7 +1562,7 @@ function focusSura(){
   const head = document.querySelector('.rhead'), y = el.getBoundingClientRect().top + window.scrollY - (head ? head.offsetHeight : 0) - 12;
   window.scrollTo(0, Math.max(0, y)); el.classList.add('flash');
 }
-const back = (to = 'home') => `<div class="top"><span class="brand">سابق</span><button class="x" data-act="tab" data-v="${to}">رجوع</button></div>`;
+const back = (to = 'home') => `<div class="top"><span class="brand">سَابِق</span><button class="x" data-act="tab" data-v="${to}">رجوع</button></div>`;
 const seg = (act, opts, cur, cols) => `<div class="seg" style="grid-template-columns:repeat(${cols || opts.length},1fr)" role="group">${opts.map(([v, l]) => `<button data-act="${act}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
 
 /* ---------- home: four choices ---------- */
@@ -1981,6 +1983,7 @@ function vSettings(){
   ${confirmBox === 'reset' ? `<div class="confirm"><p>سيُمسح كل التقدّم ولا يمكن استرجاعه.</p><div class="rnav"><button class="btn danger" data-act="resetYes">امسح</button><button class="btn ghost" data-act="cancel">إلغاء</button></div></div>` : '<button class="btn danger" data-act="ask" data-v="reset">مسح كل البيانات</button>'}</div>
   ${IN_CLAUDE || STANDALONE ? '' : installGuide()}
   ${shareCard()}
+  <div class="card abouttag"><h3>عن «سابق»</h3><p class="tagv">﴿وَمِنۡهُمۡ سَابِقُۢ بِٱلۡخَيۡرَٰتِ بِإِذۡنِ ٱللَّهِ﴾</p><p class="muted">اسم التطبيق من قوله تعالى في سورة فاطر (الآية ٣٢) عن الذين أورثهم الله الكتاب، وأعلاهم منزلة السابق بالخيرات. نسأل الله أن يجعلنا منهم.</p></div>
   <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. مصحف التجويد الملوّن: خطوط مجمع الملك فهد (الإصدار الرابع، ١٤٤١هـ) كما تنشرها مكتبة QUL، للعرض المجاني فقط. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta. محرك التسميع الدقيق: نموذج tarteel-ai/whisper-base-ar-quran من Tarteel AI (رخصة Apache 2.0)، مضغوط ليعمل على الجوال بمكتبة Transformers.js. التلاوات الصوتية: من خدمة Islamic Network (alquran.cloud) للاستخدام التعليمي المجاني، وحقوقها لأصحابها من القرّاء. صوت الأذان: مقطع من تسجيل أذان المغرب في المسجد الحرام (٢٥ فبراير ٢٠١٢) من تسجيل 3omar Faruq، برخصة المشاع الإبداعي CC BY 3.0، عبر ويكيميديا كومنز. أذكار الصباح والمساء: من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p></div>`;
   return h;
 }
@@ -2972,7 +2975,7 @@ const dpAll = l => `<button class="btn soft rqall" data-act="dpPlay" data-v="all
 function vDua(){
   if (DUA_CH){
     const [ci, j] = DUA_CH, [cat, chs] = DUA_H[ci], [title, its] = chs[j];
-    let h = `<div class="top"><span class="brand">سابق</span><button class="x" data-act="duaBack">رجوع</button></div><div><small class="muted">${cat}</small><h1 class="duah1">${esc(title)}</h1></div>`;
+    let h = `<div class="top"><span class="brand">سَابِق</span><button class="x" data-act="duaBack">رجوع</button></div><div><small class="muted">${cat}</small><h1 class="duah1">${esc(title)}</h1></div>`;
     h += dpAll(its.length > 1 ? 'استمع لأدعية الموضوع متتابعة' : 'استمع');
     h += its.map(([x, r], n) => { const key = `h:${ci}.${j}.${n}`; return `<div class="card dcard" data-dk="${key}"><p class="adt">${esc(x)}</p><div class="dsrc"><span>${r > 1 ? `<b>${AR(r)} ${r <= 10 ? 'مرات' : 'مرة'}</b>` : ''}</span>${dpBtn(key)}</div></div>`; }).join('');
     h += `<p class="muted adksrc">من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p>`;
@@ -3049,7 +3052,7 @@ async function pdfLib(){
 }
 function vBook(){
   const b = HAJJ_BOOKS[BK.i];
-  return `<main class="bookv"><div class="top"><span class="brand">سابق</span><button class="x" data-act="tab" data-v="lib">رجوع</button></div>
+  return `<main class="bookv"><div class="top"><span class="brand">سَابِق</span><button class="x" data-act="tab" data-v="lib">رجوع</button></div>
     <h2>${b[1]}</h2><p class="muted">${b[2]}</p>
     <div id="bkPages" class="bkpages">${BK.err ? '<p class="err">تعذّر فتح الكتاب على هذا الجهاز.</p>' : BK.doc ? '' : '<p class="muted">جاري فتح الكتاب...</p>'}</div></main>`;
 }
@@ -3137,7 +3140,7 @@ function haToggle(){
   if (HA.el.src !== N40A_URL){ HA.el.src = N40A_URL; HA.el.addEventListener('loadedmetadata', go, {once: true}); HA.el.load(); } else if (HA.el.readyState >= 1) go(); else HA.el.addEventListener('loadedmetadata', go, {once: true});
 }
 function vN40h(){
-  let h = `<main><div class="top"><span class="brand">سابق</span><button class="x" data-act="tab" data-v="n40">رجوع</button></div>`;
+  let h = `<main><div class="top"><span class="brand">سَابِق</span><button class="x" data-act="tab" data-v="n40">رجوع</button></div>`;
   if (!N40) return h + n40Wait() + '</main>';
   const x = N40.h[n40Cur - 1], sz = (S.n40 && S.n40.size) || 1;
   h += `<div class="n40head"><span class="n40pos">${AR(x.n)} من ٤٢</span><h1>${x.title}</h1><div class="n40size"><button class="x" data-act="n40Size" data-v="-1" aria-label="تصغير الخط">أ-</button><button class="x" data-act="n40Size" data-v="1" aria-label="تكبير الخط">أ+</button></div></div>
@@ -3222,6 +3225,7 @@ function installGuide(){
 }
 /* Share the app with a friend: the link and how to install it, ready to send (WhatsApp, Telegram...). */
 const SHARE_TXT = `تطبيق «سابق» لحفظ القرآن الكريم ومراجعته وتسميعه بالصوت، مجاني وبلا إعلانات.
+﴿وَمِنْهُمْ سَابِقٌ بِالْخَيْرَاتِ بِإِذْنِ اللَّهِ﴾
 
 الرابط:
 https://thabbit.learnoschools.com
@@ -3305,7 +3309,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r112';
+const BUILD = 'r113';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3570,7 +3574,7 @@ function splash(){
   if (navigator.webdriver) return;   // automated tests
   const el = document.createElement('div'); el.className = 'splash';
   const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 450); };
-  const plain = () => { el.classList.remove('pic'); el.innerHTML = `<div class="spin">${EMBLEM}<h1>سابق</h1><p>لحفظ القرآن الكريم</p><span class="gdiv"></span>
+  const plain = () => { el.classList.remove('pic'); el.innerHTML = `<div class="spin">${EMBLEM}<h1>سَابِق</h1><p>لحفظ القرآن الكريم</p><span class="gdiv"></span><p class="sptag">﴿وَمِنۡهُمۡ سَابِقُۢ بِٱلۡخَيۡرَٰتِ بِإِذۡنِ ٱللَّهِ﴾</p>
     <button class="spbtn" type="button">اللهم اغفر لصاحب هذا العمل</button></div>`; el.querySelector('.spbtn').addEventListener('click', close); };
   el.classList.add('pic');
   el.innerHTML = `<img class="spblur" src="splash.jpg" alt=""><img class="spmain" src="splash.jpg" alt=""><button class="sphit" type="button" aria-label="اللهم اغفر لصاحب هذا العمل"></button>`;
