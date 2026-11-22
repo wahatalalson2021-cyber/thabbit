@@ -456,6 +456,15 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .tgo{position:absolute;left:12px;bottom:12px;width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .tgo svg{width:18px;height:18px}
 .tile .tmain .tline{padding-left:40px}
+/* the green band of the home screen, carried to every other page (top bar with the name and the back button) */
+main > .top{margin:-20px -16px 0;padding:14px 16px 18px;min-height:64px;border-radius:0 0 24px 24px;background-color:#0b5a51;background-image:radial-gradient(120% 90% at 85% 0%,#137a6d 0%,transparent 60%),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='-28 -28 56 56'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.07' stroke-width='1.2'%3E%3Crect x='-12' y='-12' width='24' height='24'/%3E%3Crect x='-12' y='-12' width='24' height='24' transform='rotate(45)'/%3E%3C/g%3E%3C/svg%3E")}
+main > .top{flex-wrap:wrap;row-gap:12px;justify-content:center;position:relative;text-align:center}
+main > .top > .x{position:absolute;left:16px;top:14px}
+main > .top .brand{color:#e9cf8f;font-size:1.6rem;line-height:1.3}
+main > .top .toptitle{flex-basis:100%;text-align:center}
+main > .top .toptitle h1{color:#fff;margin:0;font-size:1.6rem}
+main > .top .toptitle small{display:block;color:#e9cf8f;opacity:.9}
+main > .top .x{background:#fff;color:#0b5a51;border:0;border-radius:999px;padding:7px 16px;font-weight:600;box-shadow:0 4px 14px rgb(0 0 0 / .22)}
 .tagv{font-family:var(--f-quran);font-size:1.45rem;line-height:2;color:var(--accent);text-align:center;margin:0}
 .sptag{font-family:var(--f-quran);font-size:1.2rem;margin:6px 0 0;opacity:.95}
 .n40play{display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 10px}
@@ -1514,6 +1523,19 @@ let WL = null, wlWant = false;
 async function wakeOn(){ wlWant = true; if (WL || !('wakeLock' in navigator) || document.hidden) return; try { WL = await navigator.wakeLock.request('screen'); WL.addEventListener('release', () => { WL = null; }); if (!wlWant) wakeOff(); } catch (e) { WL = null; } }
 function wakeOff(){ wlWant = false; if (WL){ const w = WL; WL = null; w.release().catch(() => {}); } }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && wlWant) wakeOn(); });
+/* The page title sits inside the green band at the top, as on the home screen. */
+function bandTitle(){
+  const top = app.querySelector('main > .top'); if (!top) return;
+  const nx = top.nextElementSibling; if (!nx) return;
+  let h = null, sm = null;
+  if (nx.tagName === 'H1') h = nx;
+  else if (nx.tagName === 'DIV' && !nx.className){ h = nx.querySelector(':scope > h1'); sm = nx.querySelector(':scope > small'); }
+  if (!h) return;
+  const w = document.createElement('div'); w.className = 'toptitle';
+  if (sm && sm.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING) w.appendChild(sm);
+  w.appendChild(h); top.appendChild(w);
+  if (nx !== h && !nx.children.length && !nx.textContent.trim()) nx.remove();
+}
 function render(){
   let h = '';
   if (AU && ((AU.ctx === 'reader' && view !== 'reader') || (AU.ctx === 'sess' && (view !== 'session' || !sess || sess.phase !== 'read')))) audStop(true);
@@ -1544,6 +1566,7 @@ function render(){
         `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && (view === 'read' || view === 'settings' || view === 'ptset' || view === 'qibla')) || (k === 'lib' && (view === 'n40' || view === 'book')) ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
   }
   app.innerHTML = h;
+  bandTitle();
   if (view === 'reader' && RD && RD.status === 'ok'){ layoutPage(); focusSura(); }
   if (view === 'book' && BK && BK.doc) bookMount();
   if (view === 'session' && sess && sess.listening) followWord();
@@ -1562,6 +1585,7 @@ function focusSura(){
   const head = document.querySelector('.rhead'), y = el.getBoundingClientRect().top + window.scrollY - (head ? head.offsetHeight : 0) - 12;
   window.scrollTo(0, Math.max(0, y)); el.classList.add('flash');
 }
+const band = () => `<div class="top"><span class="brand">سَابِق</span></div>`;
 const back = (to = 'home') => `<div class="top"><span class="brand">سَابِق</span><button class="x" data-act="tab" data-v="${to}">رجوع</button></div>`;
 const seg = (act, opts, cur, cols) => `<div class="seg" style="grid-template-columns:repeat(${cols || opts.length},1fr)" role="group">${opts.map(([v, l]) => `<button data-act="${act}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
 
@@ -1941,7 +1965,7 @@ function vProgress(){
   const ids = Object.keys(S.learned).map(Number).filter(i => S.chunks[i]);
   const learnedAyat = ids.reduce((n, i) => n + nAyat(S.chunks[i]), 0) + S.arch.reduce((n, x) => n + nAyat(x.c), 0);
   const weak = ids.filter(i => strength(S.learned[i]) === 'weak');
-  let h = `<h1>تقدّمي</h1>
+  let h = band() + `<h1>تقدّمي</h1>
   <div class="grid3"><div class="stat"><b>${AR(learnedAyat)}</b><span>آية محفوظة</span></div>
   <div class="stat"><b>${AR(streak())}</b><span>أيام متتالية</span></div>
   <div class="stat"><b>${AR(weak.length)}</b><span>مواضع ضعف</span></div></div>`;
@@ -2823,7 +2847,7 @@ function akCur(){
 }
 function vAdhkar(){
   const k = ADK_T || adkNow(), st = adkState()[k], L = adkList(k), left = adkLeft(k);
-  let h = (ADK_FROM === 'tab' ? '' : back(ADK_FROM)) + `<div><h1>أذكار ${k === 'm' ? 'الصباح' : 'المساء'}</h1></div>
+  let h = (ADK_FROM === 'tab' ? band() : back(ADK_FROM)) + `<div><h1>أذكار ${k === 'm' ? 'الصباح' : 'المساء'}</h1></div>
     <div class="seg" role="tablist"><button role="tab" data-act="adkTab" data-v="m" aria-selected="${k === 'm'}">${SUN_SVG}الصباح</button><button role="tab" data-act="adkTab" data-v="e" aria-selected="${k === 'e'}">${MOON_SVG}المساء</button></div>
     <button class="btn soft rqall" data-act="akPlay" data-v="all">${AK.on && AK.all ? PAUSE_SVG + 'إيقاف' : PLAY_SVG + 'استمع للأذكار متتابعة'}</button>
     <p class="muted adkhint" id="adkProg">${left ? `اضغط على الذكر بعد كل قراءة ليُحسب. بقي ${AR(left)} من ${AR(L.length)}` : 'أتممت الأذكار، تقبّل الله منك'}</p>`;
@@ -2981,7 +3005,7 @@ function vDua(){
     h += `<p class="muted adksrc">من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p>`;
     return h;
   }
-  let h = `<div><h1>الأدعية</h1></div><div class="seg seg3" role="tablist">${[['q', 'القرآن'], ['s', 'السنة'], ['m', 'المناسبات'], ['r', 'الرقية']].map(([k, l]) => `<button role="tab" data-act="duaTab" data-v="${k}" aria-selected="${DUA_T === k}">${l}</button>`).join('')}</div>`;
+  let h = band() + `<div><h1>الأدعية</h1></div><div class="seg seg3" role="tablist">${[['q', 'القرآن'], ['s', 'السنة'], ['m', 'المناسبات'], ['r', 'الرقية']].map(([k, l]) => `<button role="tab" data-act="duaTab" data-v="${k}" aria-selected="${DUA_T === k}">${l}</button>`).join('')}</div>`;
   if (DUA_T === 'q') h += dpAll('استمع للأدعية متتابعة') + `<p class="muted adkhint">أدعية جاءت في القرآن الكريم. القارئ: ${reciter()[2]}. إذا كان الدعاء جزءًا من آية، تُسمع الآية كاملة.</p>` + DUA_Q.map((d, k) => `<div class="card dcard" data-dk="q:${k}"><p class="dq">${duaQText(d)}</p><div class="dsrc"><span>${duaRef(d)}</span>${dpBtn('q:' + k)}</div></div>`).join('');
   else if (DUA_T === 's') h += `<p class="muted adkhint">من الأدعية الجامعة الصحيحة عن النبي ﷺ.</p>` + DUA_S.map(([x, src], k) => `<div class="card dcard" data-dk="s:${k}"><p class="adt">${x}</p><div class="dsrc"><span>${src}</span>${dpBtn('s:' + k)}</div></div>`).join('');
   else if (DUA_T === 'r') h += vRuqya();
@@ -2999,7 +3023,7 @@ const LIB_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 const KAABA_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4v11l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v11"/><path d="M3 10.5l9 4 9-4"/></svg>';
 const EXT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 function vLib(){
-  let h = `<div><h1>المكتبة</h1><p class="muted">كتب مختارة من مصادر موثوقة.</p></div>`;
+  let h = band() + `<div><h1>المكتبة</h1><p class="muted">كتب مختارة من مصادر موثوقة.</p></div>`;
   h += `<button class="card libcard" data-act="tab" data-v="n40"><span class="libic">${LIB_SVG}</span><span class="libt"><b>الأربعون النووية</b><small>اثنان وأربعون حديثًا للإمام النووي، تُقرأ داخل التطبيق ومعها البحث</small></span><span class="tgo">${CHEV}</span></button>`;
   h += `<button class="card libcard" data-act="adkGo" data-v="lib"><span class="libic">${SUN_SVG}</span><span class="libt"><b>أذكار الصباح والمساء</b><small>من كتاب حصن المسلم، مع عدّاد لكل ذكر</small></span><span class="tgo">${CHEV}</span></button>`;
   h += `<div class="card"><h3 class="libh">${KAABA_SVG}أحكام الحج والعمرة</h3>
@@ -3309,7 +3333,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r113';
+const BUILD = 'r114';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
