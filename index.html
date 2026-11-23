@@ -1623,8 +1623,8 @@ function render(){
 function followWord(){
   const el = document.querySelector('.w.cur'); if (!el) return;
   /* reached the first line of the next surah: lift the screen so that surah, from its title, is in view */
-  const box = el.closest('.mlay'), card = box && box.closest('.ay') || box;
-  if (box && el.closest('.mln') === box.querySelector('.mln')){
+  const box = el.closest('.mlay, .mushaf'), card = box && box.closest('.ay') || box;
+  if (box && (MUSHAF_LINES ? el.closest('.mln') === box.querySelector('.mln') : [...box.querySelectorAll('.w')].indexOf(el) < 4)){
     let hd = card.previousElementSibling; while (hd && hd.classList.contains('basmala')) hd = hd.previousElementSibling;
     if (hd && hd.classList.contains('shead')){ const ht = hd.getBoundingClientRect().top; if (ht < 50 || ht > 140) window.scrollTo({top: Math.max(0, scrollY + ht - 80), behavior: 'smooth'}); return; }
   }
@@ -1773,7 +1773,11 @@ function mlAt(g, k){ if (!MLS) MLS = MLS_RAW.split(','); const e = MLS[g - 1]; i
 const pageOfG = g => gPage(g);
 /* tokens: {g, k, h} for a word or the ayah number (k = word count), {head: html} for a surah heading.
    Returns html: lines as in the mushaf; a line cut by the start or end of the portion keeps its side. */
+const MUSHAF_LINES = false; /* r129: back to flowing text on the memorizing screens, as the user preferred */
 function mlBuild(toks, cls){
+  if (!MUSHAF_LINES){ let h = '', cur = [];
+    const close = () => { if (cur.length) h += `<div class="${cls}">${cur.join(' ')}</div>`; cur = []; };
+    toks.forEach(x => { if (x.head != null){ close(); h += x.head; } else cur.push(x.h); }); close(); return h; }
   let h = '', lines = [], cur = [], curSt = false, open = false, prev = null;
   const lastOf = i => { for (let j = i; j >= 0; j--) if (toks[j].g) return toks[j]; return null; };
   const endsLine = x => { if (!x) return true; const n = Q[gidToSA(x.g)[0] - 1][1][gidToSA(x.g)[1] - 1].split(' ').length; return x.k >= n ? (x.g >= 6236 || mlAt(x.g + 1, 0) > 0 || gidToSA(x.g + 1)[1] === 1) : mlAt(x.g, x.k + 1) > 0; };
@@ -3517,7 +3521,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r128';
+const BUILD = 'r129';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3807,7 +3811,7 @@ splash();
   document.body.appendChild(b);
   b.addEventListener('click', () => window.scrollTo({top: 0, behavior: 'smooth'}));
   function upd(){
-    const on = window.scrollY > 600 && document.documentElement.scrollHeight > innerHeight * 2;
+    const on = view !== 'session' && window.scrollY > 600 && document.documentElement.scrollHeight > innerHeight * 2;
     if (on){ let ob = 0;
       document.querySelectorAll('nav.tabs,.rtool,.aubar,.dock,.selbar').forEach(el => { const r = el.getBoundingClientRect(); if (r.height && r.top < innerHeight) ob = Math.max(ob, innerHeight - r.top); });
       b.style.bottom = (ob + 12) + 'px'; }
