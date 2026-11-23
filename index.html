@@ -2019,7 +2019,7 @@ function vRevMenu(){
   opts.push(`<button class="opt big" data-act="go" data-v="recite"><span class="tic">${MIC_SVG}</span><span><b>سمّع ما تختاره</b><span class="muted" style="display:block">سورة أو جزء أو صفحات تحفظها، تسمّعها بصوتك</span></span></button>`);
   opts.push(`<button class="opt big" data-act="go" data-v="setupReview"><span class="tic">+</span><span><b>مراجعة جديدة</b><span class="muted" style="display:block">غيّر ما تراجعه ومقدار مراجعتك اليومية</span></span></button>`);
   const r = S.rev, kn = (r.known || []).length, ksn = (r.ksur || []).length, wn = weakPages().length;
-  return `<main>${back()}<div><h1>المراجعة</h1>${(kn || ksn) && r.n ? `<p class="muted">خطتك الحالية: تحفظ ${[kn ? countWord(kn, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : '', ksn ? countWord(ksn, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : ''].filter(Boolean).join(' و')}${wn ? ' (فيها ' + countWord(wn, 'صفحة واحدة ضعيفة', 'صفحتان ضعيفتان', 'صفحات ضعيفة', 'صفحة ضعيفة') + ')' : ''} · تراجع ${r.unit === 'surah' ? countWord(r.n, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : r.unit === 'juz' ? countWord(r.n, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : countWord(r.n, 'صفحة واحدة', 'صفحتين', 'صفحات', 'صفحة')} يوميًا</p>` : ''}</div><div class="btns">${opts.join('')}</div></main>`;
+  return `<main>${back()}<div><h1>المراجعة</h1>${(kn || ksn) && r.n ? `<p class="muted">خطتك الحالية: تحفظ ${[kn ? countWord(kn, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : '', ksn ? countWord(ksn, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : ''].filter(Boolean).join(' و')}${wn ? ' (فيها ' + countWord(wn, 'صفحة واحدة ضعيفة', 'صفحتان ضعيفتان', 'صفحات ضعيفة', 'صفحة ضعيفة') + ')' : ''} · تراجع ${r.unit === 'surah' ? countWord(r.n, 'سورة واحدة', 'سورتين', 'سور', 'سورة') : r.unit === 'juz' ? countWord(r.n, 'جزءًا واحدًا', 'جزأين', 'أجزاء', 'جزءًا') : countWord(r.n, 'صفحة واحدة', 'صفحتين', 'صفحات', 'صفحة')} يوميًا</p>` : ''}</div><div class="btns">${opts.join('')}</div>${S.hifz ? (a => methodCard(S.hifz.method || 'srs', a[0], a[1], 'hmMethod', 'hmOld', 'hmOldU'))(oldAmt(S.hifz)) : ''}</main>`;
 }
 const LOCK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 /* Organized plan (optional): new memorization opens only after today's review is done. Returns how many review items are left, or 0. */
@@ -3594,7 +3594,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r133';
+const BUILD = 'r134';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
