@@ -408,6 +408,8 @@ header.hero .emblem .e1{fill:#0d6a60}header.hero .emblem svg{filter:drop-shadow(
 .dots i.ok{background:var(--good)}
 .ay.focus{padding:20px 16px}
 .ay.focus .t{font-size:2rem;line-height:2.3;text-align:center}
+.ay.focus.many{padding:14px 14px}
+.ay.focus.many .t{font-size:1.75rem;line-height:2.15}
 .bigrep{align-self:center;width:150px;height:150px;border-radius:50%;border:0;padding:8px;background:conic-gradient(var(--accent) var(--deg), var(--line) 0);display:grid;place-items:center;margin:4px auto 0;touch-action:manipulation}
 .bigrep.full{background:conic-gradient(var(--good) 360deg, var(--line) 0)}
 .bigrep .in{width:100%;height:100%;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
@@ -584,6 +586,15 @@ header.hero .heroart .lanterns,header.hero .heroart .cord,header.hero .heroart .
 .dock .bigrep{width:118px;height:118px;margin:0 auto}
 .dock .bigrep b{font-size:2.2rem}
 .dock>p.muted{margin:0;font-size:.85rem}
+/* slim dock: a whole surah on screen needs the room, so the counter shrinks into one row */
+.dock.slim{flex-direction:row;align-items:center;gap:10px;padding-top:8px}
+.dock.slim .bigrep{width:64px;height:64px;padding:5px;flex:none;margin:0}
+.dock.slim .bigrep b{font-size:1.5rem}
+.dock.slim .bigrep b.go{font-size:1.05rem}
+.dock.slim .bigrep small{font-size:.7rem}
+.dock.slim .dkr{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+.dock.slim .dkr .rnav .btn,.dock.slim .dkr>.btn{padding:9px 6px;font-size:.92rem}
+.dock.slim p.muted{margin:0;font-size:.8rem;text-align:start}
 .beeptog{display:flex;align-items:center;justify-content:center;gap:6px;border:0;background:none;color:var(--muted);font-size:.85rem;padding:2px}
 .beeptog svg{width:18px;height:18px}
 .beeptog[aria-pressed="true"]{color:var(--accent)}
@@ -2139,18 +2150,18 @@ function vSession(){
     const ukey = y => y.s + ':' + y.a, key = ukey(x), r = sess.reps[key] || 0, full = r >= R0;
     const allDone = U.every(v => (sess.reps[ukey(ay[v.s])] || 0) >= R0), one = many ? 'الآيات' : 'الآية';
     h = h.replace('<span class="chip">' + kind + '</span>', `<span class="kindtxt">${kind} · ${many || x.s !== ay[ay.length - 1].s || x.s !== ay[0].s ? spanName(ay, u.s, u.e) : 'الآية ' + AR(u.s + 1) + ' من ' + AR(ay.length)}</span>`);
-    h += `<p class="muted">اقرأ ${many ? (spanName(ay, u.s, u.e).startsWith('سورة') ? 'السورة كاملة' : 'هذه الآيات معًا') : 'الآية'} بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 >= 3 && R0 <= 10 ? 'مرات' : 'مرة'} ${ri === 0 && U.length > 1 ? 'تنتقل لما بعدها تلقائيًا.' : U.length > 1 ? `تُسمّع ${spanName(ay, 0, u.e)} معًا مرة واحدة.` : 'تنتقل للتسميع.'}</p>`;
+    if (!many) h += `<p class="muted">اقرأ ${many ? (spanName(ay, u.s, u.e).startsWith('سورة') ? 'السورة كاملة' : 'هذه الآيات معًا') : 'الآية'} بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 >= 3 && R0 <= 10 ? 'مرات' : 'مرة'} ${ri === 0 && U.length > 1 ? 'تنتقل لما بعدها تلقائيًا.' : U.length > 1 ? `تُسمّع ${spanName(ay, 0, u.e)} معًا مرة واحدة.` : 'تنتقل للتسميع.'}</p>`;
     if (U.length > 1) h += `<div class="dots" aria-hidden="true">${U.map((v, vi) => `<i class="${(sess.reps[ukey(ay[v.s])] || 0) >= R0 ? 'ok' : vi === ri ? 'on' : ''}"></i>`).join('')}</div>`;
-    h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus"><div class="t">${uay.map(y => `${esc(y.txt)} <span class="num">﴿${AR(y.a)}﴾</span>`).join(' ')}</div></div>`;
+    h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus${many ? ' many' : ''}"><div class="t">${uay.map(y => `${esc(y.txt)} <span class="num">﴿${AR(y.a)}﴾</span>`).join(' ')}</div></div>`;
     { const gs = uay.map(y => saToG(y.s, y.a)), g = gs[0], on = AU && AU.ctx === 'sess' && gs.includes(audG()), r = aRep();
       const lbl = !on ? 'استمع ل' + (many ? 'لآيات' : 'لآية') : AU.err ? 'تعذّر التشغيل، أعد المحاولة' : AU.load ? 'جاري التحميل...' : AU.paused ? 'تابع الاستماع' : (r > 1 ? `يستمع ${AR(AU.done + 1)} من ${AR(r)}` : 'إيقاف مؤقت');
       h += `<div class="aurow"><button class="btn soft" data-act="audSess" data-v="${gs.join(',')}">${on && !AU.paused && !AU.err ? PAUSE_SVG : PLAY_SVG}${lbl}</button><button class="btn ghost repb" data-act="audRep">كرّر ×${AR(r)}</button></div>
         <span class="aunote">القارئ: ${recSelect()}</span>`; }
-    h += `<div class="dock"><button class="bigrep ${full ? 'full' : ''}" data-act="rep" data-v="${key}" style="--deg:${Math.min(r, R0) * 360 / R0}deg"><span class="in">${r ? `<b>${AR(r)}</b><small>من ${AR(R0)}</small>` : `<b class="go">ابدأ</b><small>${AR(R0)} ${R0 >= 3 && R0 <= 10 ? 'مرات' : 'مرة'}</small>`}</span></button>
-      <p class="muted" style="text-align:center">${full ? 'أتممت تكرار ' + (many ? 'هذه الآيات' : 'هذه الآية') : 'اضغط بعد كل تكرار'}</p>`;
+    h += `<div class="dock${many ? ' slim' : ''}"><button class="bigrep ${full ? 'full' : ''}" data-act="rep" data-v="${key}" style="--deg:${Math.min(r, R0) * 360 / R0}deg"><span class="in">${r ? `<b>${AR(r)}</b><small>من ${AR(R0)}</small>` : `<b class="go">ابدأ</b><small>${AR(R0)} ${R0 >= 3 && R0 <= 10 ? 'مرات' : 'مرة'}</small>`}</span></button>
+      ${many ? '<div class="dkr">' : `<p class="muted" style="text-align:center">${full ? 'أتممت تكرار هذه الآية' : 'اضغط بعد كل تكرار'}</p>`}`;
     if (U.length > 1) h += `<div class="rnav"><button class="btn ghost" data-act="ri" data-v="${ri - 1}" ${ri === 0 ? 'disabled' : ''}>السابق</button><button class="btn ghost" data-act="ri" data-v="${ri + 1}" ${ri >= U.length - 1 ? 'disabled' : ''}>التالي</button></div>`;
     if (allDone || ri === U.length - 1) h += `<button class="btn" data-act="toTest">${allDone ? 'اختبر نفسك الآن' : 'جاهز، اختبرني'}</button>`;
-    h += `</div>`;
+    h += (many ? '</div>' : '') + `</div>`;
   } else {
     let k = 0, words = '';
     const starts = [];
@@ -3424,7 +3435,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r124';
+const BUILD = 'r125';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
