@@ -273,6 +273,9 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .qdeg{margin:10px 0 2px}.qdeg b{font-size:1.4rem;color:var(--accent)}
 .qnote{font-size:.82rem;margin-top:12px}
 .linkb{all:unset;cursor:pointer;color:var(--accent);text-decoration:underline}
+#toTop{position:fixed;left:50%;transform:translate(-50%,12px);bottom:80px;z-index:9;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--accent);box-shadow:0 4px 14px rgb(0 0 0 / .18);display:grid;place-items:center;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+#toTop.on{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
+#toTop svg{width:22px;height:22px}
 #ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
 #ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
 #ptAlert svg{width:44px;height:44px;color:var(--accent)}
@@ -3391,7 +3394,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r121';
+const BUILD = 'r122';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3673,6 +3676,23 @@ function splash(){
   document.body.appendChild(el);
 }
 splash();
+
+/* Back-to-top button: appears on long pages after scrolling down, sits just above whatever bar is at the bottom. */
+(function(){
+  const b = document.createElement('button'); b.id = 'toTop'; b.type = 'button'; b.setAttribute('aria-label', 'إلى أعلى الصفحة');
+  b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+  document.body.appendChild(b);
+  b.addEventListener('click', () => window.scrollTo({top: 0, behavior: 'smooth'}));
+  function upd(){
+    const on = window.scrollY > 600 && document.documentElement.scrollHeight > innerHeight * 2;
+    if (on){ let ob = 0;
+      document.querySelectorAll('nav.tabs,.rtool,.aubar,.dock,.selbar').forEach(el => { const r = el.getBoundingClientRect(); if (r.height && r.top < innerHeight) ob = Math.max(ob, innerHeight - r.top); });
+      b.style.bottom = (ob + 12) + 'px'; }
+    b.classList.toggle('on', on);
+  }
+  addEventListener('scroll', upd, {passive: true}); addEventListener('resize', upd);
+  const r0 = render; render = function(){ const x = r0.apply(this, arguments); upd(); return x; };
+})();
 </script>
 </body>
 </html>
