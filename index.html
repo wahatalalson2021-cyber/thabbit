@@ -1860,7 +1860,7 @@ function memUnits(ay){
     else { cur = {s: i, e: i, w: n, short: n <= U_AY}; out.push(cur); } });
   return out;
 }
-function keepProgress(){ const t = sess && sess.queue[sess.pos]; if (t && t.type === 'new'){ S.inprog = {idx:t.idx, reps:sess.reps, ri:sess.ri || 0}; save(); } }
+function keepProgress(){ const t = sess && sess.queue[sess.pos]; if (t && t.type === 'new' && t.idx != null){ S.inprog = {idx:t.idx, reps:sess.reps, ri:sess.ri || 0}; save(); } }
 function toast(msg){
   const old = document.querySelector('.toast'); if (old) old.remove();
   const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = '✓ ' + msg;
@@ -1891,7 +1891,23 @@ function startRecite(d){
   sess.banner = 'تسميع ' + rcName(d) + (items.length > 1 ? ': ' + countWord(items.length, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة') + '، صفحة بعد صفحة. تستطيع التوقف في أي وقت.' : '.');
   render(); window.scrollTo(0, 0);
 }
-function rcSum(d){ const [G1, G2] = rcRange(d), n = gPage(G2) - gPage(G1) + 1; return `${rcName(d)} · ${countWord(n, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')}${n > 1 ? '، تسمّعها صفحة بعد صفحة' : ''}.`; }
+/* Free memorization (outside any plan): the chosen passage, a mushaf page at a time; from Ad-Duha on, whole surahs. */
+function freePieces(G1, G2){ const groups = []; let cur = null, key = null; for (let g = G1; g <= G2; g++){ const k = gPage(g); if (k !== key){ cur = []; groups.push(cur); key = k; } cur.push(g); } return wholeShort(groups).map(compress); }
+function startFree(d){
+  const [G1, G2] = rcRange(d), items = freePieces(G1, G2).map(c => ({type:'new', chunk:c, free:1}));
+  startSession(items);
+  sess.banner = 'حفظ ' + rcName(d) + (items.length > 1 ? ': ' + countWord(items.length, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') + '، مقطع بعد مقطع. تستطيع التوقف في أي وقت، وما أتممته يدخل مراجعتك.' : '. يدخل مراجعتك بعد أن تتمه.');
+  render(); window.scrollTo(0, 0);
+}
+function learnFree(c, g){
+  const t = today(), key = JSON.stringify(c.r), old = S.arch.find(x => JSON.stringify(x.c.r) === key);
+  const rec = {iv:1, ef: g === 3 ? 2.5 : 2.2, reps:1, lapses:0, due:t + 1, last:t, on:t, free:1};
+  if (old) Object.assign(old, rec); else S.arch.push(Object.assign({c:{r:c.r}}, rec));
+  S.rev.day = null; markDay(); save();
+}
+function rcSum(d){ const [G1, G2] = rcRange(d), n = gPage(G2) - gPage(G1) + 1;
+  if (d.hifz){ const k = freePieces(G1, G2).length; return `${rcName(d)}${k > 1 ? ' · ' + countWord(k, 'مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا') + ' بحسب صفحات المصحف، تحفظها مقطعًا بعد مقطع' : ''}.`; }
+  return `${rcName(d)} · ${countWord(n, 'صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة')}${n > 1 ? '، تسمّعها صفحة بعد صفحة' : ''}.`; }
 function vRecite(){
   const d = rc; let body = '';
   const suraSel = `<label class="muted" for="rcSel">اختر السورة</label><select id="rcSel">${Q.map((q, i) => `<option value="${i + 1}" ${d.s === i + 1 ? 'selected' : ''}>${AR(i + 1)}. سورة ${q[0]}</option>`).join('')}</select>`;
@@ -1900,6 +1916,11 @@ function vRecite(){
   else if (d.kind === 'ayat') body = suraSel + `<div class="rnav">${numIn('rcFA', 'من آية', d.fa)}${numIn('rcTA', 'إلى آية', d.ta)}</div><p class="muted" style="margin:0">عدد آيات السورة: ${AR(nAy(d.s))}</p>`;
   else if (d.kind === 'juz') body = `<div class="jgrid">${Array.from({length:30}, (_, i) => `<button data-act="rcJuz" data-v="${i + 1}" aria-pressed="${d.j === i + 1}">${AR(i + 1)}</button>`).join('')}</div>`;
   else body = `<div class="rnav">${numIn('rcA', 'من صفحة', d.a)}${numIn('rcB', 'إلى صفحة', d.b)}</div>`;
+  if (d.hifz) return `<main>${back('hifzMenu')}
+    <div><h1>احفظ ما تختاره</h1><p class="muted">سورة أو آيات تختارها، تحفظها بالتكرار ثم تسمّعها. تدخل مراجعتك تلقائيًا${S.hifz ? '، ولا تتغير خطتك' : ''}.</p></div>
+    <div class="card"><h3>ماذا تريد أن تحفظ؟</h3>${seg('rcKind', [['surah','سورة'],['ayat','آيات']], d.kind)}${body}
+      <p class="muted" id="rcSum">${rcSum(d)}</p></div>
+    <button class="btn" data-act="fhGo">ابدأ الحفظ</button></main>`;
   return `<main>${back('revMenu')}
     <div><h1>سمّع ما تختاره</h1><p class="muted">اختبر حفظك لسورة أو جزء أو صفحات تحفظها. الكلمات مخفية، وتسمّع بصوتك صفحة بعد صفحة.</p></div>
     <div class="card"><h3>ماذا تريد أن تسمّع؟</h3>${seg('rcKind', [['surah','سورة'],['ayat','آيات'],['juz','جزء'],['pages','صفحات']], d.kind)}${body}
@@ -2011,6 +2032,7 @@ function vHifzMenu(){
     opts.push(`<button class="opt big" data-act="hifzResume"><span class="tic">${TI.hifz}</span><span><b>أكمل من حيث توقفت</b><span class="muted" style="display:block">${cLabel(c)} · ${(r => r <= 1 ? 'بقيت آية واحدة' : r === 2 ? 'بقيت آيتان' : 'بقيت ' + countWord(r, '', '', 'آيات', 'آية'))(n - Math.min(ip.ri || 0, n - 1))}</span></span></button>`); }
   if (!lk && hasNewLeft()){ const c = S.chunks[S.nextNew], done = newDoneToday();
     opts.push(`<button class="opt big" data-act="hifzToday"><span class="tic">${done ? '+' : '١'}</span><span><b>${done ? 'احفظ المقطع التالي' : ip && ip.idx === S.nextNew ? 'أعد مقطع اليوم من أوله' : 'حفظ اليوم'}</b><span class="muted" style="display:block">${cLabel(c)}${done ? ' · أنهيت ورد اليوم، هذا مقطع إضافي' : ''}</span></span></button>`); }
+  opts.push(`<button class="opt big" data-act="freeHifz"><span class="tic">${TI.hifz}</span><span><b>احفظ ما تختاره</b><span class="muted" style="display:block">سورة أو آيات تختارها، دون أن تتغير خطتك</span></span></button>`);
   opts.push(`<button class="opt big" data-act="go" data-v="setupHifz"><span class="tic">+</span><span><b>حفظ جديد</b><span class="muted" style="display:block">اختر سورة أو ربعًا أو جزءًا آخر، ومقداره اليومي</span></span></button>`);
   return `<main>${back()}<div><h1>الحفظ</h1>${S.hifz ? `<p class="muted">خطتك الحالية: ${hifzName(S.hifz)} · ${paceName(S.hifz)}</p>` : ''}</div><div class="btns">${opts.join('')}</div>${S.hifz ? (a => methodCard(S.hifz.method || 'srs', a[0], a[1], 'hmMethod', 'hmOld', 'hmOldU'))(oldAmt(S.hifz)) : ''}</main>`;
 }
@@ -2086,6 +2108,7 @@ function vSetupHifz(){
   const busy = Object.keys(S.learned).length;
   return `<main>${back()}
     <div><h1>خطة الحفظ</h1><p class="muted">اختر ما تحفظه، ومقدار الحفظ اليومي، وعدد تكرار كل آية.</p></div>
+    <button class="opt" data-act="freeHifz"><span class="tic">${TI.hifz}</span><span><b>لا أريد خطة: احفظ سورة أو آيات أختارها</b><span class="muted" style="display:block">تحفظ ما تختاره متى شئت، ويدخل مراجعتك</span></span></button>
     <div class="card"><h3>ماذا تحفظ؟</h3>${seg('hdType', [['surah','سورة'],['quarter','ربع حزب'],['juz','جزء'],['all','المصحف']], d.stype)}
       ${d.stype === 'all' ? '' : `<label class="muted" for="hdSel">اختر ${d.stype === 'surah' ? 'السورة' : d.stype === 'quarter' ? 'الربع' : 'الجزء'}</label><select id="hdSel">${list}</select>`}
       ${d.stype === 'all' ? `<button class="opt" data-act="hdRev" aria-pressed="${d.rev}"><span class="dot"></span><span><b>ابدأ من آخر المصحف</b><span class="muted" style="display:block">من سورة الناس وجزء عمّ إلى سورة البقرة، وهي الطريقة الأيسر لأغلب الناس. وإن ألغيتها تبدأ من سورة الفاتحة.</span></span></button>` : ''}
@@ -2246,7 +2269,7 @@ function vSession(){
   const revs = sess.queue.filter(q => q.type === 'review');
   const recs = sess.queue.filter(q => q.type === 'recite');
   const olds = sess.queue.filter(q => q.old);
-  const kind = t.rc ? 'القريب: سمّع آخر ما حفظته قبل الجديد' : t.old ? `القديم ${AR(olds.indexOf(t) + 1)} من ${AR(olds.length)}` : t.type === 'new' ? 'حفظ جديد' : t.type === 'practice' ? 'مراجعة حرة' : t.type === 'recite' ? `تسميع ${AR(recs.indexOf(t) + 1)} من ${AR(recs.length)}` : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
+  const kind = t.rc ? 'القريب: سمّع آخر ما حفظته قبل الجديد' : t.old ? `القديم ${AR(olds.indexOf(t) + 1)} من ${AR(olds.length)}` : t.type === 'new' ? (t.free ? 'احفظ ما تختاره' : 'حفظ جديد') : t.type === 'practice' ? 'مراجعة حرة' : t.type === 'recite' ? `تسميع ${AR(recs.indexOf(t) + 1)} من ${AR(recs.length)}` : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
   const title = t.page ? `صفحة ${AR(t.page)} · ${cShort(c)}` : cLabel(c);
   let h = `<main><div class="sess-top"><button class="x homebtn" data-act="quit">${HOME_SVG}الرئيسية</button><div class="steps">${steps}</div></div>${confirmBox === 'quit' ? `<div class="confirm"><p>هل تريد الخروج؟ ${t.type === 'new' ? 'تكرارك في هذا المقطع لن يُحفظ، وتستطيع العودة إليه من شاشة «اليوم».' : 'ما أنهيته من مراجعات محفوظ، والباقي ينتظرك.'}</p><div class="rnav"><button class="btn" data-act="cancel">أكمل</button><button class="btn danger" data-act="quit">خروج</button></div></div>` : ''}
     <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>${sess.banner ? `<div class="okbanner">✓ ${sess.banner}</div>` : ''}`;
@@ -3510,6 +3533,7 @@ const GUIDE = [
    'الآيات القصيرة المتتالية تُحفظ معًا قطعة واحدة، ومن سورة الضحى إلى آخر المصحف تُعرض السورة كاملة وتُحفظ مرة واحدة ولا تُقسَّم على يومين.',
    'ثم اضغط «جاهز، اختبرني»: تختفي الآيات وتقرؤها من حفظك.',
    'كل ما تحفظه يدخل مراجعتك تلقائيًا قبل أن يُنسى.',
+   'لا تريد خطة؟ اضغط «احفظ ما تختاره» واختر سورة أو آيات، فتحفظها متى شئت، وتدخل مراجعتك دون أن تتغير خطتك.',
    'طريقة «جديد وقريب وقديم»: قبل كل حفظ جديد تسمّع آخر وردين حفظتهما، وما قبلهما تراجعه بالدور من «مراجعة» بمقدار تختاره. تغيّرها من شاشة «حفظ» أسفل الخيارات.',
    'إن فعّلت «الخطة المنظمة» لا يُفتح مقطع الحفظ الجديد إلا بعد أن تنهي مراجعة اليوم.']],
  ['التسميع بالصوت', ['حمّل «محرك التسميع» مرة واحدة من الشاشة الرئيسية، ليكون التسميع أدق ويعمل بدون إنترنت.',
@@ -3570,7 +3594,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r132';
+const BUILD = 'r133';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3583,6 +3607,7 @@ window.addEventListener('pageshow', e => { if (e.persisted) checkUpdate(); });
 function go(v){
   if (v === 'setupHifz'){ hd = newHd(); confirmBox = null; }
   if (v === 'search') sFocus = true;
+  if (v === 'recite' && rc) rc.hifz = false;
   if (v === 'recite' && !rc){ const p = R().page || 1, sa = gidToSA(PSTART[p]); rc = {kind:'surah', s:sa[0], j:juzOf(p), a:p, b:Math.min(604, p + 1), fa:1, ta:nAy(sa[0])}; }
   if (v === 'setupReview') rvd = {known:[...(S.rev.known || [])], weak:[...(S.rev.weak || [])], ksur:[...(S.rev.ksur || [])], wsur:[...(S.rev.wsur || [])], tab:'juz', unit:S.rev.unit || 'pages', n:S.rev.n || 5};
   if (v === 'setupWird'){ const w = S.wird; wd = w ? {mode: w.days ? 'khatma' : w.per % 20 === 0 ? 'juz' : 'pages', n: w.days || (w.per % 20 === 0 ? w.per / 20 : w.per), from: w.pos} : {mode:'pages', n:5, from: R().page || 1}; }
@@ -3679,6 +3704,8 @@ app.addEventListener('click', e => {
   if (a === 'rcKind'){ rc.kind = v; render(); return; }
   if (a === 'rcJuz'){ rc.j = +v; render(); return; }
   if (a === 'rcGo'){ startRecite(rc); return; }
+  if (a === 'fhGo'){ startFree(rc); return; }
+  if (a === 'freeHifz'){ go('recite'); rc.hifz = true; if (rc.kind !== 'surah' && rc.kind !== 'ayat') rc.kind = 'surah'; render(); return; }
   if (a === 'mistGo'){ const ks = v === 'all' ? mistKeys() : [+v]; if (ks.length){ retMist = true;
       startSession(ks.map(g => ({type:'recite', mist:true, page:gPage(g), chunk:{r:[[g, g]]}})));
       sess.banner = 'تسميع مواضع أخطائك: ' + countWord(ks.length, 'آية واحدة', 'آيتان', 'آيات', 'آية') + '. الآية التي تسمّعها مرتين بلا خطأ تخرج من القائمة.'; render(); } return; }
@@ -3753,7 +3780,8 @@ app.addEventListener('click', e => {
   if (a === 'gnew'){
     const t = sess.queue[sess.pos]; noteMistakes(t); save();
     if (v === '1'){ initStep(); render(); window.scrollTo(0, 0); return; }
-    learnNew(t.idx, +v); advance(); return;
+    if (t.free) learnFree(t.chunk, +v); else learnNew(t.idx, +v);
+    advance(); return;
   }
   if (a === 'grev'){
     const t = sess.queue[sess.pos], g = +v; noteMistakes(t);
