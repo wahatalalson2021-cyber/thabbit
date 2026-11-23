@@ -276,7 +276,8 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 #toTop{position:fixed;left:50%;transform:translate(-50%,12px);bottom:80px;z-index:9;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--accent);box-shadow:0 4px 14px rgb(0 0 0 / .18);display:grid;place-items:center;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
 #toTop.on{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
 #toTop svg{width:22px;height:22px}
-.mlay{text-align:initial;line-height:2.25}
+.mlay{text-align:initial;line-height:2.25;max-width:100%;overflow-x:clip}
+.mlay .mln>*{flex:none}
 .ay.focus:has(.mlay){padding:14px 8px}
 .mlay .mln{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:baseline;gap:0 .28em;white-space:nowrap}
 .mlay .mln.st{justify-content:flex-end}
@@ -1134,10 +1135,11 @@ if (DICT){
     if (view === 'session') render();
   });
   DICT.onPartial(({text}) => {
-    liveText = text; if (text && sess) sess.voiceT = Date.now();
+    /* what the recognizer heard is not shown (only the listening status); the words show in the mushaf instead */
+    if (text && sess) sess.voiceT = Date.now();
     if (text && sess && sess.listening && sess.hear !== 'speech'){ sess.hear = 'speech'; sess.micTip = false; clearTimeout(sess.hearTimer); }
     if (sess && sess.exp && sess.listening && text !== sess.interim){ sess.interim = text; recompute(false); if (view === 'session'){ render(); return; } }
-    const el = document.getElementById('live'); if (el) el.textContent = text || hearMsg();
+    const el = document.getElementById('live'); if (el) el.textContent = hearMsg();
   });
   DICT.onHear(({stage}) => {
     if (!sess) return;
@@ -1614,14 +1616,19 @@ function render(){
   bandTitle();
   if (view === 'reader' && RD && RD.status === 'ok'){ layoutPage(); focusSura(); }
   if (view === 'book' && BK && BK.doc) bookMount();
-  if (view === 'session' && sess && sess.listening) followWord();
   if (view === 'search' && sFocus){ sFocus = false; const el = document.getElementById('qSearch'); if (el){ el.focus(); const n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} } }
 }
 function followWord(){
   const el = document.querySelector('.w.cur'); if (!el) return;
+  /* reached the first line of the next surah: lift the screen so that surah, from its title, is in view */
+  const box = el.closest('.mlay'), card = box && box.closest('.ay') || box;
+  if (box && el.closest('.mln') === box.querySelector('.mln')){
+    let hd = card.previousElementSibling; while (hd && hd.classList.contains('basmala')) hd = hd.previousElementSibling;
+    if (hd && hd.classList.contains('shead')){ const ht = hd.getBoundingClientRect().top; if (ht < 50 || ht > 140) window.scrollTo({top: Math.max(0, scrollY + ht - 80), behavior: 'smooth'}); return; }
+  }
   const dock = document.querySelector('.dock'), r = el.getBoundingClientRect();
   const bottom = (dock ? dock.getBoundingClientRect().top : innerHeight) - 24;
-  if (r.top < 70 || r.bottom > bottom) window.scrollBy({top: r.top - Math.max(90, (bottom - 70) * 0.3), behavior: 'smooth'});
+  if (r.top < 70 || r.bottom > bottom) window.scrollTo({top: Math.max(0, scrollY + r.top - Math.max(90, (bottom - 70) * 0.3)), behavior: 'smooth'});
 }
 function focusSura(){
   if (!RD.focus) return;
@@ -1784,7 +1791,10 @@ function mlBuild(toks, cls){
 }
 function mlFit(){
   document.querySelectorAll('.mlay').forEach(c => { c.style.fontSize = '';
-    let r = 1; c.querySelectorAll('.mln').forEach(l => { if (l.scrollWidth > l.clientWidth + 1) r = Math.min(r, l.clientWidth / l.scrollWidth); });
+    let r = 1; c.querySelectorAll('.mln').forEach(l => { const kids = l.children; if (!kids.length) return;
+      const gap = parseFloat(getComputedStyle(l).columnGap) || 0; let w = gap * (kids.length - 1);
+      for (const k of kids) w += k.getBoundingClientRect().width;
+      const room = l.clientWidth; if (room && w > room - 1) r = Math.min(r, (room - 1) / w); });
     if (r < 1) c.style.fontSize = (parseFloat(getComputedStyle(c).fontSize) * r * 0.97) + 'px'; });
 }
 addEventListener('resize', () => mlFit());
@@ -3478,7 +3488,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r126';
+const BUILD = 'r127';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3775,7 +3785,7 @@ splash();
     b.classList.toggle('on', on);
   }
   addEventListener('scroll', upd, {passive: true}); addEventListener('resize', upd);
-  const r0 = render; render = function(){ const x = r0.apply(this, arguments); mlFit(); upd(); return x; };
+  const r0 = render; render = function(){ const x = r0.apply(this, arguments); mlFit(); if (view === 'session' && sess && sess.listening) followWord(); upd(); return x; };
 })();
 </script>
 </body>
