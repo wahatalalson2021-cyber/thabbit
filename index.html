@@ -640,12 +640,12 @@ const cFirstSurah = c => gidToSA(c.r[0][0])[0];
 function cLabel(c){
   const ss = segs(c), f = ss[0], l = ss[ss.length - 1];
   if (ss.length === 1) return sName(f.s) + ' · ' + (f.a === f.b ? 'الآية ' + AR(f.a) : 'الآيات ' + AR(f.a) + ' إلى ' + AR(f.b));
-  return `${sName(f.s)} ${AR(f.a)} إلى ${sName(l.s)} ${AR(l.b)}`;
+  return `${sName(f.s)}${f.a === 1 ? '' : ' ' + AR(f.a)} إلى ${sName(l.s)}${l.b === Q[l.s - 1][1].length ? '' : ' ' + AR(l.b)}`;
 }
 function cShort(c){
   const ss = segs(c), f = ss[0], l = ss[ss.length - 1];
   if (ss.length === 1) return Q[f.s - 1][0] + ' ' + AR(f.a) + (f.a === f.b ? '' : ' إلى ' + AR(f.b));
-  return `${Q[f.s - 1][0]} ${AR(f.a)} إلى ${Q[l.s - 1][0]} ${AR(l.b)}`;
+  return `${Q[f.s - 1][0]}${f.a === 1 ? '' : ' ' + AR(f.a)} إلى ${Q[l.s - 1][0]}${l.b === Q[l.s - 1][1].length ? '' : ' ' + AR(l.b)}`;
 }
 const pageChunk = p => ({r:[[PSTART[p], PSTART[p + 1] - 1]], page:p});
 function compress(gs){ const r = []; for (const g of gs){ const last = r[r.length - 1]; if (last && last[1] === g - 1) last[1] = g; else r.push([g, g]); } return {r}; }
@@ -1731,6 +1731,12 @@ function inprog(){ const ip = S.inprog; return ip && S.chunks[ip.idx] && !S.lear
 /* Memorizing unit: one ayah, or several very short ayat of the same surah together (e.g. Al-Kawthar, Al-Ikhlas),
    so short surahs are not cut into fragments of two or three words. */
 const U_AY = 8, U_MAX = 16;
+/* Names for a run of ayat ay[i..j] that may cross surahs, e.g. «سورة قريش», «الآيات ١ إلى ٥», «من سورة الكوثر إلى سورة قريش». */
+function spanName(ay, i, j){
+  const x = ay[i], y = ay[j], full = (s, a, b) => a === 1 && b === Q[s - 1][1].length;
+  if (x.s === y.s) return full(x.s, x.a, y.a) ? sName(x.s) : x.a === y.a ? 'الآية ' + AR(x.a) : 'الآيات ' + AR(x.a) + ' إلى ' + AR(y.a);
+  return 'من ' + (x.a === 1 ? sName(x.s) : sName(x.s) + ' ' + AR(x.a)) + ' إلى ' + (y.a === Q[y.s - 1][1].length ? sName(y.s) : sName(y.s) + ' ' + AR(y.a));
+}
 function memUnits(ay){
   const out = []; let cur = null;
   const wc = x => x.txt.split(' ').length, tot = {};
@@ -2132,15 +2138,15 @@ function vSession(){
     const ay = chunkAyat(c), U = memUnits(ay), ri = Math.min(sess.ri || 0, U.length - 1), u = U[ri], x = ay[u.s], xe = ay[u.e], uay = ay.slice(u.s, u.e + 1), many = u.e > u.s;
     const ukey = y => y.s + ':' + y.a, key = ukey(x), r = sess.reps[key] || 0, full = r >= R0;
     const allDone = U.every(v => (sess.reps[ukey(ay[v.s])] || 0) >= R0), one = many ? 'الآيات' : 'الآية';
-    h = h.replace('<span class="chip">' + kind + '</span>', `<span class="kindtxt">${kind} · ${many ? 'الآيات ' + AR(x.a) + '-' + AR(xe.a) : 'الآية ' + AR(u.s + 1) + ' من ' + AR(ay.length)}</span>`);
-    h += `<p class="muted">اقرأ ${many ? 'هذه الآيات معًا' : 'الآية'} بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'} ${ri === 0 && U.length > 1 ? 'تنتقل لما بعدها تلقائيًا.' : U.length > 1 ? `تُسمّع الآيات ${AR(ay[0].a)} إلى ${AR(xe.a)} معًا مرة واحدة.` : 'تنتقل للتسميع.'}</p>`;
+    h = h.replace('<span class="chip">' + kind + '</span>', `<span class="kindtxt">${kind} · ${many || x.s !== ay[ay.length - 1].s || x.s !== ay[0].s ? spanName(ay, u.s, u.e) : 'الآية ' + AR(u.s + 1) + ' من ' + AR(ay.length)}</span>`);
+    h += `<p class="muted">اقرأ ${many ? (spanName(ay, u.s, u.e).startsWith('سورة') ? 'السورة كاملة' : 'هذه الآيات معًا') : 'الآية'} بصوت مسموع، واضغط الزر الكبير بعد كل مرة. عند ${AR(R0)} ${R0 >= 3 && R0 <= 10 ? 'مرات' : 'مرة'} ${ri === 0 && U.length > 1 ? 'تنتقل لما بعدها تلقائيًا.' : U.length > 1 ? `تُسمّع ${spanName(ay, 0, u.e)} معًا مرة واحدة.` : 'تنتقل للتسميع.'}</p>`;
     if (U.length > 1) h += `<div class="dots" aria-hidden="true">${U.map((v, vi) => `<i class="${(sess.reps[ukey(ay[v.s])] || 0) >= R0 ? 'ok' : vi === ri ? 'on' : ''}"></i>`).join('')}</div>`;
     h += (x.head || ri === 0 ? headHtml(x, multi) : '') + `<div class="ay focus"><div class="t">${uay.map(y => `${esc(y.txt)} <span class="num">﴿${AR(y.a)}﴾</span>`).join(' ')}</div></div>`;
     { const gs = uay.map(y => saToG(y.s, y.a)), g = gs[0], on = AU && AU.ctx === 'sess' && gs.includes(audG()), r = aRep();
       const lbl = !on ? 'استمع ل' + (many ? 'لآيات' : 'لآية') : AU.err ? 'تعذّر التشغيل، أعد المحاولة' : AU.load ? 'جاري التحميل...' : AU.paused ? 'تابع الاستماع' : (r > 1 ? `يستمع ${AR(AU.done + 1)} من ${AR(r)}` : 'إيقاف مؤقت');
       h += `<div class="aurow"><button class="btn soft" data-act="audSess" data-v="${gs.join(',')}">${on && !AU.paused && !AU.err ? PAUSE_SVG : PLAY_SVG}${lbl}</button><button class="btn ghost repb" data-act="audRep">كرّر ×${AR(r)}</button></div>
         <span class="aunote">القارئ: ${recSelect()}</span>`; }
-    h += `<div class="dock"><button class="bigrep ${full ? 'full' : ''}" data-act="rep" data-v="${key}" style="--deg:${Math.min(r, R0) * 360 / R0}deg"><span class="in">${r ? `<b>${AR(r)}</b><small>من ${AR(R0)}</small>` : `<b class="go">ابدأ</b><small>${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'}</small>`}</span></button>
+    h += `<div class="dock"><button class="bigrep ${full ? 'full' : ''}" data-act="rep" data-v="${key}" style="--deg:${Math.min(r, R0) * 360 / R0}deg"><span class="in">${r ? `<b>${AR(r)}</b><small>من ${AR(R0)}</small>` : `<b class="go">ابدأ</b><small>${AR(R0)} ${R0 >= 3 && R0 <= 10 ? 'مرات' : 'مرة'}</small>`}</span></button>
       <p class="muted" style="text-align:center">${full ? 'أتممت تكرار ' + (many ? 'هذه الآيات' : 'هذه الآية') : 'اضغط بعد كل تكرار'}</p>`;
     if (U.length > 1) h += `<div class="rnav"><button class="btn ghost" data-act="ri" data-v="${ri - 1}" ${ri === 0 ? 'disabled' : ''}>السابق</button><button class="btn ghost" data-act="ri" data-v="${ri + 1}" ${ri >= U.length - 1 ? 'disabled' : ''}>التالي</button></div>`;
     if (allDone || ri === U.length - 1) h += `<button class="btn" data-act="toTest">${allDone ? 'اختبر نفسك الآن' : 'جاهز، اختبرني'}</button>`;
@@ -2163,7 +2169,7 @@ function vSession(){
     words += '</div>';
     sess.total = k; sess.starts = starts; sess.ayNums = tay.map(x => x.a);
     const allShown = sess.reveal >= k;
-    h += `<p class="muted">${sess.cum ? `سمّع الآيات ${AR(tay[0].a)} إلى ${AR(tay[tay.length - 1].a)} معًا من حفظك، بصوت مسموع.` : t.type === 'new' ? 'الآيات مخفية الآن. اقرأها من حفظك بصوت مسموع، واكشف الكلمة إذا توقفت.' : 'اقرأ من حفظك بصوت مسموع من أوله. أول كلمتين ظاهرتان لتبدأ.'}</p>${words}`;
+    h += `<p class="muted">${sess.cum ? `سمّع ${spanName(tay, 0, tay.length - 1)} معًا من حفظك، بصوت مسموع.` : t.type === 'new' ? 'الآيات مخفية الآن. اقرأها من حفظك بصوت مسموع، واكشف الكلمة إذا توقفت.' : 'اقرأ من حفظك بصوت مسموع من أوله. أول كلمتين ظاهرتان لتبدأ.'}</p>${words}`;
     if (!allShown){
       h += `<div class="dock">`;
       if (sess.engAsk) h += engAskBox();
@@ -2194,7 +2200,7 @@ function vSession(){
         h += `<p class="muted">${hints ? 'احتجت إلى ' + AR(hints) + ' ' + (hints === 1 ? 'كلمة' : hints === 2 ? 'كلمتين' : 'كلمات') + ' مساعدة (باللون البرتقالي).' : 'قارن قراءتك بالنص أعلاه.'}${sess.cum ? '' : ' كيف كان حفظك؟'}</p>`;
       }
       if (sess.cum){
-        h += `<div class="cumbtns"><button class="btn" data-act="cumNext">احفظ الآية التالية</button><button class="btn ghost" data-act="cumAgain">أعِد الآيات معًا</button></div>`;
+        h += `<div class="cumbtns"><button class="btn" data-act="cumNext">احفظ ${(() => { const ca = chunkAyat(c), nu = memUnits(ca).find(v => v.s === sess.cum); return nu ? spanName(ca, nu.s, nu.e) : 'ما بعدها'; })()}</button><button class="btn ghost" data-act="cumAgain">أعِد ما سبق معًا</button></div>`;
       } else if (t.type === 'new'){
         h += `<div class="grade"><button class="g3 ${S3}" data-act="gnew" data-v="3">حفظته<small>بلا أخطاء</small></button><button class="g2 ${S2}" data-act="gnew" data-v="2">بتردد<small>أخطاء قليلة</small></button><button class="g1 ${S1}" data-act="gnew" data-v="1">ليس بعد<small>أعد القراءة</small></button></div>`;
       } else {
@@ -3418,7 +3424,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r123';
+const BUILD = 'r124';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
