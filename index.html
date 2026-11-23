@@ -39,7 +39,7 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:16px;line-height:1.6;overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
+body{overflow-x:hidden;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:16px;line-height:1.6;overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
 button{touch-action:manipulation;-webkit-user-select:none;user-select:none}
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -2062,7 +2062,7 @@ const OLDN = [[1,'١'],[2,'٢'],[5,'٥'],[10,'١٠'],[20,'جزء']];
 function methodCard(m, oldN, actM, actO){
   return `<div class="card"><h3>كيف تراجع ما تحفظه؟</h3>${seg(actM, [['huffaz','جديد وقريب وقديم'],['srs','مواعيد متباعدة']], m)}
     <p class="muted">${m === 'huffaz' ? 'طريقة الحفّاظ: قبل كل حفظ جديد تسمّع آخر وردين حفظتهما (القريب). وما قبلهما (القديم) تراجعه بالدور كل يوم بالمقدار الذي تختاره، حتى تمر عليه كله ثم تعيد.' : 'يعود إليك كل مقطع بعد يوم، ثم بعد أيام، ثم بعد أسابيع، حسب قوة حفظك له.'}</p>
-    ${m === 'huffaz' ? `<p style="margin:8px 0 4px"><b>القديم يوميًا (بالصفحات)</b></p>${seg(actO, OLDN, oldN)}` : ''}</div>`;
+    ${m === 'huffaz' ? `<p style="margin:8px 0 4px"><b>كم صفحة تراجع من القديم كل يوم؟</b></p>${seg(actO, OLDN, oldN)}` : ''}</div>`;
 }
 function vSetupHifz(){
   const d = hd;
@@ -3562,7 +3562,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r130';
+const BUILD = 'r131';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
