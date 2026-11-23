@@ -531,6 +531,9 @@ main > .top .x{background:#fff;color:#0b5a51;border:0;border-radius:999px;paddin
 .adkcard .ptop b svg,.adkcard .ptcity svg{color:var(--gold)}
 .adkok{color:var(--good)!important;font-weight:600}
 .seg{display:flex;gap:4px;background:var(--accent-soft);padding:4px;border-radius:999px;margin:4px 0 6px}
+.stepper{display:grid;grid-template-columns:56px 1fr 56px;gap:8px;align-items:center;margin:6px 0 4px}
+.stepper .btn{font-size:1.5rem;padding:6px 0;line-height:1}
+.stepper input{font:inherit;font-size:1.4rem;font-weight:700;text-align:center;border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--surface);color:var(--ink);width:100%;box-sizing:border-box}
 .seg button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border:0;background:none;font:inherit;color:var(--ink);padding:8px;border-radius:999px;cursor:pointer}
 .seg button svg{width:18px;height:18px}
 .seg button[aria-selected="true"]{background:var(--surface);color:var(--accent);font-weight:700;box-shadow:0 1px 4px rgb(0 0 0 / .1)}
@@ -1514,13 +1517,13 @@ const chunkLetters = c => chunkAyat(c).reduce((n, x) => n + strip(x.txt), 0);
 function oldItems(){
   const L = learnedIdx(), old = L.slice(0, Math.max(0, L.length - 2)); if (!old.length) return [];
   if (!PAGE_L){ let s = 0; Q.forEach(q => q[1].forEach(x => s += strip(x))); PAGE_L = s / 604; }
-  const want = (S.hifz.oldN || 5) * PAGE_L, ptr = S.rev.optr || 0;
+  const [u, n0] = oldAmt(S.hifz), byAyat = u === 'ayah', want = byAyat ? n0 : (u === 'juz' ? n0 * 20 : n0) * PAGE_L, ptr = S.rev.optr || 0;
   let k = old.findIndex(i => i >= ptr); if (k < 0) k = 0;
   const items = []; let cur = [], curL = 0, tot = 0;
   for (let n = 0; n < old.length && tot < want; n++){
     const i = old[(k + n) % old.length];
     if (cur.length && i < cur[cur.length - 1]){ items.push(cur); cur = []; curL = 0; }   /* wrapped round: start a new piece */
-    const l = chunkLetters(S.chunks[i]); cur.push(i); curL += l; tot += l;
+    const l = chunkLetters(S.chunks[i]); cur.push(i); curL += l; tot += byAyat ? nAyat(S.chunks[i]) : l;
     if (curL >= PAGE_L * 0.9){ items.push(cur); cur = []; curL = 0; }   /* about a page per recitation */
   }
   if (cur.length) items.push(cur);
@@ -2009,7 +2012,7 @@ function vHifzMenu(){
   if (!lk && hasNewLeft()){ const c = S.chunks[S.nextNew], done = newDoneToday();
     opts.push(`<button class="opt big" data-act="hifzToday"><span class="tic">${done ? '+' : '١'}</span><span><b>${done ? 'احفظ المقطع التالي' : ip && ip.idx === S.nextNew ? 'أعد مقطع اليوم من أوله' : 'حفظ اليوم'}</b><span class="muted" style="display:block">${cLabel(c)}${done ? ' · أنهيت ورد اليوم، هذا مقطع إضافي' : ''}</span></span></button>`); }
   opts.push(`<button class="opt big" data-act="go" data-v="setupHifz"><span class="tic">+</span><span><b>حفظ جديد</b><span class="muted" style="display:block">اختر سورة أو ربعًا أو جزءًا آخر، ومقداره اليومي</span></span></button>`);
-  return `<main>${back()}<div><h1>الحفظ</h1>${S.hifz ? `<p class="muted">خطتك الحالية: ${hifzName(S.hifz)} · ${paceName(S.hifz)}</p>` : ''}</div><div class="btns">${opts.join('')}</div>${S.hifz ? methodCard(S.hifz.method || 'srs', S.hifz.oldN || 5, 'hmMethod', 'hmOld') : ''}</main>`;
+  return `<main>${back()}<div><h1>الحفظ</h1>${S.hifz ? `<p class="muted">خطتك الحالية: ${hifzName(S.hifz)} · ${paceName(S.hifz)}</p>` : ''}</div><div class="btns">${opts.join('')}</div>${S.hifz ? (a => methodCard(S.hifz.method || 'srs', a[0], a[1], 'hmMethod', 'hmOld', 'hmOldU'))(oldAmt(S.hifz)) : ''}</main>`;
 }
 /* ---------- search the Quran text (works offline; ignores diacritics and hamza forms) ---------- */
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>';
@@ -2050,19 +2053,24 @@ function vSearch(){
 /* ---------- setup: memorization ---------- */
 function newHd(){
   const h = S.hifz && !S.hifz.name && S.hifz.pace.type !== 'mins' ? S.hifz : null;
-  return h ? {stype:h.scope.type, n:h.scope.n, ptype:h.pace.type, pn:h.pace.n || 1, rev:!!h.rev, reps:h.reps || 7, method:h.method || 'srs', oldN:h.oldN || 5}
-    : {stype:'juz', n:30, ptype:'ayah', pn:3, rev:true, reps: (S.hifz && S.hifz.reps) || 7, method:'huffaz', oldN:5};
+  return h ? {stype:h.scope.type, n:h.scope.n, ptype:h.pace.type, pn:h.pace.n || 1, rev:!!h.rev, reps:h.reps || 7, method:h.method || 'srs', oldU:oldAmt(h)[0], oldN:oldAmt(h)[1]}
+    : {stype:'juz', n:30, ptype:'ayah', pn:3, rev:true, reps: (S.hifz && S.hifz.reps) || 7, method:'huffaz', oldU:'page', oldN:5};
 }
-const hdToHifz = d => ({scope:{type:d.stype, n:d.n}, pace:{type:d.ptype, n: d.ptype === 'page' || d.ptype === 'quarter' ? 1 : d.pn}, rev: (d.stype === 'juz' || d.stype === 'all') && d.rev, reps:d.reps, method:d.method || 'srs', oldN:d.oldN || 5});
+const hdToHifz = d => ({scope:{type:d.stype, n:d.n}, pace:{type:d.ptype, n: d.ptype === 'page' || d.ptype === 'quarter' ? 1 : d.pn}, rev: (d.stype === 'juz' || d.stype === 'all') && d.rev, reps:d.reps, method:d.method || 'srs', oldU:d.oldU || 'page', oldN:d.oldN || 5});
 /* Days in plain words for long plans: about a year and 8 months. */
 function durName(n){ const m = Math.round(n / 30.4); if (m < 12) return 'حوالي ' + countWord(m, 'شهر', 'شهرين', 'أشهر', 'شهرًا');
   const y = Math.floor(m / 12), r = m % 12, ys = y === 1 ? 'سنة' : y === 2 ? 'سنتين' : AR(y) + (y <= 10 ? ' سنوات' : ' سنة');
   return 'حوالي ' + ys + (r ? ' و' + (r === 1 ? 'شهر' : r === 2 ? 'شهرين' : AR(r) + (r <= 10 ? ' أشهر' : ' شهرًا')) : ''); }
-const OLDN = [[1,'١'],[2,'٢'],[5,'٥'],[10,'١٠'],[20,'جزء']];
-function methodCard(m, oldN, actM, actO){
+const OLDN = {page: [[1,'١'],[2,'٢'],[5,'٥'],[10,'١٠']], ayah: [[10,'١٠'],[20,'٢٠'],[50,'٥٠'],[100,'١٠٠']], juz: [[1,'١'],[2,'٢'],[3,'٣'],[5,'٥']]};
+const OLD_DEF = {page: 5, ayah: 20, juz: 1}, OLD_STEP = {page: 1, ayah: 5, juz: 1}, OLD_MAX = {page: 604, ayah: 6236, juz: 30};
+/* the old amount as unit + number (plans from r130 kept 20 pages to mean one juz) */
+const oldAmt = h => { let u = h.oldU || 'page', n = h.oldN || OLD_DEF[u]; if (!h.oldU && n === 20){ u = 'juz'; n = 1; } return [u, n]; };
+function methodCard(m, oldU, oldN, actM, actO, actU){
   return `<div class="card"><h3>كيف تراجع ما تحفظه؟</h3>${seg(actM, [['huffaz','جديد وقريب وقديم'],['srs','مواعيد متباعدة']], m)}
     <p class="muted">${m === 'huffaz' ? 'طريقة الحفّاظ: قبل كل حفظ جديد تسمّع آخر وردين حفظتهما (القريب). وما قبلهما (القديم) تراجعه بالدور كل يوم بالمقدار الذي تختاره، حتى تمر عليه كله ثم تعيد.' : 'يعود إليك كل مقطع بعد يوم، ثم بعد أيام، ثم بعد أسابيع، حسب قوة حفظك له.'}</p>
-    ${m === 'huffaz' ? `<p style="margin:8px 0 4px"><b>كم صفحة تراجع من القديم كل يوم؟</b></p>${seg(actO, OLDN, oldN)}` : ''}</div>`;
+    ${m === 'huffaz' ? `<p style="margin:8px 0 4px"><b>كم تراجع من القديم كل يوم؟</b></p>${seg(actU, [['page','صفحات'],['ayah','آيات'],['juz','أجزاء']], oldU)}
+      <div class="stepper"><button class="btn ghost" data-act="${actO}" data-v="${Math.max(1, oldN - OLD_STEP[oldU])}" aria-label="أقل">−</button><input id="${actO}In" inputmode="numeric" value="${AR(oldN)}" aria-label="العدد"><button class="btn ghost" data-act="${actO}" data-v="${Math.min(OLD_MAX[oldU], oldN + OLD_STEP[oldU])}" aria-label="أكثر">+</button></div>
+      <p class="muted" style="margin:0;text-align:center">${AR(oldN)} ${oldU === 'page' ? pagesWord(oldN) : oldU === 'ayah' ? (oldN === 1 ? 'آية' : oldN === 2 ? 'آيتان' : oldN <= 10 ? 'آيات' : 'آية') : (oldN === 1 ? 'جزء' : oldN === 2 ? 'جزآن' : oldN <= 10 ? 'أجزاء' : 'جزءًا')} كل يوم. اضغط على الرقم لتكتب أي عدد.</p>` : ''}</div>`;
 }
 function vSetupHifz(){
   const d = hd;
@@ -2084,7 +2092,7 @@ function vSetupHifz(){
       ${d.stype === 'juz' ? `<button class="opt" data-act="hdRev" aria-pressed="${d.rev}"><span class="dot"></span><span><b>ابدأ من آخر الجزء</b><span class="muted" style="display:block">من السور القصيرة إلى الطويلة، كما يحفظ أغلب الناس جزء عمّ</span></span></button>` : ''}</div>
     <div class="card"><h3>كم تحفظ يوميًا؟</h3>${seg('hdPtype', [['ayah','آيات'],['page','صفحة'],['quarter','ربع حزب'],['days','خلال مدة']], d.ptype)}${sub}</div>
     <div class="card"><h3>كم مرة تكرر الآية؟</h3>${seg('hdReps', [[7,'٧ مرات'],[11,'١١ مرة'],[19,'١٩ مرة']], d.reps)}</div>
-    ${methodCard(d.method, d.oldN, 'hdMethod', 'hdOld')}
+    ${methodCard(d.method, d.oldU || 'page', d.oldN, 'hdMethod', 'hdOld', 'hdOldU')}
     <div class="card"><button class="opt" data-act="strictTog" aria-pressed="${!!S.strict}"><span class="dot"></span><span><b>خطة منظمة: المراجعة قبل الجديد</b><span class="muted" style="display:block">لا يُفتح مقطع الحفظ الجديد كل يوم إلا بعد أن تنهي مراجعة ما حفظته. يمكنك تغييرها من الإعدادات.</span></span></button></div>
     <div class="card"><h3>خطتك</h3><p>${AR(ayat)} آية في ${AR(chunks.length)} يومًا تقريبًا${chunks.length > 60 ? ' (' + durName(chunks.length) + ')' : ''}.</p><p class="muted">كل يوم مقطع جديد، وما تحفظه يدخل في مراجعتك تلقائيًا في وقته.</p></div>
     ${busy && confirmBox !== 'hd' ? '<button class="btn" data-act="ask" data-v="hd">ابدأ الخطة</button>' : busy ? `<div class="confirm"><p>ستبدأ خطة جديدة. ما حفظته من قبل يبقى في مراجعتك ولا يضيع.</p><div class="rnav"><button class="btn" data-act="hdSave">ابدأ الخطة الجديدة</button><button class="btn ghost" data-act="cancel">تراجع</button></div></div>` : '<button class="btn" data-act="hdSave">ابدأ الخطة</button>'}
@@ -3562,7 +3570,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r131';
+const BUILD = 'r132';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3633,8 +3641,10 @@ app.addEventListener('click', e => {
   if (a === 'hdReps'){ hd.reps = +v; render(); return; }
   if (a === 'hdMethod'){ hd.method = v; render(); return; }
   if (a === 'hdOld'){ hd.oldN = +v; render(); return; }
+  if (a === 'hdOldU'){ hd.oldU = v; hd.oldN = OLD_DEF[v]; render(); return; }
+  if (a === 'hmOldU'){ if (S.hifz){ S.hifz.oldU = v; S.hifz.oldN = OLD_DEF[v]; S.rev.day = null; save(); } render(); return; }
   if (a === 'hmMethod'){ if (S.hifz){ S.hifz.method = v; S.hifz.oldN = S.hifz.oldN || 5; S.rev.day = null; save(); } render(); return; }
-  if (a === 'hmOld'){ if (S.hifz){ S.hifz.oldN = +v; S.rev.day = null; save(); } render(); return; }
+  if (a === 'hmOld'){ if (S.hifz){ S.hifz.oldU = oldAmt(S.hifz)[0]; S.hifz.oldN = +v; S.rev.day = null; save(); } render(); return; }
   if (a === 'hdSave'){ saveHifz(); confirmBox = null; if (S.chunks.length){ startSession([{type:'new', idx:0}]); sess.banner = `بدأت خطتك: ${hifzName(S.hifz)} · ${paceName(S.hifz)}. هذا أول مقطع.`; render(); } else { view = 'home'; render(); } window.scrollTo(0, 0); return; }
   /* review setup */
   if (a === 'rvJuz' || a === 'rvSur'){ rvd.err = ''; const x = +v, k = a === 'rvJuz' ? rvd.known : rvd.ksur, w = a === 'rvJuz' ? rvd.weak : rvd.wsur;
@@ -3825,6 +3835,10 @@ app.addEventListener('change', e => {
   if (e.target.id === 'recSel'){ S.reciter = e.target.value; save(); if (AU){ const l = AU.list.slice(AU.i), c = AU.ctx; audPlay(l, c); } else render(); return; }
   if (e.target.id === 'mtSel'){ const id = e.target.value, d = MT && MT.devs.find(x => x.deviceId === id); S.micId = id; S.micLabel = d ? d.label : ''; save(); mtStart(); return; }
   if (e.target.id === 'hdSel'){ hd.n = +e.target.value; render(); }
+  if (e.target.id === 'hdOldIn' || e.target.id === 'hmOldIn'){ const n = toNum(e.target.value);
+    if (e.target.id === 'hdOldIn'){ if (n) hd.oldN = Math.min(OLD_MAX[hd.oldU || 'page'], n); }
+    else if (S.hifz && n){ const u = oldAmt(S.hifz)[0]; S.hifz.oldU = u; S.hifz.oldN = Math.min(OLD_MAX[u], n); S.rev.day = null; save(); }
+    setTimeout(render, 0); return; }
   if (e.target.id === 'rcSel'){ rc.s = +e.target.value; rc.fa = 1; rc.ta = nAy(rc.s); render(); }
   if (RCF[e.target.id]){ rcRead(e.target); e.target.value = AR(rc[RCF[e.target.id]]); }
 });
