@@ -678,7 +678,15 @@ function planChunks(h){
       push(k, g);
     } });
   }
-  return groups.map(compress);
+  return wholeShort(groups).map(compress);
+}
+/* From Ad-Duha (93) to An-Nas, a surah is never split across days: the rest of it joins the day it starts on. */
+const WHOLE_FROM = 93;
+function wholeShort(groups){
+  const home = {};
+  groups.forEach((gr, i) => { for (let j = 0; j < gr.length; j++){ const s = gidToSA(gr[j])[0]; if (s < WHOLE_FROM) continue;
+    if (home[s] == null) home[s] = i; else if (home[s] !== i){ groups[home[s]].push(gr[j]); gr.splice(j--, 1); } } });
+  return groups.filter(gr => gr.length);
 }
 function hifzName(h){
   if (!h) return '';
@@ -704,6 +712,13 @@ function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e)
   if (!S) S = {v:2, days:{}, chunks:[], learned:{}, nextNew:0, lastNewDay:null, dayOffset:0, hifz:null};
   /* The old test button ("go to the next day") is gone: put everyone back on the real date. */
   if (S.dayOffset){ S.dayOffset = 0; setTimeout(save, 0); }
+  /* r123: re-cut an existing plan so Ad-Duha..An-Nas are not split, when the chunks already memorized stay the same. */
+  setTimeout(() => { try { if (!S.hifz || !S.chunks || !S.chunks.length) return;
+    const nc = planChunks(S.hifz), k = S.nextNew || 0, same = (a, b) => JSON.stringify(a.r) === JSON.stringify(b.r);
+    if (nc.length === S.chunks.length && nc.every((c, i) => same(c, S.chunks[i]))) return;
+    for (let i = 0; i < k; i++) if (!nc[i] || !same(nc[i], S.chunks[i])) return;
+    if (S.inprog && S.inprog.idx >= k && !(nc[S.inprog.idx] && S.chunks[S.inprog.idx] && same(nc[S.inprog.idx], S.chunks[S.inprog.idx]))) S.inprog = null;
+    S.chunks = nc; save(); } catch (e) {} }, 0);
   if (!S.v){
     const names = {amma:'جزء عمّ', tabarak:'جزء تبارك'};
     S.chunks = (S.chunks || []).map(c => ({r:[[saToG(c.s, c.a), saToG(c.s, c.b)]]}));
@@ -1719,6 +1734,15 @@ const U_AY = 8, U_MAX = 16;
 function memUnits(ay){
   const out = []; let cur = null;
   const wc = x => x.txt.split(' ').length, tot = {};
+  /* Ad-Duha to An-Nas: the whole surah is shown and memorized as one piece. */
+  if (ay.some(x => x.s >= WHOLE_FROM)){
+    ay.forEach((x, i) => { const n = wc(x);
+      if (x.s >= WHOLE_FROM && cur && ay[cur.s].s === x.s){ cur.e = i; cur.w += n; }
+      else if (x.s >= WHOLE_FROM){ cur = {s: i, e: i, w: n, short: false, whole: true}; out.push(cur); }
+      else if (cur && !cur.whole && n <= U_AY && cur.short && ay[cur.s].s === x.s && cur.w + n <= U_MAX){ cur.e = i; cur.w += n; }
+      else { cur = {s: i, e: i, w: n, short: n <= U_AY}; out.push(cur); } });
+    return out;
+  }
   ay.forEach(x => tot[x.s] = (tot[x.s] || 0) + wc(x));
   /* a whole very short surah (about 30 words or less, e.g. Al-Asr, An-Nas) stays one piece */
   if (Object.keys(tot).length === 1 && tot[ay[0].s] <= 30 && ay.length === Q[ay[0].s - 1][1].length) return [{s: 0, e: ay.length - 1, w: tot[ay[0].s], short: true}];
@@ -2118,7 +2142,7 @@ function vSession(){
         <span class="aunote">القارئ: ${recSelect()}</span>`; }
     h += `<div class="dock"><button class="bigrep ${full ? 'full' : ''}" data-act="rep" data-v="${key}" style="--deg:${Math.min(r, R0) * 360 / R0}deg"><span class="in">${r ? `<b>${AR(r)}</b><small>من ${AR(R0)}</small>` : `<b class="go">ابدأ</b><small>${AR(R0)} ${R0 === 7 ? 'مرات' : 'مرة'}</small>`}</span></button>
       <p class="muted" style="text-align:center">${full ? 'أتممت تكرار ' + (many ? 'هذه الآيات' : 'هذه الآية') : 'اضغط بعد كل تكرار'}</p>`;
-    h += `<div class="rnav"><button class="btn ghost" data-act="ri" data-v="${ri - 1}" ${ri === 0 ? 'disabled' : ''}>السابق</button><button class="btn ghost" data-act="ri" data-v="${ri + 1}" ${ri >= U.length - 1 ? 'disabled' : ''}>التالي</button></div>`;
+    if (U.length > 1) h += `<div class="rnav"><button class="btn ghost" data-act="ri" data-v="${ri - 1}" ${ri === 0 ? 'disabled' : ''}>السابق</button><button class="btn ghost" data-act="ri" data-v="${ri + 1}" ${ri >= U.length - 1 ? 'disabled' : ''}>التالي</button></div>`;
     if (allDone || ri === U.length - 1) h += `<button class="btn" data-act="toTest">${allDone ? 'اختبر نفسك الآن' : 'جاهز، اختبرني'}</button>`;
     h += `</div>`;
   } else {
@@ -3332,7 +3356,7 @@ const GUIDE = [
    'الاستماع يحتاج إلى إنترنت.']],
  ['الحفظ', ['اضغط «حفظ» واختر ما تحفظه (سورة أو ربع أو جزء أو القرآن كاملًا)، ومقدار الحفظ اليومي، وعدد تكرار كل آية.',
    'في كل مقطع اقرأ الآية أو استمع لها، واضغط بعد كل تكرار حتى يكتمل العدد.',
-   'الآيات القصيرة المتتالية تُحفظ معًا قطعة واحدة، والسورة القصيرة جدًا (مثل الإخلاص والكوثر والعصر) تُحفظ كاملة مرة واحدة.',
+   'الآيات القصيرة المتتالية تُحفظ معًا قطعة واحدة، ومن سورة الضحى إلى آخر المصحف تُعرض السورة كاملة وتُحفظ مرة واحدة ولا تُقسَّم على يومين.',
    'ثم اضغط «جاهز، اختبرني»: تختفي الآيات وتقرؤها من حفظك.',
    'كل ما تحفظه يدخل مراجعتك تلقائيًا قبل أن يُنسى.',
    'إن فعّلت «الخطة المنظمة» لا يُفتح مقطع الحفظ الجديد إلا بعد أن تنهي مراجعة اليوم.']],
@@ -3394,7 +3418,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r122';
+const BUILD = 'r123';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
