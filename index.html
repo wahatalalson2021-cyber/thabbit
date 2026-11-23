@@ -1496,9 +1496,40 @@ function weakPages(){
   const r = S.rev, set = new Set(); (r.weak || []).forEach(j => juzPages(j).forEach(p => set.add(p))); (r.wsur || []).forEach(n => surPages(n).forEach(p => set.add(p)));
   return [...set].filter(p => !(r.pg && r.pg[p] && r.pg[p].firm)).sort((a, b) => a - b);
 }
+/* ---------- the huffaz way: new, recent (القريب), old (القديم) ----------
+   Before each new portion, recite the last two portions memorized (recent). Everything before them (old) is recited
+   in turn, a set amount each day, from the earliest onwards, and round again. */
+const huffaz = () => !!(S.hifz && S.hifz.method === 'huffaz');
+const learnedIdx = () => Object.keys(S.learned).map(Number).filter(i => S.chunks[i]).sort((a, b) => a - b);
+function mergeChunks(ids){ const r = []; ids.forEach(i => S.chunks[i].r.forEach(x => { const l = r[r.length - 1]; if (l && l[1] + 1 === x[0]) l[1] = x[1]; else r.push([x[0], x[1]]); })); return {r}; }
+function recentItem(){
+  if (!huffaz()) return null;
+  const rc = learnedIdx().slice(-2); if (!rc.length) return null;
+  if (S.rev.rcKey === today() + ':' + rc.join(',')) return null;   /* already recited these today */
+  return {type:'review', rc: rc, chunk: mergeChunks(rc)};
+}
+const newQueue = idx => { const q = [{type:'new', idx}], rc = recentItem(); if (rc) q.unshift(rc); return q; };
+let PAGE_L = 0;
+const chunkLetters = c => chunkAyat(c).reduce((n, x) => n + strip(x.txt), 0);
+function oldItems(){
+  const L = learnedIdx(), old = L.slice(0, Math.max(0, L.length - 2)); if (!old.length) return [];
+  if (!PAGE_L){ let s = 0; Q.forEach(q => q[1].forEach(x => s += strip(x))); PAGE_L = s / 604; }
+  const want = (S.hifz.oldN || 5) * PAGE_L, ptr = S.rev.optr || 0;
+  let k = old.findIndex(i => i >= ptr); if (k < 0) k = 0;
+  const items = []; let cur = [], curL = 0, tot = 0;
+  for (let n = 0; n < old.length && tot < want; n++){
+    const i = old[(k + n) % old.length];
+    if (cur.length && i < cur[cur.length - 1]){ items.push(cur); cur = []; curL = 0; }   /* wrapped round: start a new piece */
+    const l = chunkLetters(S.chunks[i]); cur.push(i); curL += l; tot += l;
+    if (curL >= PAGE_L * 0.9){ items.push(cur); cur = []; curL = 0; }   /* about a page per recitation */
+  }
+  if (cur.length) items.push(cur);
+  return items.map(ids => ({type:'review', old: ids, chunk: mergeChunks(ids)}));
+}
 function genReview(){
   const r = S.rev, t = today(), items = [];
-  dueList().forEach(i => items.push({type:'review', idx:i}));
+  if (huffaz()) oldItems().forEach(x => items.push(x));
+  else dueList().forEach(i => items.push({type:'review', idx:i}));
   archDue().forEach(i => items.push({type:'review', arch:i}));
   pickPages().forEach(p => items.push({type:'review', page:p}));
   r.day = t; r.todo = items; r.tot = items.length; save();
@@ -1538,7 +1569,8 @@ function gradePage(p, g){
   const kp = knownPages(); if (kp.length && kp[r.ptr % kp.length] === p) r.ptr = (r.ptr + 1) % kp.length;
 }
 function doneItem(t){
-  const todo = S.rev.todo || []; const i = todo.findIndex(x => x.idx === t.idx && x.arch === t.arch && x.page === t.page);
+  const key = x => [x.idx, x.arch, x.page, x.old && x.old.join(','), x.rc && x.rc.join(',')].join('|');
+  const todo = S.rev.todo || []; const i = todo.findIndex(x => key(x) === key(t));
   if (i >= 0) todo.splice(i, 1);
 }
 
@@ -1977,7 +2009,7 @@ function vHifzMenu(){
   if (!lk && hasNewLeft()){ const c = S.chunks[S.nextNew], done = newDoneToday();
     opts.push(`<button class="opt big" data-act="hifzToday"><span class="tic">${done ? '+' : '١'}</span><span><b>${done ? 'احفظ المقطع التالي' : ip && ip.idx === S.nextNew ? 'أعد مقطع اليوم من أوله' : 'حفظ اليوم'}</b><span class="muted" style="display:block">${cLabel(c)}${done ? ' · أنهيت ورد اليوم، هذا مقطع إضافي' : ''}</span></span></button>`); }
   opts.push(`<button class="opt big" data-act="go" data-v="setupHifz"><span class="tic">+</span><span><b>حفظ جديد</b><span class="muted" style="display:block">اختر سورة أو ربعًا أو جزءًا آخر، ومقداره اليومي</span></span></button>`);
-  return `<main>${back()}<div><h1>الحفظ</h1>${S.hifz ? `<p class="muted">خطتك الحالية: ${hifzName(S.hifz)} · ${paceName(S.hifz)}</p>` : ''}</div><div class="btns">${opts.join('')}</div></main>`;
+  return `<main>${back()}<div><h1>الحفظ</h1>${S.hifz ? `<p class="muted">خطتك الحالية: ${hifzName(S.hifz)} · ${paceName(S.hifz)}</p>` : ''}</div><div class="btns">${opts.join('')}</div>${S.hifz ? methodCard(S.hifz.method || 'srs', S.hifz.oldN || 5, 'hmMethod', 'hmOld') : ''}</main>`;
 }
 /* ---------- search the Quran text (works offline; ignores diacritics and hamza forms) ---------- */
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>';
@@ -2018,14 +2050,20 @@ function vSearch(){
 /* ---------- setup: memorization ---------- */
 function newHd(){
   const h = S.hifz && !S.hifz.name && S.hifz.pace.type !== 'mins' ? S.hifz : null;
-  return h ? {stype:h.scope.type, n:h.scope.n, ptype:h.pace.type, pn:h.pace.n || 1, rev:!!h.rev, reps:h.reps || 7}
-    : {stype:'juz', n:30, ptype:'ayah', pn:3, rev:true, reps: (S.hifz && S.hifz.reps) || 7};
+  return h ? {stype:h.scope.type, n:h.scope.n, ptype:h.pace.type, pn:h.pace.n || 1, rev:!!h.rev, reps:h.reps || 7, method:h.method || 'srs', oldN:h.oldN || 5}
+    : {stype:'juz', n:30, ptype:'ayah', pn:3, rev:true, reps: (S.hifz && S.hifz.reps) || 7, method:'huffaz', oldN:5};
 }
-const hdToHifz = d => ({scope:{type:d.stype, n:d.n}, pace:{type:d.ptype, n: d.ptype === 'page' || d.ptype === 'quarter' ? 1 : d.pn}, rev: (d.stype === 'juz' || d.stype === 'all') && d.rev, reps:d.reps});
+const hdToHifz = d => ({scope:{type:d.stype, n:d.n}, pace:{type:d.ptype, n: d.ptype === 'page' || d.ptype === 'quarter' ? 1 : d.pn}, rev: (d.stype === 'juz' || d.stype === 'all') && d.rev, reps:d.reps, method:d.method || 'srs', oldN:d.oldN || 5});
 /* Days in plain words for long plans: about a year and 8 months. */
 function durName(n){ const m = Math.round(n / 30.4); if (m < 12) return 'حوالي ' + countWord(m, 'شهر', 'شهرين', 'أشهر', 'شهرًا');
   const y = Math.floor(m / 12), r = m % 12, ys = y === 1 ? 'سنة' : y === 2 ? 'سنتين' : AR(y) + (y <= 10 ? ' سنوات' : ' سنة');
   return 'حوالي ' + ys + (r ? ' و' + (r === 1 ? 'شهر' : r === 2 ? 'شهرين' : AR(r) + (r <= 10 ? ' أشهر' : ' شهرًا')) : ''); }
+const OLDN = [[1,'١'],[2,'٢'],[5,'٥'],[10,'١٠'],[20,'جزء']];
+function methodCard(m, oldN, actM, actO){
+  return `<div class="card"><h3>كيف تراجع ما تحفظه؟</h3>${seg(actM, [['huffaz','جديد وقريب وقديم'],['srs','مواعيد متباعدة']], m)}
+    <p class="muted">${m === 'huffaz' ? 'طريقة الحفّاظ: قبل كل حفظ جديد تسمّع آخر وردين حفظتهما (القريب). وما قبلهما (القديم) تراجعه بالدور كل يوم بالمقدار الذي تختاره، حتى تمر عليه كله ثم تعيد.' : 'يعود إليك كل مقطع بعد يوم، ثم بعد أيام، ثم بعد أسابيع، حسب قوة حفظك له.'}</p>
+    ${m === 'huffaz' ? `<p style="margin:8px 0 4px"><b>القديم يوميًا (بالصفحات)</b></p>${seg(actO, OLDN, oldN)}` : ''}</div>`;
+}
 function vSetupHifz(){
   const d = hd;
   let list;
@@ -2046,6 +2084,7 @@ function vSetupHifz(){
       ${d.stype === 'juz' ? `<button class="opt" data-act="hdRev" aria-pressed="${d.rev}"><span class="dot"></span><span><b>ابدأ من آخر الجزء</b><span class="muted" style="display:block">من السور القصيرة إلى الطويلة، كما يحفظ أغلب الناس جزء عمّ</span></span></button>` : ''}</div>
     <div class="card"><h3>كم تحفظ يوميًا؟</h3>${seg('hdPtype', [['ayah','آيات'],['page','صفحة'],['quarter','ربع حزب'],['days','خلال مدة']], d.ptype)}${sub}</div>
     <div class="card"><h3>كم مرة تكرر الآية؟</h3>${seg('hdReps', [[7,'٧ مرات'],[11,'١١ مرة'],[19,'١٩ مرة']], d.reps)}</div>
+    ${methodCard(d.method, d.oldN, 'hdMethod', 'hdOld')}
     <div class="card"><button class="opt" data-act="strictTog" aria-pressed="${!!S.strict}"><span class="dot"></span><span><b>خطة منظمة: المراجعة قبل الجديد</b><span class="muted" style="display:block">لا يُفتح مقطع الحفظ الجديد كل يوم إلا بعد أن تنهي مراجعة ما حفظته. يمكنك تغييرها من الإعدادات.</span></span></button></div>
     <div class="card"><h3>خطتك</h3><p>${AR(ayat)} آية في ${AR(chunks.length)} يومًا تقريبًا${chunks.length > 60 ? ' (' + durName(chunks.length) + ')' : ''}.</p><p class="muted">كل يوم مقطع جديد، وما تحفظه يدخل في مراجعتك تلقائيًا في وقته.</p></div>
     ${busy && confirmBox !== 'hd' ? '<button class="btn" data-act="ask" data-v="hd">ابدأ الخطة</button>' : busy ? `<div class="confirm"><p>ستبدأ خطة جديدة. ما حفظته من قبل يبقى في مراجعتك ولا يضيع.</p><div class="rnav"><button class="btn" data-act="hdSave">ابدأ الخطة الجديدة</button><button class="btn ghost" data-act="cancel">تراجع</button></div></div>` : '<button class="btn" data-act="hdSave">ابدأ الخطة</button>'}
@@ -2198,7 +2237,8 @@ function vSession(){
   const steps = sess.queue.map((_, i) => `<i class="${i <= sess.pos ? 'on' : ''}"></i>`).join('');
   const revs = sess.queue.filter(q => q.type === 'review');
   const recs = sess.queue.filter(q => q.type === 'recite');
-  const kind = t.type === 'new' ? 'حفظ جديد' : t.type === 'practice' ? 'مراجعة حرة' : t.type === 'recite' ? `تسميع ${AR(recs.indexOf(t) + 1)} من ${AR(recs.length)}` : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
+  const olds = sess.queue.filter(q => q.old);
+  const kind = t.rc ? 'القريب: سمّع آخر ما حفظته قبل الجديد' : t.old ? `القديم ${AR(olds.indexOf(t) + 1)} من ${AR(olds.length)}` : t.type === 'new' ? 'حفظ جديد' : t.type === 'practice' ? 'مراجعة حرة' : t.type === 'recite' ? `تسميع ${AR(recs.indexOf(t) + 1)} من ${AR(recs.length)}` : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
   const title = t.page ? `صفحة ${AR(t.page)} · ${cShort(c)}` : cLabel(c);
   let h = `<main><div class="sess-top"><button class="x homebtn" data-act="quit">${HOME_SVG}الرئيسية</button><div class="steps">${steps}</div></div>${confirmBox === 'quit' ? `<div class="confirm"><p>هل تريد الخروج؟ ${t.type === 'new' ? 'تكرارك في هذا المقطع لن يُحفظ، وتستطيع العودة إليه من شاشة «اليوم».' : 'ما أنهيته من مراجعات محفوظ، والباقي ينتظرك.'}</p><div class="rnav"><button class="btn" data-act="cancel">أكمل</button><button class="btn danger" data-act="quit">خروج</button></div></div>` : ''}
     <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>${sess.banner ? `<div class="okbanner">✓ ${sess.banner}</div>` : ''}`;
@@ -3462,6 +3502,7 @@ const GUIDE = [
    'الآيات القصيرة المتتالية تُحفظ معًا قطعة واحدة، ومن سورة الضحى إلى آخر المصحف تُعرض السورة كاملة وتُحفظ مرة واحدة ولا تُقسَّم على يومين.',
    'ثم اضغط «جاهز، اختبرني»: تختفي الآيات وتقرؤها من حفظك.',
    'كل ما تحفظه يدخل مراجعتك تلقائيًا قبل أن يُنسى.',
+   'طريقة «جديد وقريب وقديم»: قبل كل حفظ جديد تسمّع آخر وردين حفظتهما، وما قبلهما تراجعه بالدور من «مراجعة» بمقدار تختاره. تغيّرها من شاشة «حفظ» أسفل الخيارات.',
    'إن فعّلت «الخطة المنظمة» لا يُفتح مقطع الحفظ الجديد إلا بعد أن تنهي مراجعة اليوم.']],
  ['التسميع بالصوت', ['حمّل «محرك التسميع» مرة واحدة من الشاشة الرئيسية، ليكون التسميع أدق ويعمل بدون إنترنت.',
    'اضغط «سمّع بصوتك» واقرأ بصوت مسموع، فتظهر الكلمات وأنت تقرأ.',
@@ -3521,7 +3562,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r129';
+const BUILD = 'r130';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3590,6 +3631,10 @@ app.addEventListener('click', e => {
   if (a === 'hdPtype'){ hd.ptype = v; hd.pn = v === 'days' ? (hd.stype === 'all' ? 730 : 30) : v === 'ayah' ? 3 : 1; render(); return; }
   if (a === 'hdPn'){ hd.pn = +v; render(); return; }
   if (a === 'hdReps'){ hd.reps = +v; render(); return; }
+  if (a === 'hdMethod'){ hd.method = v; render(); return; }
+  if (a === 'hdOld'){ hd.oldN = +v; render(); return; }
+  if (a === 'hmMethod'){ if (S.hifz){ S.hifz.method = v; S.hifz.oldN = S.hifz.oldN || 5; S.rev.day = null; save(); } render(); return; }
+  if (a === 'hmOld'){ if (S.hifz){ S.hifz.oldN = +v; S.rev.day = null; save(); } render(); return; }
   if (a === 'hdSave'){ saveHifz(); confirmBox = null; if (S.chunks.length){ startSession([{type:'new', idx:0}]); sess.banner = `بدأت خطتك: ${hifzName(S.hifz)} · ${paceName(S.hifz)}. هذا أول مقطع.`; render(); } else { view = 'home'; render(); } window.scrollTo(0, 0); return; }
   /* review setup */
   if (a === 'rvJuz' || a === 'rvSur'){ rvd.err = ''; const x = +v, k = a === 'rvJuz' ? rvd.known : rvd.ksur, w = a === 'rvJuz' ? rvd.weak : rvd.wsur;
@@ -3620,7 +3665,7 @@ app.addEventListener('click', e => {
   }
   if (a === 'wdStop'){ S.wird = null; save(); view = 'home'; render(); return; }
   /* start sessions */
-  if (a === 'hifzGo'){ if (hasNewLeft()) startSession([{type:'new', idx:S.nextNew}]); return; }
+  if (a === 'hifzGo'){ if (hasNewLeft()) startSession(newQueue(S.nextNew)); return; }
   if (a === 'rcKind'){ rc.kind = v; render(); return; }
   if (a === 'rcJuz'){ rc.j = +v; render(); return; }
   if (a === 'rcGo'){ startRecite(rc); return; }
@@ -3642,7 +3687,7 @@ app.addEventListener('click', e => {
   if (a === 'cumAgain'){ testFrom(sess.cum); return; }
   if (a === 'ri'){ audStop(true); sess.ri = +v; keepProgress(); render(); window.scrollTo(0, 0); return; }
   if ((a === 'hifzToday' || a === 'hifzResume') && strictLeft()){ go('hifzMenu'); return; }
-  if (a === 'hifzToday'){ if (hasNewLeft()){ S.inprog = null; save(); startSession([{type:'new', idx:S.nextNew}]); } return; }
+  if (a === 'hifzToday'){ if (hasNewLeft()){ S.inprog = null; save(); startSession(newQueue(S.nextNew)); } return; }
   if (a === 'hifzResume'){ const ip = inprog(); if (ip){ startSession([{type:'new', idx:ip.idx}]); sess.reps = Object.assign({}, ip.reps); sess.ri = ip.ri || 0; render(); } return; }
   if (a === 'toTest'){ testFrom(0); return; }
   if (a === 'peek'){ const i = +v; if (sess.reveal >= sess.total && sess.ws[i]){ sess.why = sess.why === i ? null : i; render(); return; } if (i >= sess.reveal && !sess.shown.has(i)){ sess.shown.add(i); sess.peeked.add(i); render(); } return; }
@@ -3703,6 +3748,8 @@ app.addEventListener('click', e => {
   if (a === 'grev'){
     const t = sess.queue[sess.pos], g = +v; noteMistakes(t);
     if (t.mist){ markDay(); save(); advance(); return; }
+    if (t.rc) S.rev.rcKey = today() + ':' + t.rc.join(',');
+    if (t.old) S.rev.optr = t.old[t.old.length - 1] + 1;
     if (t.page) gradePage(t.page, g);
     else if (t.arch != null) schedule(S.arch[t.arch], g);
     else if (!t.chunk && S.learned[t.idx]) schedule(S.learned[t.idx], g);
