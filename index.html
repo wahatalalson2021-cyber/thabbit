@@ -287,6 +287,15 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .mlay .mln.st.en,.mlay .mln.ctr{justify-content:center}
 .mlay .mpg{display:flex;align-items:center;gap:8px;color:var(--muted);font-family:var(--f-ui,inherit);font-size:.75rem;line-height:1.6;margin:6px 0}
 .mlay .mpg::before,.mlay .mpg::after{content:"";flex:1;border-top:1px dashed var(--line)}
+.vcard{padding:12px}
+.vbtn{display:flex;align-items:center;gap:12px;width:100%;border:0;border-radius:14px;padding:14px;background:var(--accent);color:#fff;font:inherit;text-align:start;cursor:pointer}
+.vbtn svg{width:30px;height:30px;flex:none}
+.vbtn b{display:block;font-size:1.08rem}
+.vbtn small{display:block;opacity:.85;font-size:.85rem}
+.vbtn.on{background:var(--bad)}
+.vmsg{margin:8px 2px 0;font-weight:600;color:var(--accent)}
+.vmsg:empty{display:none}
+.vmsg.err{color:var(--bad)}
 #ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
 #ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
 #ptAlert svg{width:44px;height:44px;color:var(--accent)}
@@ -1622,7 +1631,7 @@ function bandTitle(){
 }
 function render(){
   let h = '';
-  if (AU && ((AU.ctx === 'reader' && view !== 'reader') || (AU.ctx === 'sess' && (view !== 'session' || !sess || sess.phase !== 'read')))) audStop(true);
+  if (AU && ((AU.ctx === 'voice' && (view === 'session' || view === 'reader' || view === 'mictest')) || (AU.ctx === 'reader' && view !== 'reader') || (AU.ctx === 'sess' && (view !== 'session' || !sess || sess.phase !== 'read')))) audStop(true);
   if (view !== 'mictest' && MT) mtStop();
   if (DP.on && ((view !== 'dua' && view !== 'khatm') || DP.ctx !== dpCtx())) dpStop();
   if (AK.on && view !== 'adhkar') akStop();
@@ -1645,6 +1654,7 @@ function render(){
   else if (view === 'setupWird') h = vSetupWird();
   else {
     h = '<main>' + (view === 'home' ? vHome() : view === 'read' ? vRead() : view === 'lib' ? vLib() : view === 'ptset' ? vPtSet() : view === 'adhkar' ? vAdhkar() : view === 'dua' ? vDua() : view === 'khatm' ? vKhatm() : view === 'qibla' ? vQibla() : view === 'n40' ? vN40() : view === 'progress' ? vProgress() : vSettings()) + '</main>';
+    if (AU && AU.ctx === 'voice') h += audBar();
     h += '<nav class="tabs" aria-label="الأقسام"><div class="in">' +
       [['home','اليوم'],['adhkar','الأذكار'],['dua','الأدعية'],['lib','المكتبة'],['progress','تقدّمي']].map(([k, l]) =>
         `<button data-act="tab" data-v="${k}" ${view === k || (k === 'home' && (view === 'read' || view === 'settings' || view === 'ptset' || view === 'qibla')) || (k === 'lib' && (view === 'n40' || view === 'book')) || (k === 'dua' && view === 'khatm') ? 'aria-current="page"' : ''}>${l}</button>`).join('') + '</div></nav>';
@@ -1759,9 +1769,58 @@ function progCard(){
   return `<div class="card progc"><div class="row"><h3>تقدّمك</h3>${st ? `<span class="chip">${AR(st)} ${st === 1 ? 'يوم' : st === 2 ? 'يومان' : st <= 10 ? 'أيام' : 'يومًا'} متتالية</span>` : ''}</div>
     <div class="pgrid">${cells.join('')}</div><div class="week">${week}</div></div>`;
 }
+/* ---------- listen to a surah by saying its name (for the blind, drivers, the elderly) ----------
+   Tap, hear a short tone, say «سورة البقرة»; the name is announced (screen readers read it) and the reciter starts. */
+let VS = null;
+const vnm = s => s.replace(/[ً-ٰٟۖ-ۭـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/[^ء-ي0-9٠-٩ ]/g, ' ').replace(/\s+/g, ' ').trim();
+const VS_ALIAS = [['يس',36],['ياسين',36],['يا سين',36],['تبارك',67],['عم',78],['عم يتساءلون',78],['بني اسرائيل',17],['المؤمن',40],['حم السجده',41],['القتال',47],['الدهر',76],['هل اتي',76],['تبت',111],['ابي لهب',111],['براءه',9],['الحمد',1],['ام الكتاب',1],['قاف',50],['ق',50],['صاد',38],['ص',38],['طه',20],['طاها',20],['التوحيد',112],['قل هو الله احد',112],['الفلق',113],['الناس',114]];
+let VS_NAMES = null;
+function vsLev(a, b){ const m = a.length, n = b.length, d = Array.from({length: m + 1}, (_, i) => [i]); for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[m][n]; }
+function surahFromSpeech(alts){
+  if (!VS_NAMES){ const key = x => vnm(x).replace(/ /g, '').replace(/^ال/, ''); VS_NAMES = Q.map((q, i) => [key(q[0]), i + 1]).concat(VS_ALIAS.map(([a, s]) => [key(a), s])); }
+  let best = null;
+  for (const raw of alts){
+    let x = ' ' + vnm(raw) + ' '; for (const w of ['سوره','السوره','اسمع','اسمعني','شغل','اقرا','افتح','لي','من','فضلك','رقم','يا']) x = x.split(' ' + w + ' ').join(' ');
+    x = x.replace(/\s+/g, ' ').trim();
+    const num = toNum(x); if (num >= 1 && num <= 114 && /^[0-9٠-٩ ]+$/.test(x)) return num;
+    const k = x.replace(/ /g, '').replace(/^ال/, ''); if (!k) continue;
+    for (const [nk, s] of VS_NAMES){
+      const sc = nk === k ? 0 : (nk.length > 2 && k.includes(nk)) ? 0.2 : vsLev(nk, k) / Math.max(nk.length, k.length);
+      if (!best || sc < best[0]) best = [sc, s];
+    }
+  }
+  return best && best[0] <= 0.34 ? best[1] : 0;
+}
+function voiceSurah(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR){ VS = {st: 'err', msg: 'هذا الجهاز لا يدعم الأوامر الصوتية. استعمل البحث في «قراءة».'}; render(); return; }
+  audInit(); if (AU) audStop(true);
+  /* let the player start later, after the name is recognised (iPhone allows sound only from a tap) */
+  try { audEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='; audEl.play().catch(() => {}); } catch (e) {}
+  audioUnlock();
+  let r; try { r = new SR(); } catch (e) { VS = {st: 'err', msg: 'تعذّر تشغيل الميكروفون.'}; render(); return; }
+  r.lang = 'ar-SA'; r.interimResults = false; r.continuous = false; r.maxAlternatives = 5;
+  let got = false;
+  r.onresult = e => { got = true; const alts = [...e.results[0]].map(x => x.transcript);
+    const s = surahFromSpeech(alts);
+    if (s){ VS = {st: 'ok', s, msg: 'سورة ' + Q[s - 1][0]}; render(); setTimeout(() => { if (VS && VS.s === s){ const list = []; for (let g = GBASE[s - 1] + 1; g <= GBASE[s]; g++) list.push(g); audPlay(list, 'voice'); } }, 1400); }
+    else { VS = {st: 'err', msg: `لم أفهم «${esc(alts[0] || '')}». اضغط الزر وقل اسم السورة مرة أخرى.`}; render(); } };
+  r.onerror = e => { got = true; VS = {st: 'err', msg: e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'اسمح للتطبيق باستعمال الميكروفون من إعدادات الجوال، ثم حاول مرة أخرى.' : e.error === 'no-speech' ? 'لم أسمع شيئًا. اضغط الزر وقل اسم السورة.' : 'تعذّر التعرف على الصوت. تأكد من الإنترنت وحاول مرة أخرى.'}; render(); };
+  r.onend = () => { if (!got && VS && VS.st === 'listen'){ VS = {st: 'err', msg: 'لم أسمع شيئًا. اضغط الزر وقل اسم السورة.'}; render(); } };
+  VS = {st: 'listen'}; render();
+  try { r.start(); } catch (e) { VS = {st: 'err', msg: 'تعذّر تشغيل الميكروفون.'}; render(); return; }
+  /* short rising tone: speak now */
+  try { if (AC){ const t0 = AC.currentTime, o = AC.createOscillator(), g = AC.createGain(); o.frequency.value = 660; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.3, t0 + .02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + .18); o.connect(g).connect(AC.destination); o.start(t0); o.stop(t0 + .2); } } catch (e) {}
+}
+function voiceCard(){
+  const on = AU && AU.ctx === 'voice', s = on ? gidToSA(audG())[0] : 0;
+  return `<div class="card vcard"><button class="vbtn ${VS && VS.st === 'listen' ? 'on' : ''}" data-act="voiceSurah" aria-label="قل اسم السورة لتستمع إليها">${MIC_SVG}<span><b>${VS && VS.st === 'listen' ? 'أسمعك... قل اسم السورة' : 'قل اسم السورة لتستمع إليها'}</b><small aria-hidden="true">اضغط ثم قل مثلًا: سورة البقرة</small></span></button>
+    <p class="vmsg ${VS && VS.st === 'err' ? 'err' : ''}" role="status" aria-live="assertive">${VS && VS.st !== 'listen' && !(on && VS.st === 'ok' && VS.s !== s) ? VS.msg : ''}</p></div>`;
+}
 function vHome(){
   const st = streak(); TPCT = tilePct();
-  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}<button class="gear" data-act="tab" data-v="settings" >${GEAR}<span>الإعدادات</span></button></div><div class="herotxt"><div class="hrow"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div><h1>ماذا تريد اليوم؟</h1></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button>${ptCard()}<div class="tiles">`;
+  let h = `<header class="hero">${HERO_SVG}<div class="herotop">${EMBLEM}<button class="gear" data-act="tab" data-v="settings" >${GEAR}<span>الإعدادات</span></button></div><div class="herotxt"><div class="hrow"><p class="hello">السلام عليكم${S.name ? '، ' + esc(S.name) : ''}</p><span class="chip ${st ? '' : 'warn'}">${st ? 'أيام متتالية: ' + AR(st) : 'ابدأ سلسلتك اليوم'}</span></div><h1>ماذا تريد اليوم؟</h1></div></header><button class="homesearch" data-act="go" data-v="search">${SEARCH_SVG}<span>ابحث عن كلمة في القرآن</span></button>${voiceCard()}${ptCard()}<div class="tiles">`;
   const rp = R().page;
   h += tile('read', 'قراءة', 'المصحف والفهرس والعلامات', 'go', 'read');
   if (!S.hifz) h += tile('hifz', 'حفظ', 'اختر ما تحفظه ومقداره', 'go', 'setupHifz');
@@ -2593,12 +2652,13 @@ const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true
 const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
 const HEAD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg>';
 function audBar(){
-  if (!AU || AU.ctx !== 'reader') return '';
+  if (!AU || (AU.ctx !== 'reader' && AU.ctx !== 'voice')) return '';
+  const vo = AU.ctx === 'voice';
   const [s, a] = gidToSA(audG()), r = aRep();
   const st = AU.err ? 'تعذّر التشغيل. تأكد من الإنترنت، واضغط ▶' : AU.load ? 'جاري التحميل...' : (r > 1 ? `التكرار ${AR(AU.done + 1)} من ${AR(r)} · ` : '') + reciter()[2];
   return `<div class="aubar" role="region" aria-label="الاستماع"><button class="aup" data-act="audTog" aria-label="${AU.paused || AU.err ? 'تشغيل' : 'إيقاف مؤقت'}">${AU.paused || AU.err ? PLAY_SVG : PAUSE_SVG}</button>
-    <div class="aui"><b>سورة ${Q[s - 1][0]} · الآية ${AR(a)}</b><button data-act="rdSheet" data-v="rec">${esc(st)}</button></div>
-    <button data-act="audRep" aria-label="عدد التكرار">×${AR(r)}</button><button data-act="audCont" aria-pressed="${S.acont !== false}">متتابع</button><button data-act="audStop" aria-label="إيقاف">✕</button></div>`;
+    <div class="aui"><b>سورة ${Q[s - 1][0]} · الآية ${AR(a)}</b>${vo ? `<small>${esc(st)}</small>` : `<button data-act="rdSheet" data-v="rec">${esc(st)}</button>`}</div>
+    ${vo ? '' : `<button data-act="audRep" aria-label="عدد التكرار">×${AR(r)}</button><button data-act="audCont" aria-pressed="${S.acont !== false}">متتابع</button>`}<button data-act="audStop" aria-label="إيقاف القراءة">✕</button></div>`;
 }
 function recSelect(){ return `<select id="recSel" class="recsel" aria-label="القارئ">${RECITERS.map(r => `<option value="${r[0]}" ${reciter()[0] === r[0] ? 'selected' : ''}>${r[2]}</option>`).join('')}</select>`; }
 /* Prayer times calculated on the device (praytimes.org method), no internet needed. */
@@ -3528,6 +3588,7 @@ const GUIDE = [
    'الآيات القصيرة المتتالية تُحفظ معًا قطعة واحدة، ومن سورة الضحى إلى آخر المصحف تُعرض السورة كاملة وتُحفظ مرة واحدة ولا تُقسَّم على يومين.',
    'ثم اضغط «جاهز، اختبرني»: تختفي الآيات وتقرؤها من حفظك.',
    'كل ما تحفظه يدخل مراجعتك تلقائيًا قبل أن يُنسى.',
+   'لتستمع لسورة بصوتك: اضغط «قل اسم السورة لتستمع إليها» في الشاشة الرئيسية، ثم قل مثلًا «سورة البقرة»، فيبدأ القارئ. يفيد الكفيف ومن يقود السيارة.',
    'لا تريد خطة؟ اضغط «احفظ ما تختاره» واختر سورة أو آيات، فتحفظها متى شئت، وتدخل مراجعتك دون أن تتغير خطتك.',
    'طريقة «جديد وقريب وقديم»: قبل كل حفظ جديد تسمّع آخر وردين حفظتهما، وما قبلهما تراجعه بالدور من «مراجعة» بمقدار تختاره. تغيّرها من شاشة «حفظ» أسفل الخيارات.',
    'إن فعّلت «الخطة المنظمة» لا يُفتح مقطع الحفظ الجديد إلا بعد أن تنهي مراجعة اليوم.']],
@@ -3589,7 +3650,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r136';
+const BUILD = 'r137';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3807,6 +3868,7 @@ app.addEventListener('click', e => {
   if (a === 'audAyah'){ RD.sel = null; RD.selW = null; RD.sheet = ''; audPlay(audReaderList(+v), 'reader'); return; }
   if (a === 'audTog'){ audToggle(); return; }
   /* Listen to the surah from the reader: from its first ayah if it was chosen from the index, otherwise from the top of this page, to the end of the surah. */
+  if (a === 'voiceSurah'){ voiceSurah(); return; }
   if (a === 'rdListen'){
     if (AU && AU.ctx === 'reader'){ audToggle(); render(); return; }
     const p = RD.page, fs = RD.fs && gPage(GBASE[RD.fs - 1] + 1) === p ? RD.fs : 0;
