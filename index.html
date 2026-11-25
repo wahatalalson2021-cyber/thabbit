@@ -3252,7 +3252,6 @@ const EXT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 function vLib(){
   let h = band() + `<div><h1>المكتبة</h1><p class="muted">كتب مختارة من مصادر موثوقة.</p></div>`;
   h += `<button class="card libcard" data-act="tab" data-v="n40"><span class="libic">${LIB_SVG}</span><span class="libt"><b>الأربعون النووية</b><small>اثنان وأربعون حديثًا للإمام النووي، تُقرأ داخل التطبيق ومعها البحث</small></span><span class="tgo">${CHEV}</span></button>`;
-  h += `<button class="card libcard" data-act="adkGo" data-v="lib"><span class="libic">${SUN_SVG}</span><span class="libt"><b>أذكار الصباح والمساء</b><small>من كتاب حصن المسلم، مع عدّاد لكل ذكر</small></span><span class="tgo">${CHEV}</span></button>`;
   h += `<div class="card"><h3 class="libh">${KAABA_SVG}أحكام الحج والعمرة</h3>
     <p class="muted">كتب تنشرها رئاسة الشؤون الدينية بالمسجد الحرام والمسجد النبوي. يُفتح الكتاب من موقعها الرسمي بالإنترنت، وبعضها يمكن تحميله في جهازك لتقرأه بدون إنترنت.</p>
     <div class="wlist">${HAJJ_BOOKS.map((b, i) => bookRow(b, i)).join('')}</div></div>`;
@@ -3590,7 +3589,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r135';
+const BUILD = 'r136';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
