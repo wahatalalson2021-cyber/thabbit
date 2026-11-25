@@ -1776,7 +1776,7 @@ function progCard(){
 let VS = null;
 const vfold = s => s.replace(/ص/g, 'س').replace(/ث/g, 'س').replace(/[طت]/g, 'ت').replace(/[ظذز]/g, 'ز').replace(/ض/g, 'د').replace(/ح/g, 'ه').replace(/ع/g, 'ا').replace(/ق/g, 'ك');
 const vnm = s => s.replace(/[ً-ٰٟۖ-ۭـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/[^ء-ي0-9٠-٩ ]/g, ' ').replace(/\s+/g, ' ').trim();
-const VS_ALIAS = [['يس',36],['ياسين',36],['يا سين',36],['تبارك',67],['عم',78],['عم يتساءلون',78],['بني اسرائيل',17],['المؤمن',40],['حم السجده',41],['القتال',47],['الدهر',76],['هل اتي',76],['تبت',111],['ابي لهب',111],['براءه',9],['الحمد',1],['ام الكتاب',1],['قاف',50],['ق',50],['صاد',38],['ص',38],['طه',20],['طاها',20],['التوحيد',112],['قل هو الله احد',112],['الفلق',113],['الناس',114]];
+const VS_ALIAS = [['يس',36],['ياسين',36],['يا سين',36],['تبارك',67],['عم',78],['عم يتساءلون',78],['بني اسرائيل',17],['المؤمن',40],['حم السجده',41],['القتال',47],['الدهر',76],['هل اتي',76],['تبت',111],['ابي لهب',111],['براءه',9],['الحمد',1],['ام الكتاب',1],['قاف',50],['ق',50],['صاد',38],['ص',38],['طه',20],['طاها',20],['نون',68],['ن',68],['ن والقلم',68],['التوحيد',112],['قل هو الله احد',112],['الفلق',113],['الناس',114]];
 let VS_NAMES = null;
 function vsLev(a, b){ const m = a.length, n = b.length, d = Array.from({length: m + 1}, (_, i) => [i]); for (let j = 1; j <= n; j++) d[0][j] = j;
   for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[m][n]; }
@@ -3667,7 +3667,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r138';
+const BUILD = 'r139';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
