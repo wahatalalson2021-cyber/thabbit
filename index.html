@@ -1811,13 +1811,21 @@ function voiceSurah(){
   audioUnlock();
   let r; try { r = new SR(); } catch (e) { VS = {st: 'err', msg: 'تعذّر تشغيل الميكروفون.'}; render(); return; }
   r.lang = 'ar-SA'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 5;
-  let got = false, heard = [], done = false;
-  const decide = () => { if (done) return; done = true; got = true; try { r.abort(); } catch (e) {}
-    const s = surahFromSpeech(heard);
+  /* Decide on the LAST thing heard, once the speaker has finished (final result, end, or a pause):
+     while he is still saying «القلم» the phone may already show «ق», which is another surah. */
+  let got = false, heard = [], last = [], done = false, idle = null;
+  const decide = () => { if (done) return; done = true; got = true; clearTimeout(idle); try { r.abort(); } catch (e) {}
+    const s = surahFromSpeech(last) || surahFromSpeech(heard.filter(h => h.replace(/\s/g, '').length > 5));
     if (s) vsPlay(s);
     else { const near = surahRank(heard, true).slice(0, 3); VS = {st: 'err', near, msg: heard.length ? `لم أفهم «${esc(heard[heard.length - 1])}».${near.length ? ' هل تقصد إحدى هذه السور؟' : ' اضغط الزر وقل اسم السورة مرة أخرى.'}` : 'لم أسمع شيئًا. اضغط الزر وقل اسم السورة.'}; render(); } };
-  r.onresult = e => { for (let i = 0; i < e.results.length; i++){ for (let j = 0; j < e.results[i].length; j++){ const tx = (e.results[i][j].transcript || '').trim(); if (tx && !heard.includes(tx)) heard.push(tx); } if (e.results[i].isFinal !== false && i === e.results.length - 1 && e.results[i].isFinal) decide(); }
-    if (surahFromSpeech(heard)) setTimeout(decide, 700); };
+  r.onresult = e => {
+    const n = e.results.length, lr = e.results[n - 1];
+    last = []; for (let j = 0; j < lr.length; j++){ const tx = (lr[j].transcript || '').trim(); if (tx) last.push(tx); }
+    /* the phone may split the sentence into several results: also try them joined */
+    if (n > 1){ const all = []; for (let i = 0; i < n; i++) all.push((e.results[i][0] && e.results[i][0].transcript || '').trim()); last.unshift(all.join(' ')); }
+    last.forEach(tx => { if (!heard.includes(tx)) heard.push(tx); });
+    clearTimeout(idle);
+    if (lr.isFinal) decide(); else idle = setTimeout(decide, 1500); };
   r.onerror = e => { if (heard.length){ decide(); return; } got = true; done = true; VS = {st: 'err', msg: e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'اسمح للتطبيق باستعمال الميكروفون من إعدادات الجوال، ثم حاول مرة أخرى.' : e.error === 'no-speech' ? 'لم أسمع شيئًا. اضغط الزر وقل اسم السورة.' : 'تعذّر التعرف على الصوت. تأكد من الإنترنت وحاول مرة أخرى.'}; render(); };
   r.onend = () => { if (!done) decide(); };
   VS = {st: 'listen'}; render();
@@ -3667,7 +3675,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r139';
+const BUILD = 'r140';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
