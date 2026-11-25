@@ -295,6 +295,8 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .vbtn.on{background:var(--bad)}
 .vmsg{margin:8px 2px 0;font-weight:600;color:var(--accent)}
 .vmsg:empty{display:none}
+.vnear{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.vnear .btn{flex:1 1 auto;width:auto}
 .vmsg.err{color:var(--bad)}
 #ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
 #ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
@@ -1772,25 +1774,33 @@ function progCard(){
 /* ---------- listen to a surah by saying its name (for the blind, drivers, the elderly) ----------
    Tap, hear a short tone, say «سورة البقرة»; the name is announced (screen readers read it) and the reciter starts. */
 let VS = null;
+const vfold = s => s.replace(/ص/g, 'س').replace(/ث/g, 'س').replace(/[طت]/g, 'ت').replace(/[ظذز]/g, 'ز').replace(/ض/g, 'د').replace(/ح/g, 'ه').replace(/ع/g, 'ا').replace(/ق/g, 'ك');
 const vnm = s => s.replace(/[ً-ٰٟۖ-ۭـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/[^ء-ي0-9٠-٩ ]/g, ' ').replace(/\s+/g, ' ').trim();
 const VS_ALIAS = [['يس',36],['ياسين',36],['يا سين',36],['تبارك',67],['عم',78],['عم يتساءلون',78],['بني اسرائيل',17],['المؤمن',40],['حم السجده',41],['القتال',47],['الدهر',76],['هل اتي',76],['تبت',111],['ابي لهب',111],['براءه',9],['الحمد',1],['ام الكتاب',1],['قاف',50],['ق',50],['صاد',38],['ص',38],['طه',20],['طاها',20],['التوحيد',112],['قل هو الله احد',112],['الفلق',113],['الناس',114]];
 let VS_NAMES = null;
 function vsLev(a, b){ const m = a.length, n = b.length, d = Array.from({length: m + 1}, (_, i) => [i]); for (let j = 1; j <= n; j++) d[0][j] = j;
   for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[m][n]; }
 function surahFromSpeech(alts){
-  if (!VS_NAMES){ const key = x => vnm(x).replace(/ /g, '').replace(/^ال/, ''); VS_NAMES = Q.map((q, i) => [key(q[0]), i + 1]).concat(VS_ALIAS.map(([a, s]) => [key(a), s])); }
+  if (!VS_NAMES){ const key = x => vnm(x).replace(/ /g, '').replace(/^ال/, ''); VS_NAMES = Q.map((q, i) => [key(q[0]), i + 1]).concat(VS_ALIAS.map(([a, s]) => [key(a), s])).map(([k, s]) => [k, vfold(k), s]); }
+  return surahRank(alts)[0] || 0;
+}
+/* Surahs ranked by how close their names are to what was heard: best first, only the plausible ones. */
+function surahRank(alts, loose){
+  if (!VS_NAMES) surahFromSpeech([]);
+  const sc = {};
   let best = null;
   for (const raw of alts){
-    let x = ' ' + vnm(raw) + ' '; for (const w of ['سوره','السوره','اسمع','اسمعني','شغل','اقرا','افتح','لي','من','فضلك','رقم','يا']) x = x.split(' ' + w + ' ').join(' ');
+    let x = ' ' + vnm(raw) + ' '; for (const w of ['سوره','السوره','صوره','الصوره','سورت','صورت','اسمع','اسمعني','شغل','اقرا','افتح','لي','من','فضلك','رقم','يا']) x = x.split(' ' + w + ' ').join(' ');
     x = x.replace(/\s+/g, ' ').trim();
-    const num = toNum(x); if (num >= 1 && num <= 114 && /^[0-9٠-٩ ]+$/.test(x)) return num;
-    const k = x.replace(/ /g, '').replace(/^ال/, ''); if (!k) continue;
-    for (const [nk, s] of VS_NAMES){
-      const sc = nk === k ? 0 : (nk.length > 2 && k.includes(nk)) ? 0.2 : vsLev(nk, k) / Math.max(nk.length, k.length);
-      if (!best || sc < best[0]) best = [sc, s];
+    const num = toNum(x); if (num >= 1 && num <= 114 && /^[0-9٠-٩ ]+$/.test(x)) return [num];
+    const k = x.replace(/ /g, '').replace(/^ال/, ''), kf = vfold(k); if (!k) continue;
+    for (const [nk, nf, s] of VS_NAMES){
+      /* exact, or the name inside a longer sentence ("اسمعني سورة يوسف"), or close in sound (هوت / حود for هود) */
+      const v = nk === k || nf === kf ? 0 : (nk.length > 2 && k.includes(nk)) ? 0.2 : vsLev(nf, kf) / Math.max(nf.length, kf.length);
+      if (sc[s] == null || v < sc[s]) sc[s] = v;
     }
   }
-  return best && best[0] <= 0.34 ? best[1] : 0;
+  return Object.keys(sc).map(Number).filter(s => sc[s] <= (loose ? 0.6 : 0.34)).sort((a, b) => sc[a] - sc[b]);
 }
 function voiceSurah(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1800,23 +1810,30 @@ function voiceSurah(){
   try { audEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='; audEl.play().catch(() => {}); } catch (e) {}
   audioUnlock();
   let r; try { r = new SR(); } catch (e) { VS = {st: 'err', msg: 'تعذّر تشغيل الميكروفون.'}; render(); return; }
-  r.lang = 'ar-SA'; r.interimResults = false; r.continuous = false; r.maxAlternatives = 5;
-  let got = false;
-  r.onresult = e => { got = true; const alts = [...e.results[0]].map(x => x.transcript);
-    const s = surahFromSpeech(alts);
-    if (s){ VS = {st: 'ok', s, msg: 'سورة ' + Q[s - 1][0]}; render(); setTimeout(() => { if (VS && VS.s === s){ const list = []; for (let g = GBASE[s - 1] + 1; g <= GBASE[s]; g++) list.push(g); audPlay(list, 'voice'); } }, 1400); }
-    else { VS = {st: 'err', msg: `لم أفهم «${esc(alts[0] || '')}». اضغط الزر وقل اسم السورة مرة أخرى.`}; render(); } };
-  r.onerror = e => { got = true; VS = {st: 'err', msg: e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'اسمح للتطبيق باستعمال الميكروفون من إعدادات الجوال، ثم حاول مرة أخرى.' : e.error === 'no-speech' ? 'لم أسمع شيئًا. اضغط الزر وقل اسم السورة.' : 'تعذّر التعرف على الصوت. تأكد من الإنترنت وحاول مرة أخرى.'}; render(); };
-  r.onend = () => { if (!got && VS && VS.st === 'listen'){ VS = {st: 'err', msg: 'لم أسمع شيئًا. اضغط الزر وقل اسم السورة.'}; render(); } };
+  r.lang = 'ar-SA'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 5;
+  let got = false, heard = [], done = false;
+  const decide = () => { if (done) return; done = true; got = true; try { r.abort(); } catch (e) {}
+    const s = surahFromSpeech(heard);
+    if (s) vsPlay(s);
+    else { const near = surahRank(heard, true).slice(0, 3); VS = {st: 'err', near, msg: heard.length ? `لم أفهم «${esc(heard[heard.length - 1])}».${near.length ? ' هل تقصد إحدى هذه السور؟' : ' اضغط الزر وقل اسم السورة مرة أخرى.'}` : 'لم أسمع شيئًا. اضغط الزر وقل اسم السورة.'}; render(); } };
+  r.onresult = e => { for (let i = 0; i < e.results.length; i++){ for (let j = 0; j < e.results[i].length; j++){ const tx = (e.results[i][j].transcript || '').trim(); if (tx && !heard.includes(tx)) heard.push(tx); } if (e.results[i].isFinal !== false && i === e.results.length - 1 && e.results[i].isFinal) decide(); }
+    if (surahFromSpeech(heard)) setTimeout(decide, 700); };
+  r.onerror = e => { if (heard.length){ decide(); return; } got = true; done = true; VS = {st: 'err', msg: e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'اسمح للتطبيق باستعمال الميكروفون من إعدادات الجوال، ثم حاول مرة أخرى.' : e.error === 'no-speech' ? 'لم أسمع شيئًا. اضغط الزر وقل اسم السورة.' : 'تعذّر التعرف على الصوت. تأكد من الإنترنت وحاول مرة أخرى.'}; render(); };
+  r.onend = () => { if (!done) decide(); };
   VS = {st: 'listen'}; render();
   try { r.start(); } catch (e) { VS = {st: 'err', msg: 'تعذّر تشغيل الميكروفون.'}; render(); return; }
   /* short rising tone: speak now */
   try { if (AC){ const t0 = AC.currentTime, o = AC.createOscillator(), g = AC.createGain(); o.frequency.value = 660; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.3, t0 + .02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + .18); o.connect(g).connect(AC.destination); o.start(t0); o.stop(t0 + .2); } } catch (e) {}
 }
+function vsPlay(s){
+  VS = {st: 'ok', s, msg: 'سورة ' + Q[s - 1][0]}; render();
+  setTimeout(() => { if (VS && VS.s === s){ const list = []; for (let g = GBASE[s - 1] + 1; g <= GBASE[s]; g++) list.push(g); audPlay(list, 'voice'); } }, 1400);
+}
 function voiceCard(){
   const on = AU && AU.ctx === 'voice', s = on ? gidToSA(audG())[0] : 0;
   return `<div class="card vcard"><button class="vbtn ${VS && VS.st === 'listen' ? 'on' : ''}" data-act="voiceSurah" aria-label="قل اسم السورة لتستمع إليها">${MIC_SVG}<span><b>${VS && VS.st === 'listen' ? 'أسمعك... قل اسم السورة' : 'قل اسم السورة لتستمع إليها'}</b><small aria-hidden="true">اضغط ثم قل مثلًا: سورة البقرة</small></span></button>
-    <p class="vmsg ${VS && VS.st === 'err' ? 'err' : ''}" role="status" aria-live="assertive">${VS && VS.st !== 'listen' && !(on && VS.st === 'ok' && VS.s !== s) ? VS.msg : ''}</p></div>`;
+    <p class="vmsg ${VS && VS.st === 'err' ? 'err' : ''}" role="status" aria-live="assertive">${VS && VS.st !== 'listen' && !(on && VS.st === 'ok' && VS.s !== s) ? VS.msg : ''}</p>
+    ${VS && VS.st === 'err' && VS.near && VS.near.length ? `<div class="vnear">${VS.near.map(n => `<button class="btn soft" data-act="vsPick" data-v="${n}">سورة ${Q[n - 1][0]}</button>`).join('')}</div>` : ''}</div>`;
 }
 function vHome(){
   const st = streak(); TPCT = tilePct();
@@ -3650,7 +3667,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r137';
+const BUILD = 'r138';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -3869,6 +3886,7 @@ app.addEventListener('click', e => {
   if (a === 'audTog'){ audToggle(); return; }
   /* Listen to the surah from the reader: from its first ayah if it was chosen from the index, otherwise from the top of this page, to the end of the surah. */
   if (a === 'voiceSurah'){ voiceSurah(); return; }
+  if (a === 'vsPick'){ audInit(); try { audEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='; audEl.play().catch(() => {}); } catch (e) {} vsPlay(+v); return; }
   if (a === 'rdListen'){
     if (AU && AU.ctx === 'reader'){ audToggle(); render(); return; }
     const p = RD.page, fs = RD.fs && gPage(GBASE[RD.fs - 1] + 1) === p ? RD.fs : 0;
