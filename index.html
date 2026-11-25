@@ -2299,7 +2299,7 @@ function vSettings(){
   ${IN_CLAUDE || STANDALONE ? '' : installGuide()}
   ${shareCard()}
   <div class="card abouttag"><h3>عن «سابق»</h3><p class="tagv">﴿وَمِنۡهُمۡ سَابِقُۢ بِٱلۡخَيۡرَٰتِ بِإِذۡنِ ٱللَّهِ﴾</p><p class="muted">اسم التطبيق من قوله تعالى في سورة فاطر (الآية ٣٢) عن الذين أورثهم الله الكتاب، وأعلاهم منزلة السابق بالخيرات. نسأل الله أن يجعلنا منهم.</p></div>
-  <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. مصحف التجويد الملوّن: خطوط مجمع الملك فهد (الإصدار الرابع، ١٤٤١هـ) كما تنشرها مكتبة QUL، للعرض المجاني فقط. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta. محرك التسميع الدقيق: نموذج tarteel-ai/whisper-base-ar-quran من Tarteel AI (رخصة Apache 2.0)، مضغوط ليعمل على الجوال بمكتبة Transformers.js. التلاوات الصوتية: من خدمة Islamic Network (alquran.cloud) للاستخدام التعليمي المجاني، وحقوقها لأصحابها من القرّاء. صوت الأذان: مقطع من تسجيل أذان المغرب في المسجد الحرام (٢٥ فبراير ٢٠١٢) من تسجيل 3omar Faruq، برخصة المشاع الإبداعي CC BY 3.0، عبر ويكيميديا كومنز. أذكار الصباح والمساء: من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p></div>`;
+  <div class="card"><h3>عن النص</h3><p class="muted">صفحات المصحف: مصحف المدينة النبوية (طبعة ١٤٤١هـ) بخط عثمان طه، بخطوط مجمع الملك فهد لطباعة المصحف الشريف، وبيانات الصفحات من مشروع quran-qcf4. مصحف التجويد الملوّن: خطوط مجمع الملك فهد (الإصدار الرابع، ١٤٤١هـ) كما تنشرها مكتبة QUL، للعرض المجاني فقط. نص الحفظ بالرسم العثماني من موسوعة القرآن الكريم (quranenc.com). حدود الأرباع والأجزاء من مشروع quran-meta. محرك التسميع الدقيق: نموذج tarteel-ai/whisper-base-ar-quran من Tarteel AI (رخصة Apache 2.0)، مضغوط ليعمل على الجوال بمكتبة Transformers.js. التلاوات الصوتية: من خدمة Islamic Network (alquran.cloud) للاستخدام التعليمي المجاني، والاستماع المتصل للسورة كاملة من تسجيلات QuranicAudio بتوقيت الآيات من Quran.com، وحقوقها لأصحابها من القرّاء. صوت الأذان: مقطع من تسجيل أذان المغرب في المسجد الحرام (٢٥ فبراير ٢٠١٢) من تسجيل 3omar Faruq، برخصة المشاع الإبداعي CC BY 3.0، عبر ويكيميديا كومنز. أذكار الصباح والمساء: من كتاب «حصن المسلم» للشيخ سعيد بن علي بن وهف القحطاني رحمه الله.</p></div>`;
   return h;
 }
 
@@ -2531,7 +2531,9 @@ async function preparePage(p){
     [p + 1, p - 1, p + 2].filter(q => q >= 1 && q <= 604).forEach(q => { if (tjOn()) tjFont(q).catch(() => {}); else pageFonts(q).forEach(n => loadFont(n).catch(() => {})); });
   } catch (e) { if (RD && RD.page === p && view === 'reader'){ RD.status = 'err'; render(); } }
 }
+function fullPrefetch(p){ try { const rk = reciter()[0]; if (!FULLREC[rk]) return; const s1 = gidToSA(PSTART[p])[0], s2 = gidToSA(PSTART[Math.min(605, p + 1)] - 1)[0]; for (let s = s1; s <= Math.min(114, s2); s++) fullTs(rk, s).catch(() => {}); } catch (e) {} }
 function openReader(p, back){
+  fullPrefetch(p);
   p = Math.max(1, Math.min(604, p | 0));
   RD = {page:p, status: pageReady(p) ? 'ok' : 'loading', sel:null, sheet:'', back: back || (view === 'reader' ? 'read' : view)};
   view = 'reader'; R().page = p; save(); render(); window.scrollTo(0, 0);
@@ -2540,6 +2542,7 @@ function openReader(p, back){
 }
 function goPage(np){
   if (np < 1 || np > 604) return;
+  fullPrefetch(np);
   const w = S.wird, p = RD.page;
   if (w && np === p + 1 && w.pos === p){ w.pos = np; markDay(); }
   RD.page = np; RD.sel = null; RD.sheet = ''; RD.fs = null; RD.focus = null; R().page = np; save();
@@ -2627,15 +2630,48 @@ let AU = null, audEl = null;
 function audInit(){
   if (audEl) return;
   audEl = new Audio(); audEl.preload = 'auto';
-  audEl.addEventListener('ended', audNext);
+  audEl.addEventListener('ended', () => { if (AU && AU.full){ audStop(); return; } audNext(); });
+  audEl.addEventListener('timeupdate', audFullTick);
+  audEl.addEventListener('loadedmetadata', () => { if (AU && AU.seekTo != null){ try { audEl.currentTime = AU.seekTo; } catch (e) {} AU.seekTo = null; } });
   audEl.addEventListener('playing', () => { if (AU){ AU.load = false; AU.paused = false; AU.err = false; render(); } });
   audEl.addEventListener('waiting', () => { if (AU && !AU.load){ AU.load = true; render(); } });
-  audEl.addEventListener('error', () => { if (AU && audEl.getAttribute('src')){ AU.err = true; AU.load = false; AU.paused = true; render(); } });
+  audEl.addEventListener('error', () => { if (AU && AU.full && audEl.getAttribute('src')){ AU.full = null; AU.load = true; audLoad(); return; }
+    if (AU && audEl.getAttribute('src')){ AU.err = true; AU.load = false; AU.paused = true; render(); } });
+}
+/* Continuous listening plays the reciter's whole-surah recording (QuranicAudio / Quran.com), so there is no
+   gap between ayat as there is when one file per ayah is joined; the ayah timings say which ayah is being recited. */
+const FULLREC = {'ar.husary': [6, 'khalil_al_husary'], 'ar.minshawi': [9, 'siddiq_minshawi'], 'ar.abdulbasitmurattal': [2, 'abdul_baset'], 'ar.alafasy': [7, 'mishari_al_afasy'], 'ar.abdurrahmaansudais': [3, 'abdurrahmaan_as_sudais'], 'ar.saoodshuraym': [10, 'saud_ash-shuraym']};
+const FULLTS = {}, FULLGET = {};
+function fullTs(rk, s){
+  const key = rk + ':' + s; if (FULLTS[key]) return Promise.resolve(FULLTS[key]);
+  if (!FULLGET[key]) FULLGET[key] = fetch(`https://api.quran.com/api/v4/chapter_recitations/${FULLREC[rk][0]}/${s}?segments=true`).then(r => r.json())
+    .then(d => (FULLTS[key] = d.audio_file.timestamps.map(x => [x.timestamp_from / 1000, x.timestamp_to / 1000]))).catch(e => { delete FULLGET[key]; throw e; });
+  return FULLGET[key];
+}
+function fullOk(list, ctx){
+  const rk = reciter()[0]; if (!FULLREC[rk] || (ctx !== 'voice' && ctx !== 'reader') || aRep() !== 1 || list.length < 2) return null;
+  const s = gidToSA(list[0])[0]; if (gidToSA(list[list.length - 1])[0] !== s) return null;
+  for (let i = 1; i < list.length; i++) if (list[i] !== list[i - 1] + 1) return null;
+  const a1 = gidToSA(list[0])[1], ts = FULLTS[rk + ':' + s];
+  if (a1 !== 1 && !ts) return null;   /* starting mid-surah needs the timings first */
+  return {rk, s, url: `https://download.quranicaudio.com/qdc/${FULLREC[rk][1]}/murattal/${s}.mp3`, seek: a1 === 1 ? 0 : ts[a1 - 1][0]};
 }
 function audPlay(list, ctx){
   audInit(); if (audEl.getAttribute('src')) audEl.pause();
-  AU = {list, i: 0, done: 0, ctx, load: true, paused: false, err: false};
+  AU = {list, i: 0, done: 0, ctx, load: true, paused: false, err: false, full: fullOk(list, ctx)};
+  if (AU.full){ const F = AU.full; fullTs(F.rk, F.s).catch(() => {}); audEl.src = F.url; if (F.seek) AU.seekTo = F.seek; audEl.play().catch(() => { if (AU){ AU.paused = true; AU.load = false; render(); } }); render(); return; }
   audLoad();
+}
+function audFullTick(){
+  if (!AU || !AU.full) return;
+  const ts = FULLTS[AU.full.rk + ':' + AU.full.s]; if (!ts) return;
+  const tm = audEl.currentTime; let k = ts.findIndex(x => tm < x[1] - 0.05); if (k < 0) k = ts.length - 1;
+  const g = GBASE[AU.full.s - 1] + k + 1, last = AU.list[AU.list.length - 1];
+  if (g > last){ audStop(); return; }
+  const i = AU.list.indexOf(g);
+  if (i >= 0 && i !== AU.i){ AU.i = i;
+    if (AU.ctx === 'reader' && view === 'reader' && RD){ const p = gPage(g); if (p !== RD.page){ goPage(p); return; } }
+    render(); }
 }
 /* Back-to-back recitation (ayah by ayah): fetch the next file while the current one plays, so the next ayah starts at once instead of after a pause to download it. */
 const WARMED = new Set(); let warmEl = null;
@@ -2665,7 +2701,7 @@ function audStop(quiet){
 }
 function audToggle(){
   if (!AU) return;
-  if (AU.err){ AU.err = false; AU.load = true; audLoad(); return; }
+  if (AU.err){ AU.err = false; AU.load = true; AU.full = null; audLoad(); return; }
   if (audEl.paused){ audEl.play().catch(() => {}); AU.paused = false; } else { audEl.pause(); AU.paused = true; }
   render();
 }
@@ -3675,7 +3711,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r140';
+const BUILD = 'r141';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
