@@ -3244,12 +3244,8 @@ function vDua(){
   return h;
 }
 const HAJJ_BOOKS = [
-  ['780/ar_sifat_alomrah_harmain.pdf', 'صفة العمرة', 'رئاسة الشؤون الدينية بالمسجد الحرام والمسجد النبوي، ١٤٤٦هـ', 37, 3.8, true],
-  ['371/ar_mukhtasarhajj.pdf', 'المختصر في صفة الحج', 'اللجنة العلمية برئاسة الشؤون الدينية بالمسجد الحرام والمسجد النبوي', 27, 14],
   ['63/ar_sifatumrah.pdf', 'صفة العمرة', 'الشيخ عبد العزيز بن باز رحمه الله', 11, 1.8],
-  ['228/ar_sifathajj.pdf', 'صفة الحج', 'الشيخ محمد بن صالح العثيمين رحمه الله', 42, 1.4, true],
-  ['265/ar_almanhaj.pdf', 'المنهج لمريد العمرة والحج', 'الشيخ محمد بن صالح العثيمين رحمه الله', 90, 14],
-  ['209/ar_attahqiq.pdf', 'التحقيق والإيضاح لكثير من مسائل الحج والعمرة والزيارة', 'الشيخ عبد العزيز بن باز رحمه الله', 112, 4.9]];
+  ['228/ar_sifathajj.pdf', 'صفة الحج', 'الشيخ محمد بن صالح العثيمين رحمه الله', 42, 1.4, true]];
 const LIB_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>';
 const KAABA_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4v11l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v11"/><path d="M3 10.5l9 4 9-4"/></svg>';
 const EXT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
@@ -3594,7 +3590,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r134';
+const BUILD = 'r135';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
