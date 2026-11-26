@@ -298,6 +298,36 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .vnear{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .vnear .btn{flex:1 1 auto;width:auto}
 .vmsg.err{color:var(--bad)}
+#cel{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:rgb(6 50 45 / .55);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);animation:celIn .25s ease-out;cursor:pointer;overflow:hidden}
+#cel.out{animation:celOut .35s ease-in forwards}
+#cel .cc{position:relative;text-align:center;background:radial-gradient(120% 90% at 50% 20%,#14806f,#0b5a51 60%,#073f39);color:#fff;border:2px solid #e9cf8f;border-radius:26px;padding:26px 30px 22px;box-shadow:0 18px 50px rgb(0 0 0 / .4),inset 0 0 0 6px rgb(233 207 143 / .18);animation:celPop .55s cubic-bezier(.2,1.6,.4,1)}
+#cel .cs{width:74px;height:74px;margin:-62px auto 6px;color:#e9cf8f;background:#0b5a51;border:2px solid #e9cf8f;border-radius:50%;display:grid;place-items:center;animation:celSpin 3s linear infinite}
+#cel .cs svg{width:46px;height:46px}
+#cel .ct{font-family:var(--f-quran);font-size:2.6rem;line-height:1.5;background:linear-gradient(180deg,#fff3c4,#f1d27a 45%,#c9a046);-webkit-background-clip:text;background-clip:text;color:transparent;padding:0 .1em}
+#cel .c2{font-weight:700;font-size:1.15rem;margin-top:2px}
+#cel .c3{opacity:.85;font-size:.95rem;margin-top:6px}
+#cel i{position:absolute;left:50%;top:50%;width:var(--s);height:var(--s);color:var(--c);opacity:0;animation:celFly var(--d) cubic-bezier(.15,.7,.3,1) var(--w) forwards}
+#cel i svg{width:100%;height:100%}
+@keyframes celIn{from{opacity:0}to{opacity:1}}
+@keyframes celOut{to{opacity:0}}
+@keyframes celPop{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}
+@keyframes celSpin{to{transform:rotate(360deg)}}
+@keyframes celFly{0%{opacity:1;transform:translate(-50%,-50%) scale(.3) rotate(0)}70%{opacity:1}100%{opacity:0;transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(1) rotate(var(--r))}}
+#cel .ct{background:linear-gradient(100deg,#c9a046 0%,#f1d27a 30%,#fffbe8 45%,#f1d27a 60%,#c9a046 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;animation:celShine 1.8s ease-in-out .5s infinite}
+#cel .c2{font-size:1.05rem;font-weight:700;margin-top:4px;line-height:1.6}
+#cel .cn{color:#e9cf8f;font-weight:700;margin-top:2px}
+#cel.t2 .cc,#cel.t3 .cc{padding:30px 32px 26px}
+#cel.t3 .ct{font-size:3rem}
+#cel .fw{position:absolute;left:var(--fx);bottom:-10px;width:6px;height:6px;border-radius:50%;background:#fff3c4;box-shadow:0 0 10px 3px #f1d27a;opacity:0;animation:celRise var(--rd) cubic-bezier(.25,.6,.4,1) var(--rw) forwards}
+#cel .bs{position:absolute;left:var(--bx);top:var(--by);width:0;height:0}
+#cel .bs i{left:0;top:0}
+#cel .ln{position:absolute;top:-8px;left:var(--lx);transform-origin:50% 0;animation:celSwing 2.2s ease-in-out infinite alternate,celDrop .9s cubic-bezier(.2,1.4,.4,1) both;color:#e9cf8f}
+#cel .ln svg{width:var(--lw);height:auto;filter:drop-shadow(0 0 10px rgb(241 210 122 / .8))}
+@keyframes celShine{0%{background-position:100% 0}60%,100%{background-position:-50% 0}}
+@keyframes celRise{0%{opacity:1;transform:translateY(0)}90%{opacity:1}100%{opacity:0;transform:translateY(calc(-1 * var(--rh)))}}
+@keyframes celSwing{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}
+@keyframes celDrop{from{translate:0 -160px}to{translate:0 0}}
+@media (prefers-reduced-motion: reduce){#cel i,#cel .fw,#cel .bs{display:none}#cel .cs,#cel .ct,#cel .ln{animation:none}}
 #ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
 #ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
 #ptAlert svg{width:44px;height:44px;color:var(--accent)}
@@ -2339,7 +2369,7 @@ function initStep(){
   sess.reps = {}; sess.ri = 0;
   sess.reveal = t.type === 'new' ? 1 : 2;
   sess.shown = new Set(); sess.glow = false; sess.pT = Date.now(); sess.starts = null; sess.flashT = 0; sess.flashing = false;
-  sess.peeked = new Set();
+  sess.peeked = new Set(); sess.celFor = -1;
   buildExp(chunkAyat(itemChunk(t)));
   sess.cum = 0;
   sess.ws = {}; sess.p = 0; sess.m2 = 0; sess.spoken = []; sess.finalText = ''; sess.interim = ''; sess.usedMic = false; sess.listening = false; sess.micErr = ''; sess.beeped = new Set(); sess.why = null; sess.showAll = false; SRLOG.length = 0; sess.engine = null; sess.draining = false; sess.engWait = false; sess.engAsk = false;
@@ -2347,6 +2377,60 @@ function initStep(){
 function chunkAyat(c){ const out = []; segs(c).forEach((sg, si) => { for (let a = sg.a; a <= sg.b; a++) out.push({s:sg.s, a, txt:Q[sg.s - 1][1][a - 1], head: a === sg.a && (si > 0 || a === 1)}); }); return out; }
 function headHtml(x, multi){ return (multi ? `<div class="shead">${sName(x.s)}</div>` : '') + (x.a === 1 && x.s !== 1 && x.s !== 9 ? `<div class="basmala">${BASMALA}</div>` : ''); }
 
+/* ---------- a happy moment: a passage recited by voice with no mistake ---------- */
+const CEL_LINES = ['زادك الله حفظًا وتوفيقًا', 'جعلك الله من أهل القرآن', 'جعل الله القرآن ربيع قلبك', 'ثبّتك الله وزادك من فضله'];
+const CRESCENT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 3.2A9 9 0 1 0 20.8 16 7.2 7.2 0 0 1 15.5 3.2z"/></svg>';
+const LANTERN = '<svg viewBox="0 0 40 92" aria-hidden="true"><path d="M20 0v14" stroke="currentColor" stroke-width="1.5"/><path d="M14 14h12l3 8H11z" fill="currentColor"/><path d="M11 22h18c4 10 4 34 0 44H11c-4-10-4-34 0-44z" fill="rgb(241 210 122 / .28)" stroke="currentColor" stroke-width="2"/><path d="M20 26v36M14 28c-2 10-2 22 0 32M26 28c2 10 2 22 0 32" stroke="currentColor" stroke-width="1.2" fill="none" opacity=".7"/><circle cx="20" cy="44" r="5" fill="#fff3c4" opacity=".9"/><path d="M11 66h18l-3 8H14z" fill="currentColor"/><path d="M20 74v10" stroke="currentColor" stroke-width="1.5"/><circle cx="20" cy="87" r="3" fill="currentColor"/></svg>';
+/* What was recited, in words: «سورة الملك كاملة», «الآيات ١ إلى ٥ من سورة البقرة», «الجزء ٣٠ كاملًا». */
+function celInfo(ay){
+  const by = new Map(); ay.forEach(x => { if (!by.has(x.s)) by.set(x.s, []); by.get(x.s).push(x.a); });
+  const g1 = saToG(ay[0].s, ay[0].a), g2 = saToG(ay[ay.length - 1].s, ay[ay.length - 1].a);
+  for (let j = 1; j <= 30; j++){ const a = JSTART[j], b = j === 30 ? GBASE[114] : JSTART[j + 1] - 1; if (Math.min(g1, g2) <= a && Math.max(g1, g2) >= b && ay.length >= b - a + 1) return {tier: 3, what: 'الجزء ' + AR(j) + ' كاملًا'}; }
+  const parts = [...by.entries()], full = parts.filter(([s, as]) => as.length === nAy(s));
+  const tier = full.length ? 2 : 1;
+  let what;
+  if (parts.length === 1){ const [s, as] = parts[0]; what = as.length === nAy(s) ? sName(s) + ' كاملة' : (as.length === 1 ? 'الآية ' + AR(as[0]) : 'الآيات ' + AR(Math.min(...as)) + ' إلى ' + AR(Math.max(...as))) + ' من ' + sName(s); }
+  else if (parts.length === full.length && parts.length <= 3) what = parts.map(([s]) => sName(s)).join(' و');
+  else what = 'من ' + sName(parts[0][0]) + ' إلى ' + sName(parts[parts.length - 1][0]);
+  return {tier, what};
+}
+function celChime(tier){
+  if (S.beep === false) return;
+  try { audioUnlock(); if (!AC) return; const t0 = AC.currentTime + 0.05;
+    const bell = (f, at, len, vol) => [1, 2.01, 3.02].forEach((m, k) => { const o = AC.createOscillator(), g = AC.createGain(); o.type = k ? 'sine' : 'triangle'; o.frequency.value = f * m;
+      g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol / (k + 1.5), at + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, at + len / (k + 1));
+      o.connect(g).connect(AC.destination); o.start(at); o.stop(at + len + 0.1); });
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((f, i) => bell(f, t0 + i * 0.13, i === 3 ? 1.6 : 0.7, 0.2));
+    if (tier >= 2) [783.99, 1046.5, 1318.5].forEach((f, i) => bell(f, t0 + 0.75 + i * 0.11, i === 2 ? 2 : 0.8, 0.14));
+    if (tier >= 3) [1046.5, 1318.5, 1568, 2093].forEach((f, i) => bell(f, t0 + 1.4 + i * 0.09, i === 3 ? 2.4 : 0.6, 0.1));
+  } catch (e) {}
+}
+function celebrate(info){
+  info = info || {tier: 1, what: ''};
+  const tier = info.tier, old = document.getElementById('cel'); if (old) old.remove();
+  const el = document.createElement('div'); el.id = 'cel'; el.className = 't' + tier; el.setAttribute('role', 'alert');
+  const R = Math.random, pick = a => a[Math.floor(R() * a.length)], COL = ['#e9cf8f', '#f6e3a6', '#ffffff', '#7fd3c3'];
+  const spark = (k, dist, delay) => { const a = R() * Math.PI * 2, r = dist * (0.55 + R() * 0.6), s = 9 + R() * 18;
+    return `<i style="--x:${Math.round(Math.cos(a) * r)}px;--y:${Math.round(Math.sin(a) * r)}px;--s:${Math.round(s)}px;--r:${Math.round(R() * 540 - 270)}deg;--d:${(1.1 + R() * 0.9).toFixed(2)}s;--w:${(delay + R() * 0.2).toFixed(2)}s;--c:${COL[k % 4]}">${k % 5 === 0 ? CRESCENT : STAR8}</i>`; };
+  let bits = '';
+  for (let k = 0; k < 34; k++) bits += spark(k, 330, 0);
+  if (tier >= 2){   /* fireworks: rockets rise from the bottom and burst into stars and crescents */
+    const waves = tier >= 3 ? 7 : 4;
+    for (let w = 0; w < waves; w++){ const fx = 12 + R() * 76, rh = 0.42 + R() * 0.3, rd = 0.75 + R() * 0.25, rw = 0.2 + w * (tier >= 3 ? 0.45 : 0.55);
+      bits += `<span class="fw" style="--fx:${fx.toFixed(1)}%;--rh:${Math.round(rh * innerHeight)}px;--rd:${rd.toFixed(2)}s;--rw:${rw.toFixed(2)}s"></span>`;
+      let b = ''; for (let k = 0; k < 22; k++) b += spark(k + w, 150, rw + rd - 0.05);
+      bits += `<span class="bs" style="--bx:${fx.toFixed(1)}%;--by:${Math.round(innerHeight * (1 - rh))}px">${b}</span>`; }
+  }
+  if (tier >= 3) [8, 26, 74, 92].forEach((lx, k) => { bits += `<span class="ln" style="--lx:${lx}%;--lw:${k % 2 ? 34 : 44}px;animation-delay:${(k * 0.35).toFixed(2)}s,${(k * 0.12).toFixed(2)}s">${LANTERN}</span>`; });
+  const nm = S.name ? `<div class="cn">أحسنت يا ${esc(S.name)}</div>` : '';
+  el.innerHTML = bits + `<div class="cc"><div class="cs">${STAR8}</div><div class="ct">ما شاء الله</div>${nm}<div class="c2">${info.what ? 'سمّعت ' + info.what + ' بلا أخطاء' : 'تسميع بلا أخطاء'}</div><div class="c3">${pick(CEL_LINES)}</div></div>`;
+  document.body.appendChild(el);
+  const close = () => { if (!el.isConnected || el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 360); };
+  el.addEventListener('click', close); setTimeout(close, tier >= 3 ? 7000 : tier === 2 ? 5200 : 3600);
+  if (navigator.vibrate) try { navigator.vibrate(tier >= 2 ? [40, 60, 40, 60, 120, 200, 60, 60, 60] : [40, 60, 40, 60, 120]); } catch (e) {}
+  celChime(tier);
+}
 function vSession(){
   const t = sess.queue[sess.pos], c = itemChunk(t), multi = segs(c).length > 1, R0 = REPS();
   const steps = sess.queue.map((_, i) => `<i class="${i <= sess.pos ? 'on' : ''}"></i>`).join('');
@@ -2416,6 +2500,11 @@ function vSession(){
       const unreached = sess.usedMic ? Math.max(0, k - sess.p) : 0;
       const errs = misses + hints + unreached;
       const sug = sess.usedMic ? (errs === 0 ? 3 : errs <= 2 ? 2 : 1) : 0;
+      if (sess.usedMic && errs === 0 && !sess.cum && k > 0 && sess.celFor !== sess.pos){ sess.celFor = sess.pos;
+        sess.perf = sess.perf || {}; sess.perf[sess.pos] = true;
+        const q = sess.queue, all = sess.pos === q.length - 1 && q.length > 1 && q.every((x, i) => sess.perf[i] && x.type === q[0].type);
+        const info = celInfo(all ? q.flatMap(x => chunkAyat(itemChunk(x))) : chunkAyat(itemChunk(t)));
+        setTimeout(() => celebrate(info), 250); }
       const S3 = sug === 3 ? 'sug' : '', S2 = sug === 2 ? 'sug' : '', S1 = sug === 1 ? 'sug' : '';
       if (sess.usedMic){
         h += `<div class="result"><span class="chip">${AR(okN)} كلمة صحيحة</span>${misses ? `<span class="chip warn" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)">${AR(misses)} خطأ أو تجاوز (بالأحمر)</span>` : ''}${softs ? `<span class="chip soft">${AR(softs)} لم تُسمع بوضوح</span>` : ''}${hints ? `<span class="chip warn">${AR(hints)} مساعدة</span>` : ''}${unreached ? `<span class="chip warn">${AR(unreached)} لم تُقرأ</span>` : ''}</div>
@@ -3711,7 +3800,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r141';
+const BUILD = 'r142';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
