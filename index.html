@@ -343,6 +343,9 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .reviewing .spin{width:18px;height:18px;border-radius:50%;border:3px solid color-mix(in srgb,var(--warn) 30%,transparent);border-top-color:var(--warn);animation:rvspin .8s linear infinite}
 @keyframes rvspin{to{transform:rotate(360deg)}}
 .grade.wait{opacity:.45;pointer-events:none}
+.card.early{border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:color-mix(in srgb,var(--warn) 7%,var(--surface))}
+.card.early b{color:var(--warn)}
+.card.early p{margin:0}
 .okbanner.retry{background:color-mix(in srgb,var(--warn) 12%,var(--surface));color:var(--warn);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
 #ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
 #ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
@@ -2603,6 +2606,8 @@ function vSession(){
         const q = sess.queue, all = sess.pos === q.length - 1 && q.length > 1 && q.every((x, i) => sess.perf[i] && x.type === q[0].type);
         const info = celInfo(all ? q.flatMap(x => chunkAyat(itemChunk(x))) : chunkAyat(itemChunk(t)));
         setTimeout(() => celebrate(info), 250); }
+      const left = unreached;   /* by voice only: without the mic, «أنهيت» before the end is the normal way to check yourself */
+      if (left && !sess.cum && !sess.draining) h += `<div class="card early"><b>لم تُكمل تسميع ${t.page ? 'الصفحة' : 'المقطع'}</b><p class="muted">بقي ${AR(left)} ${left === 1 ? 'كلمة' : left === 2 ? 'كلمتان' : left <= 10 ? 'كلمات' : 'كلمة'} لم ${left === 2 ? 'تقرأهما' : 'تقرأها'}. تستطيع أن تعيد التسميع من أوله، أو تقيّم ما سمّعته بالأزرار في الأسفل.</p><button class="btn" data-act="reRecite">↻ أعد التسميع من أوله</button></div>`;
       const S3 = sug === 3 ? 'sug' : '', S2 = sug === 2 ? 'sug' : '', S1 = sug === 1 ? 'sug' : '';
       if (sess.usedMic && misses){ if (sess.mutaKey !== sess.spoken.length){ sess.mutaKey = sess.spoken.length; try { sess.muta = mutaFind(tay, sess.starts || []); } catch (e) { sess.muta = null; } }
         if (sess.muta) h += mutaCard(sess.muta); }
@@ -3900,7 +3905,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r152';
+const BUILD = 'r153';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -4083,6 +4088,10 @@ app.addEventListener('click', e => {
     render(); return;
   }
   if (a === 'all'){ stopMic(); sess.reveal = sess.total; render(); return; }
+  /* He finished before the end of the page: recite it again from the start (not counted as forgotten) */
+  if (a === 'reRecite'){ const wasMic = sess.usedMic; initStep(); render(); window.scrollTo(0, 0);
+    if (wasMic && view === 'session' && sess.phase === 'test'){ const mb = app.querySelector('.mic[data-act="mic"]'); if (mb && !mb.disabled) mb.click(); }
+    return; }
   if (a === 'gnew'){
     const t = sess.queue[sess.pos]; noteMistakes(t); save();
     if (v === '1'){ initStep(); render(); window.scrollTo(0, 0); return; }
