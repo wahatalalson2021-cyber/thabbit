@@ -337,6 +337,12 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .mutacard .mq.other{background:color-mix(in srgb,var(--bad) 7%,transparent)}
 .mutacard .mq.other b{color:var(--bad)}
 .mutacard mark{background:color-mix(in srgb,var(--gold, #e9cf8f) 55%,transparent);color:inherit;border-radius:6px;padding:0 2px}
+.reviewing{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;background:color-mix(in srgb,var(--warn) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);border-radius:14px;padding:10px 14px;margin:8px 0}
+.reviewing b{color:var(--warn)}
+.reviewing small{flex-basis:100%;color:var(--muted);padding-inline-start:30px}
+.reviewing .spin{width:18px;height:18px;border-radius:50%;border:3px solid color-mix(in srgb,var(--warn) 30%,transparent);border-top-color:var(--warn);animation:rvspin .8s linear infinite}
+@keyframes rvspin{to{transform:rotate(360deg)}}
+.grade.wait{opacity:.45;pointer-events:none}
 #ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
 #ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
 #ptAlert svg{width:44px;height:44px;color:var(--accent)}
@@ -2564,12 +2570,14 @@ function vSession(){
       h += `<div class="rnav"><button class="btn soft" data-act="next">اكشف الكلمة التالية</button><button class="btn ghost" data-act="all">أنهيت، أظهر النص</button></div></div>`;
     } else {
       const hints = sess.peeked.size;
+      /* the engine is still re-listening to doubtful words: colours may change in a moment, so say so and hold the grading */
+      if (sess.draining && sess.usedMic) h += `<div class="reviewing" role="status"><span class="spin"></span><b>لحظة... أراجع الكلمات الملونة مرة أخرى</b><small>قد تتغير ألوانها بعد ثوانٍ</small></div>`;
       const misses = Object.values(sess.ws).filter(x => x === 'miss').length, softs = Object.values(sess.ws).filter(x => x === 'soft').length;
       const okN = Object.values(sess.ws).filter(x => x === 'ok').length;
       const unreached = sess.usedMic ? Math.max(0, k - sess.p) : 0;
       const errs = misses + hints + unreached;
       const sug = sess.usedMic ? (errs === 0 ? 3 : errs <= 2 ? 2 : 1) : 0;
-      if (sess.usedMic && errs === 0 && !sess.cum && k > 0 && sess.celFor !== sess.pos){ sess.celFor = sess.pos;
+      if (sess.usedMic && errs === 0 && !sess.cum && k > 0 && !sess.draining && sess.celFor !== sess.pos){ sess.celFor = sess.pos;
         sess.perf = sess.perf || {}; sess.perf[sess.pos] = true;
         const q = sess.queue, all = sess.pos === q.length - 1 && q.length > 1 && q.every((x, i) => sess.perf[i] && x.type === q[0].type);
         const info = celInfo(all ? q.flatMap(x => chunkAyat(itemChunk(x))) : chunkAyat(itemChunk(t)));
@@ -2587,9 +2595,9 @@ function vSession(){
       if (sess.cum){
         h += `<div class="cumbtns"><button class="btn" data-act="cumNext">احفظ ${(() => { const ca = chunkAyat(c), nu = memUnits(ca).find(v => v.s === sess.cum); return nu ? spanName(ca, nu.s, nu.e) : 'ما بعدها'; })()}</button><button class="btn ghost" data-act="cumAgain">أعِد ما سبق معًا</button></div>`;
       } else if (t.type === 'new'){
-        h += `<div class="grade"><button class="g3 ${S3}" data-act="gnew" data-v="3">حفظته<small>بلا أخطاء</small></button><button class="g2 ${S2}" data-act="gnew" data-v="2">بتردد<small>أخطاء قليلة</small></button><button class="g1 ${S1}" data-act="gnew" data-v="1">ليس بعد<small>أعد القراءة</small></button></div>`;
+        h += `<div class="grade${sess.draining && sess.usedMic ? ' wait' : ''}"><button class="g3 ${S3}" data-act="gnew" data-v="3">حفظته<small>بلا أخطاء</small></button><button class="g2 ${S2}" data-act="gnew" data-v="2">بتردد<small>أخطاء قليلة</small></button><button class="g1 ${S1}" data-act="gnew" data-v="1">ليس بعد<small>أعد القراءة</small></button></div>`;
       } else {
-        h += `<div class="grade"><button class="g3 ${S3}" data-act="grev" data-v="3">ثابت<small>بلا أخطاء</small></button><button class="g2 ${S2}" data-act="grev" data-v="2">بتردد<small>أخطاء قليلة</small></button><button class="g1 ${S1}" data-act="grev" data-v="1">نسيته<small>نعيده قريبًا</small></button></div>`;
+        h += `<div class="grade${sess.draining && sess.usedMic ? ' wait' : ''}"><button class="g3 ${S3}" data-act="grev" data-v="3">ثابت<small>بلا أخطاء</small></button><button class="g2 ${S2}" data-act="grev" data-v="2">بتردد<small>أخطاء قليلة</small></button><button class="g1 ${S1}" data-act="grev" data-v="1">نسيته<small>نعيده قريبًا</small></button></div>`;
       }
     }
   }
@@ -3871,7 +3879,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r146';
+const BUILD = 'r147';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
