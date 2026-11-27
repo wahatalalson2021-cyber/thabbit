@@ -1385,6 +1385,9 @@ function waslMatch(i, j, ke, kh){
   const E = sess.exp, H = sess.spoken; if (i + ke > E.length || j + kh > H.length) return false;
   const hw = H.slice(j, j + kh); if (hw.some(w => !w)) return false;
   if (ke === kh && (hw.every(w => quranWord(w)) || hw.some((w, k) => E[i + k].includes(w)))) return 0;   // same word breaks: judged word by word
+  /* the written words were heard exactly, followed by an extra word (a restart, or a word the recognizer added):
+     not blurred speech, so judge them word by word and leave the extra word out (e.g. «عذابا قريبا يوم يقوم ينذر») */
+  if (kh > ke && hw.slice(0, ke).every((w, k) => same(E[i + k], w))) return 0;
   const key = 'w' + i + '|' + ke + '|' + hw.join(' '); if (sess.cls.has(key)) return sess.cls.get(key);
   const h = fold(hw.join('')), e = fold(waslSound(E.slice(i, i + ke).map(vs => vs[0])));
   const d = lev(e, h), r = e.length >= 6 && h.length >= e.length * 0.75 && d <= Math.max(2, Math.round(e.length * 0.3)) ? (d === 0 || (d <= 1 && ke !== kh) ? 1 : 2) : 0; sess.cls.set(key, r); return r;
@@ -1458,7 +1461,12 @@ function processSpoken(flush){
     /* the same phrase said again (the reader repeating the ayah he is on) is not a correction */
     const repHere = run.length && [...Array(run.length).keys()].some(L0 => { const L = L0 + 1; return run.length % L === 0 && q + L <= n && run.every((w, t) => same(E[q + (t % L)], w)); });
     if (run.length && !repHere && !reRead(run, q)){ let t = 0; while (t < run.length && E[q + t] && q + t < bi && same(E[q + t], run[t])) t++;   // "وما يعلمون" before "وما يشعرون": the changed word is يشعرون
-      const r = q + t < bi && ws[q + t] === 'ok' ? q + t : q; ws[r] = 'soft'; hd[r] = 'قلتَ قبلها: ' + run.join(' '); } }
+      const r = q + t < bi && ws[q + t] === 'ok' ? q + t : q;
+      /* a long run of words that sound nothing like what follows is not a correction but sound from outside (talk nearby,
+         noise written as words): e.g. «وما سعمهم بكما سبلتهم لكم» before «إنا أنذرناكم» */
+      const like = w => [E[r], E[r + 1]].some(vs => vs && vs.some(v => { const a = fold(v), b = fold(w); return b.length >= 3 && a.length >= 3 && lev(a, b) <= Math.max(1, Math.round(Math.max(a.length, b.length) * 0.4)); }));
+      if (run.length >= 3 && !run.some(like)) continue;
+      ws[r] = 'soft'; hd[r] = 'قلتَ قبلها: ' + run.join(' '); } }
   if (bi !== sess.p){ sess.pT = Date.now(); if (sess.glow){ sess.glow = false; const b = document.getElementById('hintBtn'); if (b) b.classList.remove('glow'); } }
   sess.ws = ws; sess.heard = hd; sess.p = bi;
   if (sess.p >= n){ sess.reveal = n; stopMic(); }
@@ -3800,7 +3808,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r142';
+const BUILD = 'r143';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
