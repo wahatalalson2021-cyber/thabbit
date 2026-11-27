@@ -1084,6 +1084,8 @@ function expVariants(w){
   /* the mushaf writes «ٱلَّيۡل» with one lam (the shadda doubles it): it is said «الليل», so accept that spelling too */
   const m = w.match(/^([وفبك]?)[\u064B-\u0652]*[ٱا]ل[\u064B-\u0650\u0652]*\u0651/); if (m){ const pre = m[1] ? baseNorm(m[1]) : '', x = a.slice(pre.length);
     if (x.startsWith('ال') && (x[2] === 'ي' || x[2] === 'ا')) out.push(pre + 'الل' + x.slice(2)); }   /* الليل، اللاتي، اللائي (not الذي/التي, said with one lam) */
+  /* a short word ending in a doubled letter, «مِمَّ» «عَمَّ»: the recognizer writes the final fatha as an alif («مما» «عما») */
+  if (a.length === 2 && /[\u064E\u0651]{2}$/.test(w.replace(/[^\u0621-\u0652]/g,''))) out.push(a + 'ا');
   return out;
 }
 /* "ألف" in "ألف لام ميم" is sometimes written as the number 1000. */
@@ -3884,7 +3886,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r150';
+const BUILD = 'r151';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
