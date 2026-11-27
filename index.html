@@ -2028,10 +2028,24 @@ function rcRange(d){
 function rcName(d){ if (d.kind === 'ayat'){ const [g1, g2] = rcRange(d); return 'سورة ' + Q[d.s - 1][0] + ': الآيات ' + AR(gidToSA(g1)[1]) + ' إلى ' + AR(gidToSA(g2)[1]); }
   return d.kind === 'surah' ? 'سورة ' + Q[d.s - 1][0] : d.kind === 'juz' ? 'الجزء ' + AR(d.j) : 'الصفحات ' + AR(Math.min(d.a, d.b)) + ' إلى ' + AR(Math.max(d.a, d.b)); }
 /* One item per mushaf page, holding only the ayat of the chosen range on that page. */
+/* A short surah (one page or less of text) that the mushaf splits across two pages stays whole: it goes with the page holding most of it. */
+const gWords = g => { const [s, a] = gidToSA(g); return Q[s - 1][1][a - 1].split(' ').length; };
 function reciteItems(G1, G2){
-  const out = [];
-  for (let p = gPage(G1); p <= gPage(G2); p++){ const a = Math.max(G1, PSTART[p]), b = Math.min(G2, PSTART[p + 1] - 1); if (a <= b) out.push({type:'recite', page:p, chunk:{r:[[a, b]]}}); }
-  return out;
+  const groups = [];
+  for (let p = gPage(G1); p <= gPage(G2); p++){ const gr = []; for (let g = Math.max(G1, PSTART[p]); g <= Math.min(G2, PSTART[p + 1] - 1); g++) gr.push(g); if (gr.length) groups.push(gr); }
+  const pw = p => { let n = 0; for (let g = PSTART[p]; g < PSTART[p + 1]; g++) n += gWords(g); return n; };
+  for (let i = 0; i + 1 < groups.length; i++){
+    const A = groups[i], B = groups[i + 1]; if (!A.length || !B.length) continue;
+    const s = gidToSA(A[A.length - 1])[0]; if (gidToSA(B[0])[0] !== s) continue;
+    let tot = 0; for (let g = GBASE[s - 1] + 1; g <= GBASE[s]; g++) tot += gWords(g);
+    if (gPage(GBASE[s]) - gPage(GBASE[s - 1] + 1) !== 1 || tot > Math.max(pw(gPage(A[0])), pw(gPage(B[0])))) continue;
+    const inA = A.filter(g => gidToSA(g)[0] === s), inB = B.filter(g => gidToSA(g)[0] === s);
+    const wA = inA.reduce((n, g) => n + gWords(g), 0), wB = inB.reduce((n, g) => n + gWords(g), 0);
+    if (wA >= wB){ A.push(...inB); B.splice(0, inB.length); } else { B.unshift(...inA); A.splice(A.length - inA.length); }
+  }
+  return groups.filter(gr => gr.length).map(gr => { const n = {}; gr.forEach(g => n[gPage(g)] = (n[gPage(g)] || 0) + gWords(g));
+    const page = +Object.keys(n).sort((x, y) => n[y] - n[x] || x - y)[0];
+    return {type:'recite', page, chunk:{r:[[gr[0], gr[gr.length - 1]]]}}; });
 }
 function startRecite(d){
   const [G1, G2] = rcRange(d), items = reciteItems(G1, G2);
@@ -3886,7 +3900,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r151';
+const BUILD = 'r152';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
