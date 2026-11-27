@@ -1375,6 +1375,14 @@ function clearDiff(vs, w){ return !vs.some(v => {
       c[j] = Math.min(p[j] + (SOFTL.includes(x) ? 0 : 1), c[j - 1] + (SOFTL.includes(y) ? 0 : 1), p[j - 1] + (x === y || (SOFTL.includes(x) && SOFTL.includes(y)) ? 0 : NEARC.has(x + y) ? 0.5 : 1)); }
     p = c; }
   return p[n] < 1; }); }   // one consonant blurred into a vowel ("الموضوب") is still the same word
+/* Distance between two letter strings counting only clear consonants (vowel letters and sound-alike swaps are cheap). */
+function consDist(x, y){ const a = fold(x), b = fold(y), cn = s => [...s].filter(c => !SOFTL.includes(c)).length;
+  let p = [0]; for (let j = 1; j <= b.length; j++) p[j] = p[j - 1] + (SOFTL.includes(b[j - 1]) ? 0 : 1);
+  for (let i = 1; i <= a.length; i++){ const x1 = a[i - 1], c = [p[0] + (SOFTL.includes(x1) ? 0 : 1)];
+    for (let j = 1; j <= b.length; j++){ const y1 = b[j - 1];
+      c[j] = Math.min(p[j] + (SOFTL.includes(x1) ? 0 : 1), c[j - 1] + (SOFTL.includes(y1) ? 0 : 1), p[j - 1] + (x1 === y1 || (SOFTL.includes(x1) && SOFTL.includes(y1)) ? 0 : NEARC.has(x1 + y1) ? 0.5 : 1)); }
+    p = c; }
+  return {d: p[b.length], n: cn(a)}; }
 /* يعملون / تعملون / نعمل / أعمل: the person of the verb swapped, a classic slip between similar verses. */
 function verbSlip(v, w){
   if (v.length > 1 && w.length > 1 && v[0] === w[0] && 'وف'.includes(v[0])){ v = v.slice(1); w = w.slice(1); }
@@ -1470,8 +1478,9 @@ function processSpoken(flush){
     if (!tail || !(' ' + before + ' ').includes(' ' + tail + ' ')) break;
     bi = i2;
   }
-  const ws = {}, hd = {}, skip = new Set(), ins = {}; let i = bi, j = m;
+  const ws = {}, hd = {}, skip = new Set(), ins = {}, Lo = [], Hi = []; let i = bi, j = m;
   while (i > 0 || j > 0){
+    Lo[i] = j; if (Hi[i] == null) Hi[i] = j;
     const o = op[at(i, j)];
     if (o === 1){ const [, st] = wordCost(i - 1, H[j - 1]); ws[i - 1] = st; if (st !== 'ok') hd[i - 1] = H[j - 1]; i--; j--; }
     else if (o === 2){ ws[i - 1] = 'soft'; skip.add(i - 1); i--; }
@@ -1483,6 +1492,19 @@ function processSpoken(flush){
     else if (o === 6){ const k = ok[at(i, j)] || 1; ws[i - 1] = 'ok'; i--; j -= k; }
     else break;
   }
+  Lo[i] = j; if (Hi[i] == null) Hi[i] = j;
+  /* A red word inside a patch where the recognizer garbled several words at once («منها رغدا» heard «من نار وعدا»):
+     if all the letters heard there still carry the text's consonants, it is the recognizer losing the word boundaries, not a slip. */
+  if (sess.engine === 'model') for (let q = 0; q < bi; q++){ if (ws[q] !== 'miss' || skip.has(q)) continue;
+    let a = q, b = q + 1; while (a > 0 && ws[a - 1] && ws[a - 1] !== 'ok') a--; while (b < bi && ws[b] && ws[b] !== 'ok') b++;
+    if (Lo[a] == null || Hi[b] == null) continue;
+    let insN = 0; for (let t2 = a; t2 <= b; t2++) if (Hi[t2] != null && Lo[t2] != null) insN += Hi[t2] - Lo[t2];
+    if (b - a < 2 && !insN) continue;
+    const heardSpan = H.slice(Lo[a], Hi[b]), expSpan = E.slice(a, b).map(vs => vs[0]);
+    if (heardSpan.length < 2) continue;
+    const r = consDist(expSpan.join(''), heardSpan.join(''));
+    if (r.n >= 4 && r.d <= Math.max(1, Math.round(r.n * 0.34))) for (let t2 = a; t2 < b; t2++) if (ws[t2] === 'miss'){ ws[t2] = 'soft'; hd[t2] = heardSpan.join(' '); }
+    q = b; }
   /* Three or more words in a row not heard, with reading after them, is a skipped passage (a real slip), not unclear sound. */
   for (let q = 0; q < bi; q++) if (skip.has(q)){ let r = q; while (skip.has(r)) r++; if (r - q >= (sess.engine === 'model' ? 2 : 3)) for (let t = q; t < r; t++) ws[t] = 'miss'; q = r; }
   /* With the Quran model: the reader said something else, then corrected himself (e.g. "يقولون ... يكذبون").
@@ -3909,7 +3931,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r155';
+const BUILD = 'r156';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
