@@ -1366,7 +1366,7 @@ function soundAlike(vs, w){ if (w.length < 2) return false; const fw = fold(w); 
    (ه/ع/ا, ص/س ...) is its spelling or a blur; a different clear consonant ("المصلحون" for "المفلحون") is what the reader said. */
 const SOFTL = 'اويهعءى';
 /* Consonants the model itself mixes up (ر/ل/ن, م/ن, غ/ر): a swap between them is its hearing, not the reader's slip. */
-const NEARC = new Set(['رل', 'لر', 'رن', 'نر', 'لن', 'نل', 'من', 'نم', 'خر', 'رخ']);
+const NEARC = new Set(['رل', 'لر', 'رن', 'نر', 'لن', 'نل', 'من', 'نم', 'خر', 'رخ', 'تد', 'دت']);   /* ت/ط and د: «اهبطوا» heard «يبدئ» */
 function clearDiff(vs, w){ return !vs.some(v => {
   const a = fold(v), b = fold(w), m = a.length, n = b.length; let p = Array.from({length: n + 1}, (_, j) => j ? p0(b, j) : 0);
   function p0(s, j){ let c = 0; for (let k = 0; k < j; k++) if (!SOFTL.includes(s[k])) c++; return c; }
@@ -1408,6 +1408,8 @@ function wordCost(i, w){
   else if (vs.some(v => prefixSlip(v, w))) c = [0.6, 'miss'];
   else if (sess.engine === 'model' && quranWord(w) && clearDiff(vs, w) && (nearWord(vs, w) || soundAlike(vs, w))) c = [0.85, 'miss'];
   else if (nearWord(vs, w) || soundAlike(vs, w)) c = [0.4, 'soft'];
+  /* another Quranic word, but with the same clear consonants («يبدئ» for «اهبطوا»): the model's hearing, not a different word said */
+  else if (sess.engine === 'model' && !clearDiff(vs, w) && consDist(vs[0], w).n >= 2) c = [0.5, 'soft'];
   else c = quranWord(w) ? [1, 'miss'] : [0.9, 'soft'];
   sess.cls.set(key, c); return c;
 }
@@ -3938,7 +3940,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r158';
+const BUILD = 'r159';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
