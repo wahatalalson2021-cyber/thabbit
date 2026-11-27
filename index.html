@@ -343,6 +343,7 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 .reviewing .spin{width:18px;height:18px;border-radius:50%;border:3px solid color-mix(in srgb,var(--warn) 30%,transparent);border-top-color:var(--warn);animation:rvspin .8s linear infinite}
 @keyframes rvspin{to{transform:rotate(360deg)}}
 .grade.wait{opacity:.45;pointer-events:none}
+.okbanner.retry{background:color-mix(in srgb,var(--warn) 12%,var(--surface));color:var(--warn);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
 #ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
 #ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
 #ptAlert svg{width:44px;height:44px;color:var(--accent)}
@@ -2519,7 +2520,7 @@ function vSession(){
   const kind = t.rc ? 'القريب: سمّع آخر ما حفظته قبل الجديد' : t.old ? `القديم ${AR(olds.indexOf(t) + 1)} من ${AR(olds.length)}` : t.type === 'new' ? (t.free ? 'احفظ ما تختاره' : 'حفظ جديد') : t.type === 'practice' ? 'مراجعة حرة' : t.type === 'recite' ? `تسميع ${AR(recs.indexOf(t) + 1)} من ${AR(recs.length)}` : `مراجعة ${AR(revs.indexOf(t) + 1)} من ${AR(revs.length)}`;
   const title = t.page ? `صفحة ${AR(t.page)} · ${cShort(c)}` : cLabel(c);
   let h = `<main><div class="sess-top"><button class="x homebtn" data-act="quit">${HOME_SVG}الرئيسية</button><div class="steps">${steps}</div></div>${confirmBox === 'quit' ? `<div class="confirm"><p>هل تريد الخروج؟ ${t.type === 'new' ? 'تكرارك في هذا المقطع لن يُحفظ، وتستطيع العودة إليه من شاشة «اليوم».' : 'ما أنهيته من مراجعات محفوظ، والباقي ينتظرك.'}</p><div class="rnav"><button class="btn" data-act="cancel">أكمل</button><button class="btn danger" data-act="quit">خروج</button></div></div>` : ''}
-    <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>${sess.banner ? `<div class="okbanner">✓ ${sess.banner}</div>` : ''}`;
+    <div><span class="chip">${kind}</span><h2 style="margin-top:8px">${title}</h2></div>${sess.banner ? `<div class="okbanner">✓ ${sess.banner}</div>` : ''}${sess.retryOn === sess.pos && sess.retryN ? `<div class="okbanner retry">↻ لا بأس، سمّعه مرة أخرى. وإذا أتقنته اضغط «ثابت» أو «بتردد» لتنتقل.</div>` : ''}`;
   if (sess.phase === 'read'){
     const ay = chunkAyat(c), U = memUnits(ay), ri = Math.min(sess.ri || 0, U.length - 1), u = U[ri], x = ay[u.s], xe = ay[u.e], uay = ay.slice(u.s, u.e + 1), many = u.e > u.s;
     const ukey = y => y.s + ':' + y.a, key = ukey(x), r = sess.reps[key] || 0, full = r >= R0;
@@ -3883,7 +3884,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r149';
+const BUILD = 'r150';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
@@ -4074,15 +4075,23 @@ app.addEventListener('click', e => {
   }
   if (a === 'grev'){
     const t = sess.queue[sess.pos], g = +v; noteMistakes(t);
-    if (t.mist){ markDay(); save(); advance(); return; }
-    if (t.rc) S.rev.rcKey = today() + ':' + t.rc.join(',');
-    if (t.old) S.rev.optr = t.old[t.old.length - 1] + 1;
-    if (t.page) gradePage(t.page, g);
-    else if (t.arch != null) schedule(S.arch[t.arch], g);
-    else if (!t.chunk && S.learned[t.idx]) schedule(S.learned[t.idx], g);
-    if (t.type === 'review') doneItem(t);
+    sess.lapsed = sess.lapsed || {};
+    const graded = sess.lapsed[sess.pos];   /* «نسيته» was pressed on this passage before: it is already counted as forgotten */
+    if (!t.mist && !graded){
+      if (t.rc) S.rev.rcKey = today() + ':' + t.rc.join(',');
+      if (t.old) S.rev.optr = t.old[t.old.length - 1] + 1;
+      if (t.page) gradePage(t.page, g);
+      else if (t.arch != null) schedule(S.arch[t.arch], g);
+      else if (!t.chunk && S.learned[t.idx]) schedule(S.learned[t.idx], g);
+      if (t.type === 'review') doneItem(t);
+    }
     const wasMic = sess.usedMic;
-    markDay(); save(); advance();
+    markDay(); save();
+    /* «نسيته»: recite the same passage again at once, instead of moving on */
+    if (g === 1){ sess.lapsed[sess.pos] = true; initStep(); sess.retryN = (sess.retryN || 0) + 1; sess.retryOn = sess.pos; render(); window.scrollTo(0, 0);
+      if (wasMic && view === 'session' && sess.phase === 'test'){ const mb = app.querySelector('.mic[data-act="mic"]'); if (mb && !mb.disabled) mb.click(); }
+      return; }
+    advance();
     /* He was reciting by voice: start listening on the next page at once (this tap counts as the start). */
     if (wasMic && sess && view === 'session' && sess.phase === 'test'){ const mb = app.querySelector('.mic[data-act="mic"]'); if (mb && !mb.disabled) mb.click(); }
     return;
