@@ -1036,7 +1036,7 @@ async function engReview(R0){
     const g = groups[groups.length - 1];
     if (g && a <= g[1] + 1 && P.slice(g[0], b + 1).reduce((x, p) => x + p.y.length, 0) / 16000 <= 25) g[1] = Math.max(g[1], b);
     else { if (g) a = Math.max(a, g[1] + 1); if (a <= b) groups.push([a, b]); } });   // groups never overlap
-  sess.keepOk = new Set(Object.keys(sess.ws).filter(k => sess.ws[k] === 'ok').map(Number));
+  sess.keepOk = new Set(Object.keys(sess.ws).filter(k => sess.ws[k] === 'ok').map(Number)); sess.firstWs = Object.assign({}, sess.ws);
   liveText = 'أراجع المواضع المشكوك فيها...'; engLive();
   for (const [a, b] of groups){
     if (R0.dead) return;
@@ -1538,6 +1538,8 @@ function processSpoken(flush){
   if (bi !== sess.p){ sess.pT = Date.now(); if (sess.glow){ sess.glow = false; const b = document.getElementById('hintBtn'); if (b) b.classList.remove('glow'); } }
   /* a word the first hearing got exactly right stays right if the re-listening hears it worse («فتح الله» re-heard «فتعالى الله») */
   if (sess.keepOk) sess.keepOk.forEach(q => { if (q < bi && ws[q] !== 'ok'){ ws[q] = 'ok'; delete hd[q]; } });
+  /* red only if both hearings agree it is wrong: a word heard «فتق» the first time and «فترى» the second is unclear sound, not a slip */
+  if (sess.firstWs) for (const q in ws) if (ws[q] === 'miss' && sess.firstWs[q] && sess.firstWs[q] !== 'miss') ws[q] = 'soft';
   sess.ws = ws; sess.heard = hd; sess.p = bi;
   if (sess.p >= n){ sess.reveal = n; stopMic(); }
 }
@@ -2433,7 +2435,7 @@ function startSession(queue){
 }
 /* The words the recitation is matched against: the whole passage, or (cumulative memorizing) its first ayat. */
 function buildExp(ay){
-  sess.keepOk = null; sess.exp = []; sess.bounds = new Set(); sess.muq = new Map(); sess.silah = new Set(); sess.sakin = new Set();
+  sess.keepOk = null; sess.firstWs = null; sess.exp = []; sess.bounds = new Set(); sess.muq = new Map(); sess.silah = new Set(); sess.sakin = new Set();
   ay.forEach(x => {
     /* «مالَهُۥٓ أخلده»: the ha's long u is said, so the recognizer hears «واخلده»; the next word may carry that و */
     /* a word after one ending in a still consonant («وإذ أخذنا»): its first hamza often runs into it unheard («خزنا») */
@@ -3950,7 +3952,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r161';
+const BUILD = 'r162';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
