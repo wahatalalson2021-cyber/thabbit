@@ -1444,7 +1444,8 @@ function processSpoken(flush){
     if (j < m) set(i, j + 1, d + insCost(i, H[j]), 3);                                        // extra heard word
     if (i + 1 < n && j < m && joinedMatch(E[i], E[i + 1], H[j])) set(i + 2, j + 1, d + 0.05, 4);   // two words heard as one
     if (i < n && j + 1 < m && same(E[i], H[j] + H[j + 1])) set(i + 1, j + 2, d + 0.05, 5);        // one word heard as two
-    if (j < m) for (let ke = 2; ke <= 3; ke++) for (let kh = 1; kh <= 3; kh++) { const r = waslMatch(i, j, ke, kh); if (r) set(i + ke, j + kh, d + (r === 1 ? 0.05 : 0.45 * ke), 7, ke * 4 + kh + (r === 1 ? 64 : 0)); }   // words blurred together
+    if (j < m) for (let ke = 2; ke <= 3; ke++) for (let kh = 1; kh <= 3; kh++) { const r = waslMatch(i, j, ke, kh); if (r === 2 && kh === 1 && [...Array(ke).keys()].some(q => same(E[i + q], H[j]))) continue;   /* «هم المفسدون» heard «المفسدون»: one word clear, the other not heard; don't blur both */
+      if (r) set(i + ke, j + kh, d + (r === 1 ? 0.05 : 0.45 * ke), 7, ke * 4 + kh + (r === 1 ? 64 : 0)); }   // words blurred together
     if (i < n && sess.muq && sess.muq.has(i)) for (let k = 1; k <= 5 && j + k <= m; k++) if (muqWords(sess.muq.get(i), H.slice(j, j + k))) set(i + 1, j + k, d, 6, k);
   }
   /* how far the reader got: the best line-up of everything heard with the start of the text (prefer going further on a tie) */
@@ -3908,7 +3909,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r154';
+const BUILD = 'r155';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
