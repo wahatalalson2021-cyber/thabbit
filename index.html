@@ -328,6 +328,15 @@ select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);b
 @keyframes celSwing{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}
 @keyframes celDrop{from{translate:0 -160px}to{translate:0 0}}
 @media (prefers-reduced-motion: reduce){#cel i,#cel .fw,#cel .bs{display:none}#cel .cs,#cel .ct,#cel .ln{animation:none}}
+.mutacard h3{color:var(--accent);margin:0 0 2px}
+.mutacard .mq{border-radius:12px;padding:8px 12px;margin-top:8px;border:1px solid var(--line)}
+.mutacard .mq b{display:block;font-size:.85rem;margin-bottom:2px}
+.mutacard .mq p{font-family:var(--f-quran);font-size:1.35rem;line-height:2.1;margin:0}
+.mutacard .mq.ok{background:color-mix(in srgb,var(--good) 8%,transparent)}
+.mutacard .mq.ok b{color:var(--good)}
+.mutacard .mq.other{background:color-mix(in srgb,var(--bad) 7%,transparent)}
+.mutacard .mq.other b{color:var(--bad)}
+.mutacard mark{background:color-mix(in srgb,var(--gold, #e9cf8f) 55%,transparent);color:inherit;border-radius:6px;padding:0 2px}
 #ptAlert{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .45);display:grid;place-items:center;padding:20px}
 #ptAlert .ptbox{background:var(--surface);color:var(--ink);border-radius:20px;padding:24px 20px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 20px 50px rgb(0 0 0 / .3);font-family:var(--f-ui)}
 #ptAlert svg{width:44px;height:44px;color:var(--accent)}
@@ -2439,6 +2448,54 @@ function celebrate(info){
   if (navigator.vibrate) try { navigator.vibrate(tier >= 2 ? [40, 60, 40, 60, 120, 200, 60, 60, 60] : [40, 60, 40, 60, 120]); } catch (e) {}
   celChime(tier);
 }
+/* ---------- similar ayat (المتشابهات) ----------
+   The Quran is one fixed text with many repeated phrases. When the reader goes wrong, check whether what he said is
+   another ayah that resembles this one (the commonest slip of a hafiz) and show him the two ayat side by side. */
+let MQ = null;
+const mskel = w => fold(w).replace(/[اويىءئؤآأإة]/g, c => c === 'ة' ? 'ه' : '');
+function mutaIndex(){
+  if (MQ) return MQ;
+  const W = [], G = [], tri = new Map();
+  Q.forEach((q, si) => q[1].forEach((txt, ai) => { const g = GBASE[si] + ai + 1; txt.split(' ').forEach(w => { const v = expVariants(w)[0]; if (v){ W.push(mskel(v)); G.push(g); } }); }));
+  for (let i = 0; i + 2 < W.length; i++){ const k = W[i] + ' ' + W[i + 1] + ' ' + W[i + 2]; const l = tri.get(k); if (l) l.push(i); else tri.set(k, [i]); }
+  return (MQ = {W, G, tri});
+}
+/* What the reader said that belongs to another ayah: {from: gid read, at: gid where he should be}, or null. */
+function mutaFind(tay, starts){
+  const M = mutaIndex(), H = (sess.spoken || []).map(mskel).filter(Boolean);
+  if (H.length < 4 || !tay.length) return null;
+  const g1 = saToG(tay[0].s, tay[0].a), g2 = saToG(tay[tay.length - 1].s, tay[tay.length - 1].a);
+  const inside = g => g >= g1 - 3 && g <= g2 + 3;   /* reading on just before/after the passage is not a similar ayah */
+  let best = null;
+  for (let j = 0; j + 2 < H.length; j++){
+    const l = M.tri.get(H[j] + ' ' + H[j + 1] + ' ' + H[j + 2]); if (!l) continue;
+    if (l.some(i => inside(M.G[i]))) continue;   /* the phrase also belongs to this passage */
+    for (const i of l){ let k = 3; while (j + k < H.length && i + k < M.W.length && M.W[i + k] === H[j + k]) k++;
+      let b = 0; while (b < j && i - b - 1 >= 0 && M.W[i - b - 1] === H[j - b - 1]) b++;   /* the shared start before the slip */
+      const len = k + b; if (len >= 4 && (!best || len > best.len)) best = {len, from: M.G[i], j}; }
+  }
+  if (!best) return null;
+  /* the ayah of this passage where he slipped: the first red word */
+  const missI = Object.keys(sess.ws).map(Number).filter(i => sess.ws[i] === 'miss').sort((a, b) => a - b)[0];
+  if (missI == null) return null;
+  let k = 0; while (k + 1 < starts.length && starts[k + 1] <= missI) k++;
+  const at = saToG(tay[k].s, tay[k].a);
+  return at === best.from ? null : {from: best.from, at};
+}
+/* the two ayat with the words that differ marked */
+function mutaCard(m){
+  const words = g => ayahText(g).split(' '), A = words(m.at), B = words(m.from);
+  const a = A.map(w => mskel(expVariants(w)[0] || w)), b = B.map(w => mskel(expVariants(w)[0] || w));
+  const L = Array.from({length: a.length + 1}, () => new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const keepA = new Set(), keepB = new Set(); let i = 0, j = 0;
+  while (i < a.length && j < b.length){ if (a[i] === b[j]){ keepA.add(i); keepB.add(j); i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++; }
+  const show = (W, keep) => W.map((w, x) => keep.has(x) ? esc(w) : `<mark>${esc(w)}</mark>`).join(' ');
+  const nm = g => { const [s, ay] = gidToSA(g); return 'سورة ' + Q[s - 1][0] + ' · الآية ' + AR(ay); };
+  return `<div class="card mutacard"><h3>انتقلتَ إلى آية مشابهة</h3><p class="muted">ما قرأته يشبه آية أخرى. قارن بينهما، والكلمات المختلفة ملوّنة:</p>
+    <div class="mq ok"><b>الصحيح هنا: ${nm(m.at)}</b><p>${show(A, keepA)}</p></div>
+    <div class="mq other"><b>ما قرأته من: ${nm(m.from)}</b><p>${show(B, keepB)}</p></div></div>`;
+}
 function vSession(){
   const t = sess.queue[sess.pos], c = itemChunk(t), multi = segs(c).length > 1, R0 = REPS();
   const steps = sess.queue.map((_, i) => `<i class="${i <= sess.pos ? 'on' : ''}"></i>`).join('');
@@ -2514,6 +2571,8 @@ function vSession(){
         const info = celInfo(all ? q.flatMap(x => chunkAyat(itemChunk(x))) : chunkAyat(itemChunk(t)));
         setTimeout(() => celebrate(info), 250); }
       const S3 = sug === 3 ? 'sug' : '', S2 = sug === 2 ? 'sug' : '', S1 = sug === 1 ? 'sug' : '';
+      if (sess.usedMic && misses){ if (sess.mutaKey !== sess.spoken.length){ sess.mutaKey = sess.spoken.length; try { sess.muta = mutaFind(tay, sess.starts || []); } catch (e) { sess.muta = null; } }
+        if (sess.muta) h += mutaCard(sess.muta); }
       if (sess.usedMic){
         h += `<div class="result"><span class="chip">${AR(okN)} كلمة صحيحة</span>${misses ? `<span class="chip warn" style="color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)">${AR(misses)} خطأ أو تجاوز (بالأحمر)</span>` : ''}${softs ? `<span class="chip soft">${AR(softs)} لم تُسمع بوضوح</span>` : ''}${hints ? `<span class="chip warn">${AR(hints)} مساعدة</span>` : ''}${unreached ? `<span class="chip warn">${AR(unreached)} لم تُقرأ</span>` : ''}</div>
           <p class="muted">${errs === 0 ? 'ما شاء الله، قراءة بلا أخطاء.' : 'راجع الكلمات الملونة.'} ${sess.cum ? '' : 'الاقتراح مُعلَّم، والقرار لك.'}${misses || softs ? ' اضغط أي كلمة ملونة لترى ماذا سمع التطبيق.' : ''}</p>${whyBox()}
@@ -3808,7 +3867,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r143';
+const BUILD = 'r144';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
