@@ -1397,6 +1397,8 @@ function wordCost(i, w){
   /* the word just before, heard again in this word's place («كل شيء شي» for «كل شيء شهيد»): the recognizer echoing it
      while the word itself was lost; prefer "repeated + not heard" (orange) over calling it a wrong word (red) */
   if (sess.silah && sess.silah.has(i) && w[0] === 'و' && vs.some(v => v === w.slice(1))){ sess.cls.set(key, [0, 'ok']); return [0, 'ok']; }
+  /* «أنهم مُّلاقوا»: the two م are said as one, so the recognizer gives it to the first word and hears «الاقو» */
+  if (i > 0 && vs.some(v => v.length >= 4 && !'اوي'.includes(v[0]) && sess.exp[i - 1].some(u => u.length >= 2 && u[u.length - 1] === v[0]) && same([v.slice(1), 'ا' + v.slice(1)], w))){ sess.cls.set(key, [0, 'ok']); return [0, 'ok']; }
   const echo = i > 0 && !vs.some(v => v === w) && sess.exp[i - 1].some(v => v === w || (v.length >= 3 && v.startsWith(w) && w.length >= v.length - 1));
   if (echo) c = [1.3, 'miss'];
   else if (vs.some(v => verbSlip(v, w))) c = [0.6, 'miss'];
@@ -1513,6 +1515,9 @@ function processSpoken(flush){
     const run = ins[k].filter(w => !(PRE.has(w) && (q === 0 || (sess.bounds && sess.bounds.has(q)))));
     /* the same phrase said again (the reader repeating the ayah he is on) is not a correction */
     const repHere = run.length && [...Array(run.length).keys()].some(L0 => { const L = L0 + 1; return run.length % L === 0 && q + L <= n && run.every((w, t) => same(E[q + (t % L)], w)); });
+    /* the phrase around this point said twice, cut at another word («وأوفوا بعهدي وأوفوا بعهدي أوف»): a repeat, not a correction */
+    const repRound = run.length && [1, 2, 3, 4, 5, 6].some(L => { const b = q - L + 1; if (L < 2 || b < 0) return false; for (let off = 0; off < L; off++) if (run.every((w, t2) => same(E[b + (off + t2) % L], w))) return true; return false; });
+    if (repRound) continue;
     if (run.length && !repHere && !reRead(run, q)){ let t = 0; while (t < run.length && E[q + t] && q + t < bi && same(E[q + t], run[t])) t++;   // "وما يعلمون" before "وما يشعرون": the changed word is يشعرون
       const r = q + t < bi && ws[q + t] === 'ok' ? q + t : q;
       /* a long run of words that sound nothing like what follows is not a correction but sound from outside (talk nearby,
@@ -3931,7 +3936,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r156';
+const BUILD = 'r157';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
