@@ -1087,6 +1087,8 @@ function expVariants(w){
   const a = baseNorm(w.replace(/[وى]ٰ/g,'ا').replace(/ٰ/g,'ا').replace(HAR,''));
   const b = baseNorm(w.replace(/ٰ/g,'').replace(HAR,''));
   const out = a === b ? [a] : [a, b];
+  /* a hamza on a tatweel («خَطِيٓـَٔتُهُۥ») is written by the model as «خطيئته» */
+  if (/ـ[\u064B-\u0652]*\u0654/.test(w)){ const h = baseNorm(w.replace(/ـ[\u064B-\u0652]*\u0654/g, 'ئ').replace(/[وى]ٰ/g,'ا').replace(/ٰ/g,'ا').replace(HAR,'')); if (!out.includes(h)) out.push(h); }
   /* the mushaf writes «ٱلَّيۡل» with one lam (the shadda doubles it): it is said «الليل», so accept that spelling too */
   const m = w.match(/^([وفبك]?)[\u064B-\u0652]*[ٱا]ل[\u064B-\u0650\u0652]*\u0651/); if (m){ const pre = m[1] ? baseNorm(m[1]) : '', x = a.slice(pre.length);
     if (x.startsWith('ال') && (x[2] === 'ي' || x[2] === 'ا')) out.push(pre + 'الل' + x.slice(2)); }   /* الليل، اللاتي، اللائي (not الذي/التي, said with one lam) */
@@ -1414,7 +1416,7 @@ function wordCost(i, w){
   if (i > 0 && vs.some(v => v.length >= 4 && !'اوي'.includes(v[0]) && sess.exp[i - 1].some(u => u.length >= 2 && u[u.length - 1] === v[0]) && same([v.slice(1), 'ا' + v.slice(1)], w))){ sess.cls.set(key, [0, 'ok']); return [0, 'ok']; }
   const echo = i > 0 && !vs.some(v => v === w) && sess.exp[i - 1].some(v => v === w || (v.length >= 3 && v.startsWith(w) && w.length >= v.length - 1));
   if (echo) c = [1.3, 'miss'];
-  else if (vs.some(v => verbSlip(v, w))) c = [0.6, 'miss'];
+  else if (!(sess.kasraA && sess.kasraA.has(i)) && vs.some(v => verbSlip(v, w))) c = [0.6, 'miss'];   /* «إحسانا» heard «يحسانا» is no verb prefix swap */
   else if (same(vs, w) && !diff) c = [0, 'ok'];
   else if (same(vs, w)) c = realOther ? [0.85, 'miss'] : [0.4, 'soft'];
   else if (extraWF(vs, w)) c = [0.4, 'soft'];
@@ -2456,7 +2458,7 @@ function startSession(queue){
 }
 /* The words the recitation is matched against: the whole passage, or (cumulative memorizing) its first ayat. */
 function buildExp(ay){
-  sess.keepOk = null; sess.firstWs = null; sess.exp = []; sess.bounds = new Set(); sess.muq = new Map(); sess.silah = new Set(); sess.sakin = new Set();
+  sess.keepOk = null; sess.firstWs = null; sess.kasraA = new Set(); sess.exp = []; sess.bounds = new Set(); sess.muq = new Map(); sess.silah = new Set(); sess.sakin = new Set();
   ay.forEach(x => {
     /* «مالَهُۥٓ أخلده»: the ha's long u is said, so the recognizer hears «واخلده»; the next word may carry that و */
     /* a word after one ending in a still consonant («وإذ أخذنا»): its first hamza often runs into it unheard («خزنا») */
@@ -2464,7 +2466,7 @@ function buildExp(ay){
     x.txt.split(' ').forEach((w, j, a) => { if (j + 1 < a.length && /ه\u064F\u06E5\u0653?$/.test(w.replace(/[\u06D6-\u06DC]/g, ''))) sess.silah.add(sess.exp.length + j + 1); }); if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length);
     const first = baseNorm(x.txt.split(' ')[0].replace(HAR, ''));
     if ((x.a === 1 || (x.s === 42 && x.a === 2)) && MUQ.has(first)) sess.muq.set(sess.exp.length, first);
-    x.txt.split(' ').forEach(w => sess.exp.push(expVariants(w))); });
+    x.txt.split(' ').forEach(w => { if (/^[وفب]?[\u064B-\u0652]*إ/.test(w)) sess.kasraA.add(sess.exp.length); sess.exp.push(expVariants(w)); }); });
   tajweedVariants(sess.exp); sess.cls = new Map();
 }
 /* A fresh recitation of the first k ayat (k = 0: the whole passage). Cumulative memorizing: ayah 1, then 1-2 together, then 1-3... */
@@ -3973,7 +3975,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r164';
+const BUILD = 'r165';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
