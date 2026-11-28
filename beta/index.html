@@ -1473,10 +1473,14 @@ function waslMatch(i, j, ke, kh){
      not blurred speech, so judge them word by word and leave the extra word out (e.g. «عذابا قريبا يوم يقوم ينذر») */
   if (kh > ke && hw.slice(0, ke).every((w, k) => same(E[i + k], w))) return 0;
   const key = 'w' + i + '|' + ke + '|' + hw.join(' '); if (sess.cls.has(key)) return sess.cls.get(key);
+  /* fewer heard words than written, the last one heard clearly: a word between was left out, judge word by word */
+  if (sess.engine === 'model' && ke > kh && same(E[i + ke - 1], hw[kh - 1]) && hw[kh - 1].length >= 3){ sess.cls.set(key, 0); return 0; }
+  /* the last heard word is really the next written word («وزرابيما أفلا» for «وزرابي مبثوثة» then «أفلا»): the word between was left out */
+  if (sess.engine === 'model' && kh >= 2 && E[i + ke] && same(E[i + ke], hw[kh - 1]) && !E.slice(i, i + ke).some(vs => same(vs, hw[kh - 1]))){ sess.cls.set(key, 0); return 0; }
   /* a clearly different Quranic word among the heard ones («أحضرت» for «وأخرت») is a real slip, not blurred speech */
   if (sess.engine === 'model' && hw.some(w => w.length >= 5 && quranWord(w) && E.slice(i, i + ke).every(vs => !vs.includes(w) && clearDiff(vs, w) && !nearWord(vs, w)))){ sess.cls.set(key, 0); return 0; }
   const h = fold(hw.join('')), e = fold(waslSound(E.slice(i, i + ke).map(vs => vs[0])));
-  const d = lev(e, h), r = e.length >= 6 && h.length >= e.length * 0.75 && d <= Math.max(2, Math.round(e.length * 0.3)) ? (d === 0 || (d <= 1 && ke !== kh) ? 1 : 2) : 0; sess.cls.set(key, r); return r;
+  const d = lev(e, h), r = e.length >= 6 && h.length >= e.length * (sess.engine === 'model' ? 0.85 : 0.75) && d <= Math.max(2, Math.round(e.length * 0.3)) ? (d === 0 || (d <= 1 && ke !== kh) ? 1 : 2) : 0; sess.cls.set(key, r); return r;
 }
 function muqWords(letters, ws){
   const names = [...letters].map(c => LNAME[c]); let j = 0;
@@ -4018,7 +4022,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r168c';
+const BUILD = 'r168d';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('beta/version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
