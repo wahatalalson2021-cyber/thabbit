@@ -1132,6 +1132,9 @@ const normSpoken = w => baseNorm((SPNUM[w.trim()] || w).replace(HAR,''));
 /* Every word form in the Quran. A heard word that is not one of them is the recognizer garbling sound, not the reader
    saying a different word (a real slip almost always swaps in another Quranic word). */
 let QVOC = null;
+/* Pairs of neighbouring words anywhere in the Quran: a heard run made of them is real Quran text, not noise. */
+let QBI = null;
+function quranPair(a, b){ if (!QBI){ QBI = new Set(); Q.forEach(q => q[1].forEach(t => { const ws = t.split(' ').map(x => expVariants(x)[0]); for (let k = 0; k + 1 < ws.length; k++) QBI.add(ws[k] + ' ' + ws[k + 1]); })); } return QBI.has(a + ' ' + b); }
 function quranWord(w){ if (!QVOC){ QVOC = new Set(); Q.forEach(q => q[1].forEach(t => t.split(' ').forEach(x => expVariants(x).forEach(v => QVOC.add(v))))); } return QVOC.has(w); }
 function lev(a,b){ const m=a.length,n=b.length; if(!m) return n; if(!n) return m; let p=Array.from({length:n+1},(_,j)=>j);
   for(let i=1;i<=m;i++){ const c=[i]; for(let j=1;j<=n;j++) c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1)); p=c; } return p[n]; }
@@ -1470,8 +1473,14 @@ function waslMatch(i, j, ke, kh){
      not blurred speech, so judge them word by word and leave the extra word out (e.g. «عذابا قريبا يوم يقوم ينذر») */
   if (kh > ke && hw.slice(0, ke).every((w, k) => same(E[i + k], w))) return 0;
   const key = 'w' + i + '|' + ke + '|' + hw.join(' '); if (sess.cls.has(key)) return sess.cls.get(key);
+  /* fewer heard words than written, the last one heard clearly: a word between was left out, judge word by word */
+  if (sess.engine === 'model' && ke > kh && same(E[i + ke - 1], hw[kh - 1]) && hw[kh - 1].length >= 3){ sess.cls.set(key, 0); return 0; }
+  /* the last heard word is really the next written word («وزرابيما أفلا» for «وزرابي مبثوثة» then «أفلا»): the word between was left out */
+  if (sess.engine === 'model' && kh >= 2 && E[i + ke] && same(E[i + ke], hw[kh - 1]) && !E.slice(i, i + ke).some(vs => same(vs, hw[kh - 1]))){ sess.cls.set(key, 0); return 0; }
+  /* a clearly different Quranic word among the heard ones («أحضرت» for «وأخرت») is a real slip, not blurred speech */
+  if (sess.engine === 'model' && hw.some(w => w.length >= 5 && quranWord(w) && E.slice(i, i + ke).every(vs => !vs.includes(w) && clearDiff(vs, w) && !nearWord(vs, w)))){ sess.cls.set(key, 0); return 0; }
   const h = fold(hw.join('')), e = fold(waslSound(E.slice(i, i + ke).map(vs => vs[0])));
-  const d = lev(e, h), r = e.length >= 6 && h.length >= e.length * 0.75 && d <= Math.max(2, Math.round(e.length * 0.3)) ? (d === 0 || (d <= 1 && ke !== kh) ? 1 : 2) : 0; sess.cls.set(key, r); return r;
+  const d = lev(e, h), r = e.length >= 6 && h.length >= e.length * (sess.engine === 'model' ? 0.85 : 0.75) && d <= Math.max(2, Math.round(e.length * 0.3)) ? (d === 0 || (d <= 1 && ke !== kh) ? 1 : 2) : 0; sess.cls.set(key, r); return r;
 }
 function muqWords(letters, ws){
   const names = [...letters].map(c => LNAME[c]); let j = 0;
@@ -1553,10 +1562,14 @@ function processSpoken(flush){
   for (let q = 0; q < bi; q++) if (skip.has(q)){ let r = q; while (skip.has(r)) r++;
     /* a few words lost exactly where the recording was cut into pieces: the model dropping the edge of a piece, not a skipped passage */
     const edge = sess.engine === 'model' && r - q <= 3 && Lo[r] != null && (atCut(Lo[r]) || atCut(Hi[r]) || (Hi[q] != null && atCut(Hi[q])));
-    if (!edge && r - q >= (sess.engine === 'model' ? 2 : 3)) for (let t = q; t < r; t++){ ws[t] = 'miss'; skipMiss.add(t); } q = r; }
+    /* one lost word is a slip unless the recognizer clearly garbled it there (an odd word written in its place, «شي» for «شهيد»)
+       or it repeats the sound of its neighbour («إنهم هم» heard as one «إنهم») */
+    const v0 = E[q][0], garble = r - q === 1 && ((ins[q] && ins[q].length) || (ins[r] && ins[r].length)),
+      twin = r - q === 1 && ((q > 0 && E[q - 1].some(u => u.length > v0.length && u.endsWith(v0))) || (E[r] && E[r].some(u => u.length > v0.length && u.startsWith(v0))));
+    if (!edge && !garble && !twin && r - q >= (sess.engine === 'model' ? 1 : 3)) for (let t = q; t < r; t++){ ws[t] = 'miss'; if (r - q >= 2) skipMiss.add(t); } q = r; }
   /* With the Quran model: the reader said something else, then corrected himself (e.g. "يقولون ... يكذبون").
      The corrected word is shown orange so he sees it. Re-reading the text just before (a normal restart) is not marked. */
-  if (sess.engine === 'model') for (const k in ins){ const q = +k; if (q >= bi || ws[q] !== 'ok' || q === 0 || (sess.bounds && sess.bounds.has(q))) continue;   // before a surah: isti'adha/basmala, however written
+  if (sess.engine === 'model') for (const k in ins){ const q = +k; if (q >= bi || q === 0 || (sess.bounds && sess.bounds.has(q))) continue; const okHere = ws[q] === 'ok';   // before a surah: isti'adha/basmala, however written
     const run = ins[k].filter(w => !(PRE.has(w) && (q === 0 || (sess.bounds && sess.bounds.has(q)))));
     /* the same phrase said again (the reader repeating the ayah he is on) is not a correction */
     const repHere = run.length && [...Array(run.length).keys()].some(L0 => { const L = L0 + 1; return run.length % L === 0 && q + L <= n && run.every((w, t) => same(E[q + (t % L)], w)); });
@@ -1570,6 +1583,12 @@ function processSpoken(flush){
       /* a long run of words that sound nothing like what follows is not a correction but sound from outside (talk nearby,
          noise written as words): e.g. «وما سعمهم بكما سبلتهم لكم» before «إنا أنذرناكم» */
       const like = w => [E[r], E[r + 1]].some(vs => vs && vs.some(v => { const a = fold(v), b = fold(w); return b.length >= 3 && a.length >= 3 && lev(a, b) <= Math.max(1, Math.round(Math.max(a.length, b.length) * 0.4)); }));
+      /* three or more extra words that are themselves Quran text (another ayah's words, «قال موسى لقومه اذكروا نعمة الله عليكم»):
+         the reader added a passage that does not belong here, a real slip */
+      let pairs = 0; for (let z = 0; z + 1 < run.length; z++) if (quranPair(run[z], run[z + 1])) pairs++;
+      const added = run.length >= 3 && pairs >= Math.max(2, Math.ceil((run.length - 1) * 0.6));
+      if (added){ ws[r] = 'miss'; hd[r] = 'زدتَ قبلها: ' + run.join(' '); continue; }
+      if (!okHere) continue;
       if (run.length >= 3 && !run.some(like)) continue;
       ws[r] = 'soft'; hd[r] = 'قلتَ قبلها: ' + run.join(' '); } }
   if (bi !== sess.p){ sess.pT = Date.now(); if (sess.glow){ sess.glow = false; const b = document.getElementById('hintBtn'); if (b) b.classList.remove('glow'); } }
@@ -4003,7 +4022,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r167';
+const BUILD = 'r168';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
