@@ -1590,6 +1590,8 @@ setInterval(() => {
   const cur = hintCur();
   if (cur >= sess.total || !sess.pT || !((sess.p || 0) > 0)) return;
   if (Date.now() - Math.max(sess.pT, sess.voiceT || 0, sess.flashT || 0) <= 4000) return;
+  /* the model is still writing what he already read (a piece waiting, being written, or speech since the last cut): he is not stuck */
+  if (REC && (REC.busy || REC.q.length || REC.speech > 0.3 || REC.ending)) return;
   const el = document.querySelector(`.w[data-v="${cur}"]`); if (!el || !el.classList.contains('hid')) return;
   sess.peeked.add(cur); sess.flashing = true; el.classList.add('flash');
   setTimeout(() => { el.classList.remove('flash'); if (sess){ sess.flashing = false; sess.flashT = Date.now(); } }, 2000);
@@ -3975,7 +3977,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r165';
+const BUILD = 'r166';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('beta/version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
