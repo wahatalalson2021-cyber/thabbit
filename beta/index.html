@@ -1470,6 +1470,8 @@ function waslMatch(i, j, ke, kh){
      not blurred speech, so judge them word by word and leave the extra word out (e.g. «عذابا قريبا يوم يقوم ينذر») */
   if (kh > ke && hw.slice(0, ke).every((w, k) => same(E[i + k], w))) return 0;
   const key = 'w' + i + '|' + ke + '|' + hw.join(' '); if (sess.cls.has(key)) return sess.cls.get(key);
+  /* a clearly different Quranic word among the heard ones («أحضرت» for «وأخرت») is a real slip, not blurred speech */
+  if (sess.engine === 'model' && hw.some(w => w.length >= 5 && quranWord(w) && E.slice(i, i + ke).every(vs => !vs.includes(w) && clearDiff(vs, w) && !nearWord(vs, w)))){ sess.cls.set(key, 0); return 0; }
   const h = fold(hw.join('')), e = fold(waslSound(E.slice(i, i + ke).map(vs => vs[0])));
   const d = lev(e, h), r = e.length >= 6 && h.length >= e.length * 0.75 && d <= Math.max(2, Math.round(e.length * 0.3)) ? (d === 0 || (d <= 1 && ke !== kh) ? 1 : 2) : 0; sess.cls.set(key, r); return r;
 }
@@ -1553,7 +1555,11 @@ function processSpoken(flush){
   for (let q = 0; q < bi; q++) if (skip.has(q)){ let r = q; while (skip.has(r)) r++;
     /* a few words lost exactly where the recording was cut into pieces: the model dropping the edge of a piece, not a skipped passage */
     const edge = sess.engine === 'model' && r - q <= 3 && Lo[r] != null && (atCut(Lo[r]) || atCut(Hi[r]) || (Hi[q] != null && atCut(Hi[q])));
-    if (!edge && r - q >= (sess.engine === 'model' ? 2 : 3)) for (let t = q; t < r; t++){ ws[t] = 'miss'; skipMiss.add(t); } q = r; }
+    /* one lost word is a slip unless the recognizer clearly garbled it there (an odd word written in its place, «شي» for «شهيد»)
+       or it repeats the sound of its neighbour («إنهم هم» heard as one «إنهم») */
+    const v0 = E[q][0], garble = r - q === 1 && ((ins[q] && ins[q].length) || (ins[r] && ins[r].length)),
+      twin = r - q === 1 && ((q > 0 && E[q - 1].some(u => u.length > v0.length && u.endsWith(v0))) || (E[r] && E[r].some(u => u.length > v0.length && u.startsWith(v0))));
+    if (!edge && !garble && !twin && r - q >= (sess.engine === 'model' ? 1 : 3)) for (let t = q; t < r; t++){ ws[t] = 'miss'; if (r - q >= 2) skipMiss.add(t); } q = r; }
   /* With the Quran model: the reader said something else, then corrected himself (e.g. "يقولون ... يكذبون").
      The corrected word is shown orange so he sees it. Re-reading the text just before (a normal restart) is not marked. */
   if (sess.engine === 'model') for (const k in ins){ const q = +k; if (q >= bi || ws[q] !== 'ok' || q === 0 || (sess.bounds && sess.bounds.has(q))) continue;   // before a surah: isti'adha/basmala, however written
@@ -4003,7 +4009,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r167';
+const BUILD = 'r168b';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('beta/version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
