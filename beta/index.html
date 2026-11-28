@@ -1132,6 +1132,9 @@ const normSpoken = w => baseNorm((SPNUM[w.trim()] || w).replace(HAR,''));
 /* Every word form in the Quran. A heard word that is not one of them is the recognizer garbling sound, not the reader
    saying a different word (a real slip almost always swaps in another Quranic word). */
 let QVOC = null;
+/* Pairs of neighbouring words anywhere in the Quran: a heard run made of them is real Quran text, not noise. */
+let QBI = null;
+function quranPair(a, b){ if (!QBI){ QBI = new Set(); Q.forEach(q => q[1].forEach(t => { const ws = t.split(' ').map(x => expVariants(x)[0]); for (let k = 0; k + 1 < ws.length; k++) QBI.add(ws[k] + ' ' + ws[k + 1]); })); } return QBI.has(a + ' ' + b); }
 function quranWord(w){ if (!QVOC){ QVOC = new Set(); Q.forEach(q => q[1].forEach(t => t.split(' ').forEach(x => expVariants(x).forEach(v => QVOC.add(v))))); } return QVOC.has(w); }
 function lev(a,b){ const m=a.length,n=b.length; if(!m) return n; if(!n) return m; let p=Array.from({length:n+1},(_,j)=>j);
   for(let i=1;i<=m;i++){ const c=[i]; for(let j=1;j<=n;j++) c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1)); p=c; } return p[n]; }
@@ -1562,7 +1565,7 @@ function processSpoken(flush){
     if (!edge && !garble && !twin && r - q >= (sess.engine === 'model' ? 1 : 3)) for (let t = q; t < r; t++){ ws[t] = 'miss'; if (r - q >= 2) skipMiss.add(t); } q = r; }
   /* With the Quran model: the reader said something else, then corrected himself (e.g. "يقولون ... يكذبون").
      The corrected word is shown orange so he sees it. Re-reading the text just before (a normal restart) is not marked. */
-  if (sess.engine === 'model') for (const k in ins){ const q = +k; if (q >= bi || ws[q] !== 'ok' || q === 0 || (sess.bounds && sess.bounds.has(q))) continue;   // before a surah: isti'adha/basmala, however written
+  if (sess.engine === 'model') for (const k in ins){ const q = +k; if (q >= bi || q === 0 || (sess.bounds && sess.bounds.has(q))) continue; const okHere = ws[q] === 'ok';   // before a surah: isti'adha/basmala, however written
     const run = ins[k].filter(w => !(PRE.has(w) && (q === 0 || (sess.bounds && sess.bounds.has(q)))));
     /* the same phrase said again (the reader repeating the ayah he is on) is not a correction */
     const repHere = run.length && [...Array(run.length).keys()].some(L0 => { const L = L0 + 1; return run.length % L === 0 && q + L <= n && run.every((w, t) => same(E[q + (t % L)], w)); });
@@ -1576,6 +1579,12 @@ function processSpoken(flush){
       /* a long run of words that sound nothing like what follows is not a correction but sound from outside (talk nearby,
          noise written as words): e.g. «وما سعمهم بكما سبلتهم لكم» before «إنا أنذرناكم» */
       const like = w => [E[r], E[r + 1]].some(vs => vs && vs.some(v => { const a = fold(v), b = fold(w); return b.length >= 3 && a.length >= 3 && lev(a, b) <= Math.max(1, Math.round(Math.max(a.length, b.length) * 0.4)); }));
+      /* three or more extra words that are themselves Quran text (another ayah's words, «قال موسى لقومه اذكروا نعمة الله عليكم»):
+         the reader added a passage that does not belong here, a real slip */
+      let pairs = 0; for (let z = 0; z + 1 < run.length; z++) if (quranPair(run[z], run[z + 1])) pairs++;
+      const added = run.length >= 3 && pairs >= Math.max(2, Math.ceil((run.length - 1) * 0.6));
+      if (added){ ws[r] = 'miss'; hd[r] = 'زدتَ قبلها: ' + run.join(' '); continue; }
+      if (!okHere) continue;
       if (run.length >= 3 && !run.some(like)) continue;
       ws[r] = 'soft'; hd[r] = 'قلتَ قبلها: ' + run.join(' '); } }
   if (bi !== sess.p){ sess.pT = Date.now(); if (sess.glow){ sess.glow = false; const b = document.getElementById('hintBtn'); if (b) b.classList.remove('glow'); } }
@@ -4009,7 +4018,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r168b';
+const BUILD = 'r168c';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('beta/version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
