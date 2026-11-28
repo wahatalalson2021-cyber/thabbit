@@ -855,7 +855,7 @@ function loadASR(onProg){
       else if (m.type === 'err'){ w.terminate(); reject(new Error(m.msg)); }
       else if (m.type === 'out'){ const p = wait[m.id]; delete wait[m.id]; if (p){ if (m.err) p.no(new Error(m.err)); else p.ok({text: m.text}); } } };
     w.onerror = e => { reject(new Error(e.message || 'worker')); };
-    w.postMessage({type: 'load', tjs: TJS, base: new URL('./models/', location.href).href, dtype: ENG_DTYPE});
+    w.postMessage({type: 'load', tjs: TJS, base: new URL('./models/', document.baseURI).href, dtype: ENG_DTYPE});
   }).catch(e => { asrLoad = null; throw e; });
   return asrLoad;
 }
@@ -1534,6 +1534,8 @@ function processSpoken(flush){
     /* the phrase around this point said twice, cut at another word («وأوفوا بعهدي وأوفوا بعهدي أوف»): a repeat, not a correction */
     const repRound = run.length && [...Array(30).keys()].some(L => { const b = q - L + 1; if (L < 2 || b < 0) return false; for (let off = 0; off < L; off++) if (run.every((w, t2) => same(E[b + (off + t2) % L], w))) return true; return false; });
     if (repRound) continue;
+    /* one or two odd words right where the recording was cut: the edge of a piece written twice or garbled, not the reader correcting himself */
+    if (run.length <= 2 && Lo[q] != null && Hi[q] != null){ let cut = false; for (let jj = Lo[q]; jj <= Hi[q]; jj++) if (pc.has(jj)) cut = true; if (cut) continue; }
     if (run.length && !repHere && !reRead(run, q)){ let t = 0; while (t < run.length && E[q + t] && q + t < bi && same(E[q + t], run[t])) t++;   // "وما يعلمون" before "وما يشعرون": the changed word is يشعرون
       const r = q + t < bi && ws[q + t] === 'ok' ? q + t : q;
       /* a long run of words that sound nothing like what follows is not a correction but sound from outside (talk nearby,
@@ -3964,7 +3966,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r163';
+const BUILD = 'r163b';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('beta/version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
