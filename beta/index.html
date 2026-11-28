@@ -1081,6 +1081,7 @@ const HAR = /[ؐ-ًؚ-ٟۖ-ࣰۭ-ࣿـ]/g;
 function baseNorm(s){
   return s.replace(/[ٱأإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ء/g,'').replace(/[^ء-ي]/g,'');
 }
+const OPEN_T = new Set(['رحمت','نعمت','امرات','سنت','لعنت','معصيت','كلمت','بقيت','قرت','جنت','فطرت','شجرت','ابنت','غيبت','جمالت','ثمرت','بينت','مرضات','ايت','غيابت','هيهات']);
 function expVariants(w){
   w = w.replace(/[ۥۦ]/g,'');
   const a = baseNorm(w.replace(/[وى]ٰ/g,'ا').replace(/ٰ/g,'ا').replace(HAR,''));
@@ -1092,6 +1093,10 @@ function expVariants(w){
   /* a short word ending in a doubled letter, «مِمَّ» «عَمَّ»: the recognizer writes the final fatha as an alif («مما» «عما») */
   /* «بَقَرَةٞ صفراء»: the tanween of ة said in wasl, written by the recognizer «بقرتن» / «بقرتم» */
   if (a.length >= 3 && a.endsWith('ه') && /[\u064B-\u064D\u0656\u0657\u065E\u08F0-\u08F2]/.test(w.slice(-3))) out.push(a.slice(0, -1) + 'تن', a.slice(0, -1) + 'تم');
+  /* «ٱلنَّـٰظِرِينَ» after a word: the lam of a sun letter is not said, so the model may write «ناظرين» */
+  if (/^[وفبك]?ال[تثدذرزسشصضطظلن]/.test(a) && /[ٱا]ل.\u0651/.test(w.replace(/[\u064B-\u0650\u0652-\u065F\u0670\u06D6-\u06ED]/g, ''))){ const pre = /^[وفبك]ال/.test(a) ? a[0] : ''; out.push(pre + a.slice(pre.length + 2)); }
+  /* the mushaf's open ta («نِعۡمَتَ», «رَحۡمَتَ»), written by the model in the usual spelling «نعمة» */
+  { const core = a.replace(/^[وفبكل]/, ''); if (OPEN_T.has(core) || OPEN_T.has(a)) out.push(a.slice(0, -1) + 'ه'); }
   /* «خَلۡفَهَا» heard «خلفا» / «خلفى»: the weak ha of the ending «ها» lost */
   if (a.length >= 5 && a.endsWith('ها')) out.push(a.slice(0, -2) + 'ا', a.slice(0, -2) + 'ي');
   if (a.length === 2 && /[\u064E\u0651]{2}$/.test(w.replace(/[^\u0621-\u0652]/g,''))) out.push(a + 'ا');
@@ -1520,11 +1525,11 @@ function processSpoken(flush){
     if (r.n >= 4 && r.d <= Math.max(1, Math.round(r.n * 0.34))) for (let t2 = a; t2 < b; t2++) if (ws[t2] === 'miss'){ ws[t2] = 'soft'; hd[t2] = heardSpan.join(' '); }
     q = b; }
   /* Three or more words in a row not heard, with reading after them, is a skipped passage (a real slip), not unclear sound. */
-  const pc = sess.pcut || new Set(), atCut = jj => pc.has(jj);
+  const pc = sess.pcut || new Set(), atCut = jj => pc.has(jj), skipMiss = new Set();
   for (let q = 0; q < bi; q++) if (skip.has(q)){ let r = q; while (skip.has(r)) r++;
     /* a few words lost exactly where the recording was cut into pieces: the model dropping the edge of a piece, not a skipped passage */
     const edge = sess.engine === 'model' && r - q <= 3 && Lo[r] != null && (atCut(Lo[r]) || atCut(Hi[r]) || (Hi[q] != null && atCut(Hi[q])));
-    if (!edge && r - q >= (sess.engine === 'model' ? 2 : 3)) for (let t = q; t < r; t++) ws[t] = 'miss'; q = r; }
+    if (!edge && r - q >= (sess.engine === 'model' ? 2 : 3)) for (let t = q; t < r; t++){ ws[t] = 'miss'; skipMiss.add(t); } q = r; }
   /* With the Quran model: the reader said something else, then corrected himself (e.g. "يقولون ... يكذبون").
      The corrected word is shown orange so he sees it. Re-reading the text just before (a normal restart) is not marked. */
   if (sess.engine === 'model') for (const k in ins){ const q = +k; if (q >= bi || ws[q] !== 'ok' || q === 0 || (sess.bounds && sess.bounds.has(q))) continue;   // before a surah: isti'adha/basmala, however written
@@ -1552,6 +1557,8 @@ function processSpoken(flush){
       || (start && E[q].some(v => v.length > w.length && w.length >= 3 && v.endsWith(w)))) ws[q] = 'soft'; }
   /* a word the first hearing got exactly right stays right if the re-listening hears it worse («فتح الله» re-heard «فتعالى الله») */
   if (sess.keepOk) sess.keepOk.forEach(q => { if (q < bi && ws[q] !== 'ok'){ ws[q] = 'ok'; delete hd[q]; } });
+  /* a «skipped passage» that the first hearing partly heard is down to one lost word: unclear, not a skip */
+  skipMiss.forEach(q => { if (ws[q] === 'miss' && !(ws[q - 1] === 'miss' && skipMiss.has(q - 1)) && !(ws[q + 1] === 'miss' && skipMiss.has(q + 1))) ws[q] = 'soft'; });
   /* red only if both hearings agree it is wrong: a word heard «فتق» the first time and «فترى» the second is unclear sound, not a slip */
   if (sess.firstWs) for (const q in ws) if (ws[q] === 'miss' && sess.firstWs[q] && sess.firstWs[q] !== 'miss') ws[q] = 'soft';
   sess.ws = ws; sess.heard = hd; sess.p = bi;
@@ -3966,7 +3973,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r163b';
+const BUILD = 'r164';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('beta/version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
