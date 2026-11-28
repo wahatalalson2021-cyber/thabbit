@@ -992,7 +992,9 @@ function engAudio(x, rate, R1){
 function engCut(k, R1){
   const R0 = R1 || REC, rate = R0.rate || 48000, spoke = R0.speech; const part = R0.seg.slice(0, k), len = part.reduce((a, b) => a + b.length, 0), raw = new Float32Array(len); let o = 0;
   part.forEach(b => { raw.set(b, o); o += b.length; });
-  R0.seg = R0.seg.slice(k); R0.blocks = R0.blocks.slice(k); R0.segN = R0.seg.reduce((a, b) => a + b.length, 0); R0.speech = 0; R0.sil = 0;
+  R0.seg = R0.seg.slice(k); R0.blocks = R0.blocks.slice(k); R0.segN = R0.seg.reduce((a, b) => a + b.length, 0); R0.sil = 0;
+  /* the part kept after a cut in the middle of reading already holds speech: count it, or a short ending would be thrown away as «no speech» */
+  const thr0 = Math.max(R0.noise * 3, 0.006); R0.speech = R0.seg.reduce((a, b, ix) => a + (R0.blocks[ix] > thr0 ? b.length / rate : 0), 0);
   R0.cands = R0.cands.filter(x => x.k > k).map(x => ({k: x.k - k, sil: x.sil, at: x.at - len / rate}));
   if (len < rate * 0.6 || spoke < 0.5){ if (len >= rate * 0.6) engLog('تجاهلت قطعة بلا كلام (' + (len / rate).toFixed(1) + 'ث)'); return; }
   /* convert to the model's 16 kHz with the browser's own careful converter, keeping pieces in order */
@@ -1009,7 +1011,7 @@ async function engPump(){
   try { const y = R0.q.shift().y; if (!y.length) throw 0; const sec = y.length / 16000, piece = {y, text: ''}; R0.pieces.push(piece);
     const t0 = performance.now(), t = await engWrite(y);
     engLog('قطعة ' + sec.toFixed(1) + 'ث · كتابة ' + ((performance.now() - t0) / 1000).toFixed(1) + 'ث · ' + t);
-    piece.text = t; if (sess === R0.s0 && !R0.dead){ engText(R0); recompute(false); piece.endP = sess.p; } }
+    piece.text = piece.text0 = t; if (sess === R0.s0 && !R0.dead){ engText(R0); recompute(false); piece.endP = sess.p; } }
   catch (e) { if (e !== 0){ engLog('خطأ: ' + (e && e.message || e)); if (sess === R0.s0 && !R0.dead) sess.micErr = 'تعذّرت كتابة جزء من التلاوة. (' + (e && e.message || e) + ')'; } }
   R0.busy = false; if (R0.dead) return; liveText = R0.stopping ? 'أكتب آخر ما قرأته...' : '';
   if (REC === R0 && view === 'session') render();
@@ -1050,6 +1052,26 @@ async function engReview(R0){
         parts.forEach((p, k) => { p.text = k ? '' : t; });
         const after = okN(); if (after < before){ parts.forEach((p, k) => { p.text = old[k]; }); engLog('مراجعة: أبقيت النص الأول (' + after + ' < ' + before + ')'); } } }
     catch (e) { engLog('مراجعة: خطأ ' + (e && e.message || e)); }
+  }
+  /* Still red words where the model stopped early on a piece («ورأيت الناس يدخلون» for the whole ayah): write that piece again
+     as two halves cut at its quietest moment, and keep the result only if it matches the mushaf better. */
+  const misses = Object.keys(sess.ws).filter(k => sess.ws[k] === 'miss').map(Number), tried = new Set();
+  const okN = () => { engText(R0); recompute(true); return Object.values(sess.ws).filter(v => v === 'ok').length; };
+  for (const q of misses){
+    let k = P.findIndex(p => p.endP != null && p.endP > q); if (k < 0) k = P.length - 1;
+    for (const c of [k, k - 1]){
+      if (c < 0 || tried.has(c) || R0.dead || P[c].y.length < 16000 * 2.5) continue; tried.add(c);
+      const y = P[c].y, n = y.length; let best = Math.floor(n / 2), bv = Infinity;
+      for (let s = Math.floor(n * 0.3); s + 1600 < n * 0.7; s += 800){ let e = 0; for (let z = s; z < s + 1600; z++) e += y[z] * y[z]; if (e < bv){ bv = e; best = s + 800; } }
+      try { const t1 = await engWrite(y.slice(0, best)), t2 = await engWrite(y.slice(best)); engLog('مراجعة بنصفين: ' + t1 + ' ‖ ' + t2);
+        if (R0.dead) return;
+        let i = c; while (i > 0 && !P[i].text) i--; let j = c; while (j + 1 < P.length && !P[j + 1].text) j++;
+        const unit = P.slice(i, j + 1), old = unit.map(p => p.text), before = okN();
+        const txt = unit.map((p, z) => i + z === c ? t1 + ' ‖ ' + t2 : (p.text0 || '')).filter(Boolean).join(' ‖ ');
+        unit.forEach((p, z) => { p.text = z ? '' : txt; });
+        if (okN() <= before) unit.forEach((p, z) => { p.text = old[z]; }); }
+      catch (e) { engLog('مراجعة بنصفين: خطأ ' + (e && e.message || e)); }
+    }
   }
   if (!R0.dead) engText(R0);
 }
@@ -2460,7 +2482,7 @@ function startSession(queue){
 }
 /* The words the recitation is matched against: the whole passage, or (cumulative memorizing) its first ayat. */
 function buildExp(ay){
-  sess.keepOk = null; sess.firstWs = null; sess.kasraA = new Set(); sess.exp = []; sess.bounds = new Set(); sess.muq = new Map(); sess.silah = new Set(); sess.sakin = new Set();
+  const tanw = new Set(); sess.keepOk = null; sess.firstWs = null; sess.kasraA = new Set(); sess.exp = []; sess.bounds = new Set(); sess.muq = new Map(); sess.silah = new Set(); sess.sakin = new Set();
   ay.forEach(x => {
     /* «مالَهُۥٓ أخلده»: the ha's long u is said, so the recognizer hears «واخلده»; the next word may carry that و */
     /* a word after one ending in a still consonant («وإذ أخذنا»): its first hamza often runs into it unheard («خزنا») */
@@ -2468,8 +2490,12 @@ function buildExp(ay){
     x.txt.split(' ').forEach((w, j, a) => { if (j + 1 < a.length && /ه\u064F\u06E5\u0653?$/.test(w.replace(/[\u06D6-\u06DC]/g, ''))) sess.silah.add(sess.exp.length + j + 1); }); if (x.a === 1 && sess.exp.length) sess.bounds.add(sess.exp.length);
     const first = baseNorm(x.txt.split(' ')[0].replace(HAR, ''));
     if ((x.a === 1 || (x.s === 42 && x.a === 2)) && MUQ.has(first)) sess.muq.set(sess.exp.length, first);
-    x.txt.split(' ').forEach(w => { if (/^[وفب]?[\u064B-\u0652]*إ/.test(w)) sess.kasraA.add(sess.exp.length); sess.exp.push(expVariants(w)); }); });
-  tajweedVariants(sess.exp); sess.cls = new Map();
+    x.txt.split(' ').forEach((w, j, a) => { if (/^[وفب]?[\u064B-\u0652]*إ/.test(w)) sess.kasraA.add(sess.exp.length); if (j + 1 < a.length && /[\u064B-\u064D\u0656\u0657\u065E\u08F0-\u08F2]/.test(w.slice(-3))) tanw.add(sess.exp.length); sess.exp.push(expVariants(w)); }); });
+  tajweedVariants(sess.exp);
+  /* tanween merged into a following ل / ر («صَفّٗا لَّا» said «صفّلّا»): the model may write that letter into the word («صفرا») */
+  tanw.forEach(i => { const L = sess.exp[i + 1] && sess.exp[i + 1][0][0]; if (L !== 'ل' && L !== 'ر') return;
+    sess.exp[i].slice().forEach(v => ['ل', 'ر'].forEach(x => { const a = v.endsWith('ا') ? v.slice(0, -1) + x + 'ا' : v + x; if (!sess.exp[i].includes(a)) sess.exp[i].push(a); })); });
+  sess.cls = new Map();
 }
 /* A fresh recitation of the first k ayat (k = 0: the whole passage). Cumulative memorizing: ayah 1, then 1-2 together, then 1-3... */
 function testFrom(k){
@@ -3977,7 +4003,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r166';
+const BUILD = 'r167';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
