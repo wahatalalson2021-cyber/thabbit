@@ -992,7 +992,9 @@ function engAudio(x, rate, R1){
 function engCut(k, R1){
   const R0 = R1 || REC, rate = R0.rate || 48000, spoke = R0.speech; const part = R0.seg.slice(0, k), len = part.reduce((a, b) => a + b.length, 0), raw = new Float32Array(len); let o = 0;
   part.forEach(b => { raw.set(b, o); o += b.length; });
-  R0.seg = R0.seg.slice(k); R0.blocks = R0.blocks.slice(k); R0.segN = R0.seg.reduce((a, b) => a + b.length, 0); R0.speech = 0; R0.sil = 0;
+  R0.seg = R0.seg.slice(k); R0.blocks = R0.blocks.slice(k); R0.segN = R0.seg.reduce((a, b) => a + b.length, 0); R0.sil = 0;
+  /* the part kept after a cut in the middle of reading already holds speech: count it, or a short ending would be thrown away as «no speech» */
+  const thr0 = Math.max(R0.noise * 3, 0.006); R0.speech = R0.seg.reduce((a, b, ix) => a + (R0.blocks[ix] > thr0 ? b.length / rate : 0), 0);
   R0.cands = R0.cands.filter(x => x.k > k).map(x => ({k: x.k - k, sil: x.sil, at: x.at - len / rate}));
   if (len < rate * 0.6 || spoke < 0.5){ if (len >= rate * 0.6) engLog('تجاهلت قطعة بلا كلام (' + (len / rate).toFixed(1) + 'ث)'); return; }
   /* convert to the model's 16 kHz with the browser's own careful converter, keeping pieces in order */
@@ -4001,7 +4003,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r167b';
+const BUILD = 'r167c';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('beta/version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
