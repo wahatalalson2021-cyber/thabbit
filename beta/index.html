@@ -1009,7 +1009,7 @@ async function engPump(){
   try { const y = R0.q.shift().y; if (!y.length) throw 0; const sec = y.length / 16000, piece = {y, text: ''}; R0.pieces.push(piece);
     const t0 = performance.now(), t = await engWrite(y);
     engLog('قطعة ' + sec.toFixed(1) + 'ث · كتابة ' + ((performance.now() - t0) / 1000).toFixed(1) + 'ث · ' + t);
-    piece.text = t; if (sess === R0.s0 && !R0.dead){ engText(R0); recompute(false); piece.endP = sess.p; } }
+    piece.text = piece.text0 = t; if (sess === R0.s0 && !R0.dead){ engText(R0); recompute(false); piece.endP = sess.p; } }
   catch (e) { if (e !== 0){ engLog('خطأ: ' + (e && e.message || e)); if (sess === R0.s0 && !R0.dead) sess.micErr = 'تعذّرت كتابة جزء من التلاوة. (' + (e && e.message || e) + ')'; } }
   R0.busy = false; if (R0.dead) return; liveText = R0.stopping ? 'أكتب آخر ما قرأته...' : '';
   if (REC === R0 && view === 'session') render();
@@ -1051,24 +1051,25 @@ async function engReview(R0){
         const after = okN(); if (after < before){ parts.forEach((p, k) => { p.text = old[k]; }); engLog('مراجعة: أبقيت النص الأول (' + after + ' < ' + before + ')'); } } }
     catch (e) { engLog('مراجعة: خطأ ' + (e && e.message || e)); }
   }
-  /* Still red words inside one piece (the model stopping early: «ورأيت الناس يدخلون» for a whole ayah): write that piece again
-     as two halves cut at its quietest moment, and keep it only if it matches better. */
-  for (let i = 0; i < P.length && !R0.dead; i++){
-    if (!P[i].text) continue; let j = i; while (j + 1 < P.length && !P[j + 1].text) j++;
-    const from = i ? (P[i - 1].endP || 0) : 0, to = P[j].endP == null ? sess.exp.length : P[j].endP;
-    let bad = false; for (let q = from; q < to; q++) if (sess.ws[q] === 'miss') bad = true;
-    if (!bad){ i = j; continue; }
-    const parts = P.slice(i, j + 1), n = parts.reduce((x, p) => x + p.y.length, 0); if (n < 16000 * 3){ i = j; continue; }
-    const y = new Float32Array(n); let o = 0; parts.forEach(p => { y.set(p.y, o); o += p.y.length; });
-    let best = Math.floor(n / 2), bv = Infinity; for (let s = Math.floor(n * 0.3); s + 1600 < n * 0.7; s += 800){ let e = 0; for (let k = s; k < s + 1600; k++) e += y[k] * y[k]; if (e < bv){ bv = e; best = s + 800; } }
-    try { const t1 = await engWrite(y.slice(0, best)), t2 = await engWrite(y.slice(best)); engLog('مراجعة بنصفين: ' + t1 + ' ‖ ' + t2);
-      if (R0.dead) return;
-      const okN = () => { engText(R0); recompute(true); return Object.values(sess.ws).filter(v => v === 'ok').length; };
-      const before = okN(), old = parts.map(p => p.text);
-      parts.forEach((p, k) => { p.text = k ? '' : t1 + ' ‖ ' + t2; });
-      if (okN() <= before){ parts.forEach((p, k) => { p.text = old[k]; }); } }
-    catch (e) { engLog('مراجعة بنصفين: خطأ ' + (e && e.message || e)); }
-    i = j;
+  /* Still red words where the model stopped early on a piece («ورأيت الناس يدخلون» for the whole ayah): write that piece again
+     as two halves cut at its quietest moment, and keep the result only if it matches the mushaf better. */
+  const misses = Object.keys(sess.ws).filter(k => sess.ws[k] === 'miss').map(Number), tried = new Set();
+  const okN = () => { engText(R0); recompute(true); return Object.values(sess.ws).filter(v => v === 'ok').length; };
+  for (const q of misses){
+    let k = P.findIndex(p => p.endP != null && p.endP > q); if (k < 0) k = P.length - 1;
+    for (const c of [k, k - 1]){
+      if (c < 0 || tried.has(c) || R0.dead || P[c].y.length < 16000 * 2.5) continue; tried.add(c);
+      const y = P[c].y, n = y.length; let best = Math.floor(n / 2), bv = Infinity;
+      for (let s = Math.floor(n * 0.3); s + 1600 < n * 0.7; s += 800){ let e = 0; for (let z = s; z < s + 1600; z++) e += y[z] * y[z]; if (e < bv){ bv = e; best = s + 800; } }
+      try { const t1 = await engWrite(y.slice(0, best)), t2 = await engWrite(y.slice(best)); engLog('مراجعة بنصفين: ' + t1 + ' ‖ ' + t2);
+        if (R0.dead) return;
+        let i = c; while (i > 0 && !P[i].text) i--; let j = c; while (j + 1 < P.length && !P[j + 1].text) j++;
+        const unit = P.slice(i, j + 1), old = unit.map(p => p.text), before = okN();
+        const txt = unit.map((p, z) => i + z === c ? t1 + ' ‖ ' + t2 : (p.text0 || '')).filter(Boolean).join(' ‖ ');
+        unit.forEach((p, z) => { p.text = z ? '' : txt; });
+        if (okN() <= before) unit.forEach((p, z) => { p.text = old[z]; }); }
+      catch (e) { engLog('مراجعة بنصفين: خطأ ' + (e && e.message || e)); }
+    }
   }
   if (!R0.dead) engText(R0);
 }
@@ -4000,7 +4001,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !IN_CLAUDE
 /* The phone keeps the app open in the background, so a new version would only arrive after a full restart.
    When the app comes back to the screen, check a tiny version file and reload if there is a newer version
    (only when nothing is in progress, so no recitation or session is interrupted). */
-const BUILD = 'r167';
+const BUILD = 'r167b';
 function checkUpdate(){
   if (sess || REC || !navigator.onLine) return;
   fetch('beta/version.txt?t=' + Date.now(), {cache: 'no-store'}).then(r => r.ok ? r.text() : '').then(v => { v = v.trim(); if (v && v !== BUILD && !sess && !REC) location.reload(); }).catch(() => {});
